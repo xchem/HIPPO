@@ -1697,6 +1697,95 @@ class Database:
             self.commit()
         return feature_id
 
+    def insert_features(
+        self,
+        dicts: list[dict],
+        commit: bool = True,
+    ) -> None:
+        """Bulk insert entries into the feature table"""
+
+        from .prolif import FEATURE_FAMILIES
+
+        FEATURE_FAMILIES = set(FEATURE_FAMILIES)
+
+        payload = []
+
+        for d in dicts:
+
+            chain_name = d["chain_name"]
+            family = d["family"]
+            target = d["target"]
+            atom_names = d["atom_names"]
+            residue_name = d["residue_name"]
+            residue_number = d["residue_number"]
+
+            assert len(chain_name) == 1
+            assert len(residue_name) <= 4
+            for a in atom_names:
+                assert len(a) <= 4
+            assert isinstance(target, int)
+
+            atom_names = " ".join(sorted(atom_names))
+
+            if family:
+                assert family in FEATURE_FAMILIES, f"Unsupported {family=}"
+            else:
+                family = "Unknown"
+
+            payload.append(
+                (family, target, chain_name, residue_name, residue_number, atom_names)
+            )
+
+        sql = f"""
+        INSERT INTO {self.SQL_SCHEMA_PREFIX}feature(
+            feature_family, 
+            feature_target, 
+            feature_chain_name, 
+            feature_residue_name, 
+            feature_residue_number, 
+            feature_atom_names
+        )
+        VALUES(
+            {self.SQL_STRING_PLACEHOLDER}, 
+            {self.SQL_STRING_PLACEHOLDER}, 
+            {self.SQL_STRING_PLACEHOLDER}, 
+            {self.SQL_STRING_PLACEHOLDER}, 
+            {self.SQL_STRING_PLACEHOLDER}, 
+            {self.SQL_STRING_PLACEHOLDER}
+        )
+        """
+
+        if self.engine == "psycopg":
+            sql += "\nON CONFLICT ON CONSTRAINT uc_feature DO NOTHING;"
+
+        try:
+            self.executemany(
+                sql,
+                payload,
+            )
+
+        # except self.ERROR_UNIQUE_VIOLATION as e:
+
+        # if warn_duplicate:
+        #     mrich.warning(str(e))
+        #     mrich.var("family", family)
+        #     mrich.var("target", target)
+        #     mrich.var("chain_name", chain_name)
+        #     mrich.var("residue_name", residue_name)
+        #     mrich.var("residue_number", residue_number)
+        #     mrich.var("atom_names", atom_names)
+
+        # self.rollback()
+
+        # return None
+
+        except Exception as e:
+            mrich.error(e)
+            raise
+
+        if commit:
+            self.commit()
+
     def insert_metadata(
         self,
         *,
