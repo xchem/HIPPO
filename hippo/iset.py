@@ -710,8 +710,8 @@ class InteractionSet:
 
         ### Summary
 
-        if debug:
-            self.summary()
+        # if debug:
+        #     self.summary()
 
     ### DUNDERS
 
