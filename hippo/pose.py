@@ -993,6 +993,7 @@ class Pose:
 
             if debug:
                 mrich.debug("Getting protein features...")
+
             protein_features = self.target.calculate_features(
                 protein_system, reference_id=self.reference_id
             )
@@ -1182,15 +1183,31 @@ class Pose:
                     mrich.warning(mutation)
 
             if resolve:
+                from .feature import Feature
                 from .iset import InteractionSet
 
                 interactions = InteractionSet.from_pose(
                     self, table="temp_interaction", db=temp_db
                 )
 
-                feature_ids = interactions.feature_ids
+                feature_ids = str(tuple(interactions.feature_ids)).replace(",)", ")")
 
-                feature_cache = {i: self.db.get_feature(id=i) for i in feature_ids}
+                records = self.db.select_all_where(
+                    table="feature", key=f"feature_id IN {feature_ids}", multiple=True
+                )
+
+                feature_cache = {
+                    pk: Feature(
+                        id=pk,
+                        family=family,
+                        target=target,
+                        chain_name=chain_name,
+                        residue_name=residue_name,
+                        residue_number=residue_number,
+                        atom_names=atom_names,
+                    )
+                    for pk, family, target, chain_name, residue_name, residue_number, atom_names in records
+                }
 
                 interactions.resolve(debug=debug, feature_cache=feature_cache)
 

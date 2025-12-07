@@ -4,6 +4,7 @@ import mcol
 import mrich
 
 import psycopg
+from pathlib import Path
 
 from .db import Database
 
@@ -83,7 +84,7 @@ class PostgresDatabase(Database):
     """
 
     SQL_BULK_INSERT_INTERACTIONS = """
-    INSERT INTO interaction(
+    INSERT INTO hippo.interaction(
         interaction_feature, 
         interaction_pose, 
         interaction_type, 
@@ -283,36 +284,59 @@ class PostgresDatabase(Database):
         self._cursor = conn.cursor()
 
     def execute(
-        self, sql, payload=None, *, retry: float | None = 1, debug: bool = False
+        self,
+        sql,
+        payload=None,
+        *,
+        debug: bool = False,
+        time: bool = False,
     ):
         """Execute arbitrary SQL with retry if database is locked."""
         if debug:
             mrich.debug(sql)
 
-        # while True:
-        try:
-            if payload:
-                return self.cursor.execute(sql, payload)
-            else:
-                return self.cursor.execute(sql)
-        # except sqlite3.OperationalError as e:
-        #     if "database is locked" in str(e) and retry:
-        #         with mrich.clock(
-        #             f"SQLite Database is locked, waiting {retry} second(s)..."
-        #         ):
-        #             time.sleep(retry)
-        #         mrich.print("[debug]SQLite Database was locked, retrying...")
-        #         continue  # retry without recursion
-        #     elif "syntax error" in str(e):
-        #         mrich.error(sql)
-        #         mrich.error(payload)
-        #         raise
-        #     else:
-        #         raise
-        except Exception as e:
-            # mrich.print(sql)
-            # mrich.print(payload)
-            raise
+        if time:
+            import re
+            from time import perf_counter
+
+            start = perf_counter()
+
+        if payload:
+            records = self.cursor.execute(sql, payload)
+        else:
+            records = self.cursor.execute(sql)
+
+        if time:
+            sql = re.sub(r"\s+", " ", sql).strip()
+            mrich.debug(f"{perf_counter()-start:.2}s: ", sql)
+
+        return records
+
+    def executemany(
+        self,
+        sql,
+        payload=None,
+        *,
+        debug: bool = False,
+        time: bool = False,
+    ):
+        """Execute arbitrary SQL with retry if database is locked."""
+        if debug:
+            mrich.debug(sql)
+
+        if time:
+            import re
+            from time import perf_counter
+
+            start = perf_counter()
+
+        records = self.cursor.executemany(sql, payload)
+
+        if time:
+            sql = re.sub(r"\s+", " ", sql).strip()
+            mrich.debug(f"{perf_counter()-start:.2}s: ", sql)
+
+        return records
 
     def rollback(self) -> None:
         """rollback (not relevant for sqlite)"""
@@ -346,6 +370,78 @@ class PostgresDatabase(Database):
         self.execute(sql)
 
     ### METHODS
+
+    def migrate(
+        cls,
+        source: Path,
+        batch_size: int = 10000,
+    ) -> None:
+        """Migrate records from a SQLite :class:`.Database` to this :class:`.PostgresDatabase`"""
+
+        raise NotImplementedError
+
+        from .animal import HIPPO
+
+        source_path = Path(source)
+
+        assert source_path.exists()
+
+        source = HIPPO("source", source)
+
+        ### compounds
+
+        # source data
+
+        compound_records = source.select(
+            table="compound",
+            query="compound_id, compound_inchikey, compound_smiles, compound_alias",
+            multiple=True,
+        )
+
+        sql = """
+        INSERT INTO hippo.compound(
+            compound_inchikey, 
+            compound_smiles, 
+            compound_mol, 
+            compound_alias
+        )
+        VALUES(
+            %(inchikey)s, 
+            %(smiles)s, 
+            mol_from_smiles(%(smiles)s), 
+            %(alias)s
+        )
+        """
+
+        self.execute(sql, compound_records)
+
+        ### scaffolds
+
+        ### targets
+
+        ### poses
+
+        ### inspirations
+
+        ### tags
+
+        ### reactions
+
+        ### quotes
+
+        ### reactants
+
+        ### routes
+
+        ### components
+
+        ### features
+
+        ### interactions
+
+        ### subsites
+
+        ### subsite_tags
 
     def update_pose_mol(self, pose_id: int, mol: "Chem.Mol") -> None:
         """Update the molecule stored for a specific pose"""
