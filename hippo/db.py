@@ -108,18 +108,7 @@ class Database:
         interaction_angle, 
         interaction_energy
     )
-    VALUES(
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        ?
-    )
+    VALUES(?,?,?,?,?,?,?,?,?,?)
     """
 
     POSE_FIELDS = [
@@ -1735,27 +1724,35 @@ class Database:
                 (family, target, chain_name, residue_name, residue_number, atom_names)
             )
 
-        sql = f"""
-        INSERT INTO {self.SQL_SCHEMA_PREFIX}feature(
-            feature_family, 
-            feature_target, 
-            feature_chain_name, 
-            feature_residue_name, 
-            feature_residue_number, 
-            feature_atom_names
-        )
-        VALUES(
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}
-        )
-        """
+        match self.engine:
+            case "sqlite3":
 
-        if self.engine == "psycopg":
-            sql += "\nON CONFLICT ON CONSTRAINT uc_feature DO NOTHING;"
+                sql = """
+                INSERT OR IGNORE INTO feature(
+                    feature_family, 
+                    feature_target, 
+                    feature_chain_name, 
+                    feature_residue_name, 
+                    feature_residue_number, 
+                    feature_atom_names
+                )
+                VALUES(?,?,?,?,?,?)
+                """
+
+            case "psycopg":
+
+                sql = """
+                INSERT INTO hippo.feature(
+                    feature_family, 
+                    feature_target, 
+                    feature_chain_name, 
+                    feature_residue_name, 
+                    feature_residue_number, 
+                    feature_atom_names
+                )
+                VALUES(%s,%s,%s,%s,%s,%s)
+                ON CONFLICT ON CONSTRAINT uc_feature DO NOTHING;
+                """
 
         try:
             self.executemany(
@@ -3361,6 +3358,8 @@ class Database:
     ) -> "Chem.Mol":
         """Get the rdkit.Chem.Mol for a given :class:`.Compound`"""
 
+        from rdkit.Chem import Mol
+
         (bytestr,) = self.select_where(
             query="mol_to_binary_mol(compound_mol)",
             table="compound",
@@ -3368,7 +3367,7 @@ class Database:
             value=compound_id,
         )
 
-        return Chem.Mol(bytestr)
+        return Mol(bytestr)
 
     def get_compound_computed_property(
         self,
