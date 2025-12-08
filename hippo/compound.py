@@ -101,14 +101,7 @@ class Compound:
     def mol(self) -> Chem.Mol:
         """Returns the compound's RDKit Molecule"""
         if self._mol is None:
-            (mol,) = self.db.select_where(
-                query="mol_to_binary_mol(compound_mol)",
-                table="compound",
-                key="id",
-                value=self.id,
-                multiple=False,
-            )
-            self._mol = Chem.Mol(mol)
+            self._mol = self.db.get_compound_mol(self.id)
         return self._mol
 
     @property

@@ -7,6 +7,7 @@ import psycopg
 from pathlib import Path
 
 from .db import Database
+from .tools import strip_sql
 
 
 class PostgresDatabase(Database):
@@ -126,6 +127,13 @@ class PostgresDatabase(Database):
         "pose_distance_score",
         "pose_inspiration_score",
     ]
+
+    COMPOUND_PROPERTY_FUNCTIONS = {
+        "num_heavy_atoms": "mol_numheavyatoms",
+        "formula": "mol_formula",
+        "num_rings": "mol_numrings",
+        "molecular_weight": "mol_amw",
+    }
 
     def __init__(
         self,
@@ -301,14 +309,17 @@ class PostgresDatabase(Database):
 
             start = perf_counter()
 
-        if payload:
-            records = self.cursor.execute(sql, payload)
-        else:
-            records = self.cursor.execute(sql)
+        try:
+            if payload:
+                records = self.cursor.execute(sql, payload)
+            else:
+                records = self.cursor.execute(sql)
+        except Exception as e:
+            mrich.error(e)
+            mrich.print(strip_sql(sql))
 
         if time:
-            sql = re.sub(r"\s+", " ", sql).strip()
-            mrich.debug(f"{perf_counter()-start:.2}s: ", sql)
+            mrich.debug(f"{perf_counter()-start:.2}s: ", strip_sql(sql))
 
         return records
 
@@ -371,7 +382,50 @@ class PostgresDatabase(Database):
 
         self.execute(sql)
 
-    ### METHODS
+    ### GETTERS
+
+    def get_compound_mol(
+        self,
+        compound_id: int,
+    ) -> "Chem.Mol":
+        """Get the rdkit.Chem.Mol for a given :class:`.Compound`"""
+
+        from rdkit.Chem import Mol
+
+        (bytestr,) = self.select_where(
+            query="mol_to_pkl(compound_mol)",
+            table="compound",
+            key="id",
+            value=compound_id,
+        )
+
+        return Mol(bytestr)
+
+    ### SINGLE UPDATES
+
+    def update_pose_mol(self, pose_id: int, mol: "Chem.Mol") -> None:
+        """Update the molecule stored for a specific pose"""
+
+        from rdkit.Chem import MolToMolBlock
+
+        sql = f"""
+        UPDATE hippo.pose
+        SET pose_mol = mol_from_pkl(%s)
+        WHERE pose_id = %s;
+        """
+
+        self.execute(sql, (mol.ToBinary(), pose_id))
+        self.commit()
+
+    ### BULK CALCULATIONS
+
+    def calculate_all_scaffolds(self) -> None:
+        raise NotImplementedError
+
+    def calculate_all_murcko_scaffolds(self) -> None:
+        raise NotImplementedError
+
+    ### MIGRATIONS
 
     def migrate(
         cls,
@@ -445,25 +499,7 @@ class PostgresDatabase(Database):
 
         ### subsite_tags
 
-    def calculate_all_scaffolds(self) -> None:
-        raise NotImplementedError
-
-    def calculate_all_murcko_scaffolds(self) -> None:
-        raise NotImplementedError
-
-    def update_pose_mol(self, pose_id: int, mol: "Chem.Mol") -> None:
-        """Update the molecule stored for a specific pose"""
-
-        from rdkit.Chem import MolToMolBlock
-
-        sql = f"""
-        UPDATE hippo.pose
-        SET pose_mol = mol_from_pkl(%s)
-        WHERE pose_id = %s;
-        """
-
-        self.execute(sql, (mol.ToBinary(), pose_id))
-        self.commit()
+    ### MAINTENANCE
 
     def _clear_schema(self) -> None:
         """Empty the Database schema entirely and recreate it"""

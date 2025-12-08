@@ -21,14 +21,6 @@ from .recipe import Recipe, Route
 from .tools import inchikey_from_smiles, sanitise_smiles, SanitisationError, strip_sql
 
 
-CHEMICALITE_COMPOUND_PROPERTY_MAP = {
-    "num_heavy_atoms": "mol_num_hvyatms",
-    "formula": "mol_formula",
-    "num_rings": "mol_num_rings",
-    "molecular_weight": "mol_amw",
-}
-
-
 class Database:
     """Wrapper to connect to the HIPPO sqlite database.
 
@@ -145,6 +137,13 @@ class Database:
         "pose_distance_score",
         "pose_inspiration_score",
     ]
+
+    COMPOUND_PROPERTY_FUNCTIONS = {
+        "num_heavy_atoms": "mol_num_hvyatms",
+        "formula": "mol_formula",
+        "num_rings": "mol_num_rings",
+        "molecular_weight": "mol_amw",
+    }
 
     def __init__(
         self,
@@ -3356,6 +3355,21 @@ class Database:
 
         return None
 
+    def get_compound_mol(
+        self,
+        compound_id: int,
+    ) -> "Chem.Mol":
+        """Get the rdkit.Chem.Mol for a given :class:`.Compound`"""
+
+        (bytestr,) = self.select_where(
+            query="mol_to_binary_mol(compound_mol)",
+            table="compound",
+            key="id",
+            value=compound_id,
+        )
+
+        return Chem.Mol(bytestr)
+
     def get_compound_computed_property(
         self,
         prop: str,
@@ -3369,7 +3383,8 @@ class Database:
 
         """
 
-        function = CHEMICALITE_COMPOUND_PROPERTY_MAP[prop]
+        function = self.COMPOUND_PROPERTY_FUNCTIONS[prop]
+
         (val,) = self.select_where(
             query=f"{function}(compound_mol)",
             table="compound",
@@ -5108,8 +5123,15 @@ class Database:
         :param value: the value to match (Default value = None)
 
         """
+
+        if isinstance(value, str):
+            if "'" in value:
+                value = f'"{value}"'
+            else:
+                value = f"'{value}'"
+
         if value is not None:
-            where_str = f"{table}_{key} is {value}"
+            where_str = f"{table}_{key}={value}"
         else:
             where_str = key
 
