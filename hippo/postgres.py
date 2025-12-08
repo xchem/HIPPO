@@ -322,7 +322,9 @@ class PostgresDatabase(Database):
     ):
         """Execute arbitrary SQL with retry if database is locked."""
         if debug:
-            mrich.debug(sql)
+            from .tools import strip_sql
+
+            mrich.debug(strip_sql(sql))
 
         if time:
             import re
@@ -442,6 +444,12 @@ class PostgresDatabase(Database):
         ### subsites
 
         ### subsite_tags
+
+    def calculate_all_scaffolds(self) -> None:
+        raise NotImplementedError
+
+    def calculate_all_murcko_scaffolds(self) -> None:
+        raise NotImplementedError
 
     def update_pose_mol(self, pose_id: int, mol: "Chem.Mol") -> None:
         """Update the molecule stored for a specific pose"""

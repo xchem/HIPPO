@@ -1748,63 +1748,7 @@ class PoseSet:
 
         """
 
-        from json import loads
-
-        records = self.db.select_where(
-            table="pose",
-            query="pose_id, pose_target, pose_metadata",
-            key=f"pose_id IN {self.str_ids}",
-            multiple=True,
-        )
-
-        subsites = set()
-        subsite_tags = set()
-
-        for pose_id, pose_target, metadata in records:
-
-            metadata = loads(metadata)
-
-            key = metadata.get(field)
-
-            if not key:
-                mrich.warning(field, "not in metadata pose_id=", pose_id)
-                continue
-
-            subsites.add((pose_target, key))
-            subsite_tags.add((key, pose_id))
-
-        sql = """
-        INSERT OR IGNORE INTO subsite(subsite_target, subsite_name)
-        VALUES(?1, ?2)
-        RETURNING subsite_id
-        """
-
-        records = self.db.executemany(sql, sorted(list(subsites)))
-        subsite_ids = [i for i, in records]
-        subsite_lookup = {name: i for (t, name), i in zip(subsites, subsite_ids)}
-
-        # supplement existing subsites
-        subsite_lookup.update(
-            {
-                n: i
-                for i, n in self.db.select(
-                    table="subsite", query="subsite_id, subsite_name", multiple=True
-                )
-            }
-        )
-
-        sql = """
-        INSERT OR IGNORE INTO subsite_tag(subsite_tag_ref, subsite_tag_pose)
-        VALUES(?1, ?2)
-        """
-
-        subsite_tags = [
-            (subsite_lookup[subsite], pose_id) for subsite, pose_id in subsite_tags
-        ]
-
-        self.db.executemany(sql, subsite_tags)
-
-        self.db.commit()
+        self.db.set_subsites_from_metadata_field(pose_str_ids=self.str_ids, field=field)
 
     def calculate_inspiration_scores(
         self,

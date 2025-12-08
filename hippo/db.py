@@ -18,7 +18,7 @@ from .compound import Compound
 from .reaction import Reaction
 from .metadata import MetaData
 from .recipe import Recipe, Route
-from .tools import inchikey_from_smiles, sanitise_smiles, SanitisationError
+from .tools import inchikey_from_smiles, sanitise_smiles, SanitisationError, strip_sql
 
 
 CHEMICALITE_COMPOUND_PROPERTY_MAP = {
@@ -3193,6 +3193,89 @@ class Database:
 
         if commit:
             self.commit()
+
+    def set_subsites_from_metadata_field(
+        self, pose_str_ids: str, field="CanonSites alias"
+    ) -> None:
+        """Create and assign subsite entries from a metadata field
+
+        :param pose_str_ids: pose_str_ids
+        :param field: the metadata field to use
+
+        """
+
+        from json import loads
+
+        records = self.select_where(
+            table="pose",
+            query="pose_id, pose_target, pose_metadata",
+            key=f"pose_id IN {pose_str_ids}",
+            multiple=True,
+        )
+
+        subsites = set()
+        subsite_tags = set()
+
+        for pose_id, pose_target, metadata in records:
+
+            metadata = loads(metadata)
+
+            key = metadata.get(field)
+
+            if not key:
+                mrich.warning(field, "not in metadata pose_id=", pose_id)
+                continue
+
+            subsites.add((pose_target, key))
+            subsite_tags.add((pose_target, key, pose_id))
+
+        match self.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO subsite(subsite_target, subsite_name)
+                VALUES(?, ?)
+                """
+            case "psycopg":
+                sql = strip_sql(
+                    """
+                INSERT INTO hippo.subsite(subsite_target, subsite_name)
+                VALUES(%s, %s)
+                ON CONFLICT DO NOTHING;
+                """
+                )
+
+        self.executemany(sql, sorted(list(subsites)))
+
+        subsite_records = self.select(
+            table="subsite",
+            query="subsite_id, subsite_target, subsite_name",
+            multiple=True,
+        )
+
+        subsite_lookup = {(t, name): i for i, t, name in subsite_records}
+
+        match self.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO subsite_tag(subsite_tag_ref, subsite_tag_pose)
+                VALUES(?, ?)
+                """
+            case "psycopg":
+                sql = strip_sql(
+                    """
+                INSERT INTO hippo.subsite_tag(subsite_tag_ref, subsite_tag_pose)
+                VALUES(%s, %s)
+                ON CONFLICT DO NOTHING;
+                """
+                )
+
+        subsite_tags = [
+            (subsite_lookup[(t, name)], pose_id) for t, name, pose_id in subsite_tags
+        ]
+
+        self.executemany(sql, subsite_tags)
+
+        self.commit()
 
     ### GETTERS
 
