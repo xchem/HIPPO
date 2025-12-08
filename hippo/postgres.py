@@ -97,18 +97,7 @@ class PostgresDatabase(Database):
         interaction_angle, 
         interaction_energy
     )
-    VALUES(
-        %s,
-        %s,
-        %s,
-        %s,
-        %s,
-        %s,
-        %s,
-        %s,
-        %s,
-        %s
-    )
+    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON CONFLICT ON CONSTRAINT UC_interaction DO NOTHING
     """
 
@@ -248,9 +237,9 @@ class PostgresDatabase(Database):
 
         cursor = self.execute(
             f"""
-            SELECT indexname
-            FROM pg_indexes
-            WHERE schemaname = '{self.SQL_SCHEMA}';
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = '{self.SQL_SCHEMA}';
         """
         )
 
@@ -461,13 +450,13 @@ class PostgresDatabase(Database):
         ### compounds
 
         # source data
-
         compound_records = source.select(
             table="compound",
             query="compound_id, compound_inchikey, compound_smiles, compound_alias",
             multiple=True,
         )
 
+        # insertion query
         sql = """
         INSERT INTO hippo.compound(
             compound_inchikey, 
@@ -481,15 +470,155 @@ class PostgresDatabase(Database):
             mol_from_smiles(%(smiles)s), 
             %(alias)s
         )
+        ON CONFLICT DO NOTHING;
         """
 
-        self.execute(sql, compound_records)
+        # format the data
+        new_compound_records = [
+            dict(inchikey=b, smiles=c, alias=d) for a, b, c, d in compound_records
+        ]
+
+        # do the insertion
+        self.execute(sql, new_compound_records)
+
+        # map to the destination records
+        destination_inchikey_map = self.get_compound_inchikey_id_dict(
+            inchikeys=[b for a, b, c, d in compound_records]
+        )
+        compound_id_map = {
+            a: destination_inchikey_map[b] for a, b, c, d in compound_records
+        }
 
         ### scaffolds
 
+        # source data
+        scaffold_records = source.select(
+            table="scaffold",
+            query="scaffold_base, scaffold_superstructure",
+            multiple=True,
+        )
+
+        # map to new IDs
+        scaffold_records = [
+            (compound_id_map[a], compound_id_map[b]) for a, b in scaffold_records
+        ]
+
+        # insert new data
+
+        sql = """
+        INSERT INTO hippo.scaffold(scaffold_base, scaffold_superstructure)
+        VALUES(%s, %s)
+        ON CONFLICT DO NOTHING;
+        """
+
+        self.execute(sql, scaffold_records)
+
         ### targets
 
+        # source data
+        target_records = source.select(
+            table="target", query="target_id, target_name", multiple=True
+        )
+
+        # do the insertion
+        for i, name in target_records:
+            self.insert_target(name, warn_duplicate=False)
+
+        # map to the destination records
+        destination_target_name_map = {
+            name: i
+            for i, name in self.select(
+                table="target", query="target_id, target_name", multiple=True
+            )
+        }
+        target_id_map = {
+            i: destination_target_name_map[name] for i, name in target_records
+        }
+
         ### poses
+
+        pose_fields = [
+            "pose_id",
+            "pose_inchikey",
+            "pose_alias",
+            "pose_smiles",
+            "pose_path",
+            "pose_compound",
+            "pose_target",
+            "mol_to_pkl(pose_mol)",
+            "pose_fingerprint",
+            "pose_energy_score",
+            "pose_distance_score",
+            "pose_inspiration_score",
+            "pose_metadata",
+        ]
+
+        # source data
+        pose_records = source.select(
+            table="pose", query=", ".join(pose_fields), multiple=True
+        )
+
+        # insertion query
+        sql = """
+        INSERT INTO hippo.pose(
+            pose_inchikey,
+            pose_alias,
+            pose_smiles,
+            pose_path,
+            pose_compound,
+            pose_target,
+            pose_mol,
+            pose_fingerprint,
+            pose_energy_score,
+            pose_distance_score,
+            pose_inspiration_score,
+            pose_metadata
+        )
+        VALUES(
+            %(inchikey)s,
+            %(alias)s,
+            %(smiles)s,
+            %(path)s,
+            %(compound)s,
+            %(target)s,
+            mol_frok_pkl(%(mol)s),
+            %(fingerprint)s,
+            %(energy_score)s,
+            %(distance_score)s,
+            %(inspiration_score)s,
+            %(metadata)s,
+        )
+        ON CONFLICT DO NOTHING;
+        """
+
+        # massage the data
+        pose_dicts = [
+            dict(
+                id=i,
+                inchikey=inchikey,
+                alias=alias,
+                smiles=smiles,
+                path=path,
+                compound=compound_id_map[compound_id],
+                target=target_id_map[target_id],
+                mol=mol,
+                fingerprint=fingerprint,
+                energy_score=energy_score,
+                distance_score=distance_score,
+                inspiration_score=inspiration_score,
+                metadata=metadata,
+            )
+            for i, inchikey, alias, smiles, path, compound_id, target_id, mol, fingerprint, energy_score, distance_score, inspiration_score, metadata in pose_records
+        ]
+
+        # do the insertion
+        self.execute(sql, [p[1:] for p in pose_records])
+
+        # map to the destination records
+        destination_pose_path_map = self.get_pose_path_id_dict()
+        pose_id_map = {p[0]: destination_pose_path_map[p[5]] for p in pose_records}
+
+        ### pose references
 
         ### inspirations
 
