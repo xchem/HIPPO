@@ -317,6 +317,7 @@ class PostgresDatabase(Database):
         except Exception as e:
             mrich.error(e)
             mrich.print(strip_sql(sql))
+            raise
 
         if time:
             mrich.debug(f"{perf_counter()-start:.2}s: ", strip_sql(sql))
