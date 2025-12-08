@@ -136,14 +136,14 @@ class InteractionSet:
                 mrich.warning(f"{has_invalid_fps} Poses have not been fingerprinted")
 
             sql = f"""
-            SELECT interaction_id FROM {table}
+            SELECT interaction_id FROM {db.SQL_SCHEMA_PREFIX}{table}
             WHERE interaction_pose IN {pose.str_ids}
             """
 
         else:
 
             sql = f"""
-            SELECT interaction_id FROM {table}
+            SELECT interaction_id FROM {db.SQL_SCHEMA_PREFIX}{table}
             WHERE interaction_pose = {pose.id}
             """
 
@@ -470,7 +470,7 @@ class InteractionSet:
 
         pairs = self.db.execute(
             f"""
-        SELECT interaction_feature, COUNT(1) FROM {self.table}
+        SELECT interaction_feature, COUNT(1) FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         WHERE interaction_id IN {self.str_ids}
         GROUP BY interaction_feature
         """
