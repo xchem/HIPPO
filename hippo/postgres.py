@@ -364,6 +364,19 @@ class PostgresDatabase(Database):
         """Get ID of last inserted row"""
         return self.cursor.fetchone()[0]
 
+    def column_names(self, table: str) -> list[str]:
+        """Get the column names of the given table"""
+
+        sql = f"""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'hippo'
+        AND table_name = '{table}'
+        ORDER BY ordinal_position;
+        """
+
+        return [n for n, in self.execute(sql).fetchall()]
+
     ### CREATE TABLES
 
     def create_table_pattern_bfp(self) -> None:
