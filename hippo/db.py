@@ -2190,6 +2190,7 @@ class Database:
         multiple: bool = False,
         none: str | None = "error",
         sort: str = None,
+        debug: bool = False,
     ) -> tuple | list[tuple]:
         """Select entries where ``key == value``
 
@@ -2257,10 +2258,13 @@ class Database:
                 f"SELECT {query} FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {where_str}"
             )
 
+        if debug:
+            mrich.print(strip_sql(sql))
+
         try:
             self.execute(sql)
         except sqlite3.OperationalError as e:
-            mrich.var("sql", sql)
+            mrich.var("sql", strip_sql(sql))
             raise
 
         if multiple:
@@ -3717,6 +3721,7 @@ class Database:
         """
 
         entry = self.select_all_where(table="feature", key="id", value=id)
+
         return Feature(*entry)
 
     def get_route(
