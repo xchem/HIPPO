@@ -272,6 +272,24 @@ class PostgresDatabase(Database):
 
             conn.execute("SET client_encoding TO 'UTF8'")
 
+            with conn.cursor() as c:
+                c.execute(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM pg_type t
+                        JOIN pg_namespace n ON n.oid = t.typnamespace
+                        WHERE t.typname = 'mol'
+                    );
+                """
+                )
+                (exists,) = c.fetchone()
+
+            if not exists:
+                raise ValueError(
+                    "'mol' datatype not defined, is the rdkit postgres cartridge installed correctly?"
+                )
+
         except Exception as e:
             mrich.error("Could not connect to", self.path)
             mrich.error(e)
