@@ -1335,10 +1335,27 @@ class Recipe:
             permitted_reactions=self.reactions, return_ids=return_ids
         )
 
-    def calculate_missing_routes(self, supplier: str = "Enamine") -> None:
+    def calculate_missing_routes(
+        self, missing_only: bool = True, supplier: str = "Enamine"
+    ) -> None:
         """Calculate missing routes to products of this Recipe"""
 
         products = self.products.compounds
+
+        if missing_only:
+            from .cset import CompoundSet
+
+            records = self.db.select_where(
+                table="route",
+                key=f"route_product IN {products.str_ids}",
+                query="route_product",
+                multiple=True,
+            )
+            existing = set(i for i, in records)
+            missing = set(products.ids) - existing
+            products = CompoundSet(self.db, missing)
+
+        mrich.var("#products", len(products))
 
         for i, c in mrich.track(enumerate(products), total=len(products)):
 
