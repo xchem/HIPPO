@@ -1244,6 +1244,7 @@ class PoseSet:
         inspiration_aliases: bool = False,
         derivative_ids: bool = False,
         tags: bool = False,
+        expand_tags: bool = False,
         subsites: bool = False,
         # skip_no_mol=True, reference: str = "name", mol: bool = False, **kwargs
     ) -> "pandas.DataFrame":
@@ -1442,7 +1443,14 @@ class PoseSet:
             if debug:
                 mrich.debug("adding tag column")
             lookup = self.db.get_pose_tag_dict()
-            df["tags"] = df["id"].apply(lambda x: lookup.get(x, {}))
+
+            if not expand_tags:
+                df["tags"] = df["id"].apply(lambda x: lookup.get(x, set()))
+
+            else:
+                for i, row in df.iterrows():
+                    for tag in lookup.get(row["id"], set()):
+                        df.loc[i, tag] = True
 
         if subsites:
             if debug:
@@ -2003,6 +2011,7 @@ class PoseSet:
         tags: bool = True,
         subsites: bool = True,
         extra_cols: dict[str, list] = None,
+        inspiration_score: bool = True,
         # name_col: str = "name",
         **kwargs,
     ):
@@ -2096,8 +2105,9 @@ class PoseSet:
             subsites=subsites,
             energy_score=True,
             distance_score=True,
-            inspiration_score=True,
+            inspiration_score=inspiration_score,
             # sanitise_null_metadata_values=True,
+            expand_tags=False,
             # sanitise_tag_list_separator=";",
             # sanitise_metadata_list_separator=";",
             # skip_metadata=skip_metadata,
