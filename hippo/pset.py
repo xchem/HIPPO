@@ -530,7 +530,7 @@ class PoseTable:
 
     def __iter__(self):
         """Iterate through all compounds"""
-        return iter(self[i + 1] for i in range(len(self)))
+        return iter(self[i] for i in self.ids)
 
 
 class PoseSet:
