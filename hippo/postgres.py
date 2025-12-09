@@ -19,6 +19,24 @@ class PostgresDatabase(Database):
 
     """
 
+    TABLES = [
+        "subsite",
+        "subsite_tag",
+        "scaffold",
+        "compound",
+        "pose",
+        "inspiration",
+        "reaction",
+        "reactant",
+        "tag",
+        "quote",
+        "route",
+        "component",
+        "feature",
+        "interaction",
+        "target",
+    ]
+
     SQL_STRING_PLACEHOLDER = "%s"
     SQL_PK_DATATYPE = "SERIAL"
     SQL_SCHEMA = "hippo"
@@ -32,7 +50,7 @@ class PostgresDatabase(Database):
         compound_alias TEXT,
         compound_smiles TEXT,
         compound_base INTEGER,
-        compound_mol MOL,
+        compound_mol hippo.MOL,
         compound_pattern_bfp bit(2048),
         compound_morgan_bfp bit(2048),
         compound_metadata TEXT,
@@ -52,7 +70,7 @@ class PostgresDatabase(Database):
         pose_path TEXT,
         pose_compound INTEGER,
         pose_target INTEGER,
-        pose_mol MOL,
+        pose_mol hippo.MOL,
         pose_fingerprint INTEGER,
         pose_energy_score REAL,
         pose_distance_score REAL,
@@ -69,16 +87,12 @@ class PostgresDatabase(Database):
         compound_inchikey, 
         compound_smiles, 
         compound_mol, 
-        -- compound_pattern_bfp, 
-        -- compound_morgan_bfp, 
         compound_alias
     )
     VALUES(
         %(inchikey)s, 
         %(smiles)s, 
-        mol_from_smiles(%(smiles)s), 
-        -- mol_pattern_bfp(mol_from_smiles(%(smiles)s), 2048), 
-        -- mol_morgan_bfp(mol_from_smiles(%(smiles)s), 2, 2048), 
+        hippo.mol_from_smiles(%(smiles)s), 
         %(alias)s
     )
     RETURNING compound_id;
@@ -110,7 +124,7 @@ class PostgresDatabase(Database):
         "pose_path",
         "pose_compound",
         "pose_target",
-        "mol_to_pkl(pose_mol)",
+        "hippo.mol_to_pkl(pose_mol)",
         "pose_fingerprint",
         "pose_energy_score",
         "pose_distance_score",
@@ -118,10 +132,10 @@ class PostgresDatabase(Database):
     ]
 
     COMPOUND_PROPERTY_FUNCTIONS = {
-        "num_heavy_atoms": "mol_numheavyatoms",
-        "formula": "mol_formula",
-        "num_rings": "mol_numrings",
-        "molecular_weight": "mol_amw",
+        "num_heavy_atoms": "hippo.mol_numheavyatoms",
+        "formula": "hippo.mol_formula",
+        "num_rings": "hippo.mol_numrings",
+        "molecular_weight": "hippo.mol_amw",
     }
 
     def __init__(
@@ -434,7 +448,7 @@ class PostgresDatabase(Database):
         from rdkit.Chem import Mol
 
         (bytestr,) = self.select_where(
-            query="mol_to_pkl(compound_mol)",
+            query="hippo.mol_to_pkl(compound_mol)",
             table="compound",
             key="id",
             value=compound_id,
@@ -451,7 +465,7 @@ class PostgresDatabase(Database):
 
         sql = f"""
         UPDATE hippo.pose
-        SET pose_mol = mol_from_pkl(%s)
+        SET pose_mol = hippo.mol_from_pkl(%s)
         WHERE pose_id = %s;
         """
 
@@ -505,7 +519,7 @@ class PostgresDatabase(Database):
         VALUES(
             %(inchikey)s, 
             %(smiles)s, 
-            mol_from_smiles(%(smiles)s), 
+            hippo.mol_from_smiles(%(smiles)s), 
             %(alias)s
         )
         ON CONFLICT DO NOTHING;
@@ -583,7 +597,7 @@ class PostgresDatabase(Database):
             "pose_path",
             "pose_compound",
             "pose_target",
-            "mol_to_pkl(pose_mol)",
+            "hippo.mol_to_pkl(pose_mol)",
             "pose_fingerprint",
             "pose_energy_score",
             "pose_distance_score",
