@@ -172,7 +172,7 @@ class PostgresDatabase(Database):
         if not self.table_names:
 
             if create_blank:
-                self.execute("CREATE SCHEMA IF NOT EXISTS hippo;")
+                self.create_schema()
                 self.create_blank_db()
             else:
                 mrich.error("Database is empty!", self.path)
@@ -367,6 +367,26 @@ class PostgresDatabase(Database):
         return [n for n, in self.execute(sql).fetchall()]
 
     ### CREATE TABLES
+
+    def create_schema(self) -> None:
+        """Create postgres schema if it does not exist"""
+
+        sql = """
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.schemata
+            WHERE schema_name = %s
+        );
+        """
+
+        c = self.execute(sql, (self.SQL_SCHEMA,))
+
+        exists = c.fetchone()[0]
+
+        if exists:
+            return None
+
+        self.execute("CREATE SCHEMA IF NOT EXISTS hippo;")
+        self.commit()
 
     def create_table_pattern_bfp(self) -> None:
         """Create the pattern_bfp table"""
@@ -644,15 +664,17 @@ class PostgresDatabase(Database):
 
     ### MAINTENANCE
 
-    def _clear_schema(self) -> None:
+    def _drop_schema(self) -> None:
         """Empty the Database schema entirely and recreate it"""
 
-        self.execute(
-            f"""
-            DROP SCHEMA IF EXISTS {self.SQL_SCHEMA} CASCADE;
-            CREATE SCHEMA {self.SQL_SCHEMA};
-        """
-        )
+        self.execute(f"DROP SCHEMA IF EXISTS {self.SQL_SCHEMA} CASCADE;")
+        self.commit()
+
+    def _drop_tables(self) -> None:
+        """Delete all HIPPO tables"""
+
+        for table in self.TABLES:
+            self.execute(f"DROP TABLE IF EXISTS {table};")
 
         self.commit()
 
