@@ -2704,35 +2704,7 @@ class HIPPO:
         :returns: The :class:`.Route` ID
         """
 
-        assert recipe.num_products == 1
-
-        # register the route
-        route_id = self.db.insert_route(product_id=recipe.product.id, commit=False)
-
-        assert route_id
-
-        # reactions
-        for ref in recipe.reactions.ids:
-            self.db.insert_component(
-                component_type=1, ref=ref, route=route_id, commit=False
-            )
-
-        # reactants
-        for ref, amount in recipe.reactants.id_amount_pairs:
-            self.db.insert_component(
-                component_type=2, ref=ref, route=route_id, amount=amount, commit=False
-            )
-
-        # intermediates
-        for ref, amount in recipe.intermediates.id_amount_pairs:
-            self.db.insert_component(
-                component_type=3, ref=ref, route=route_id, amount=amount, commit=False
-            )
-
-        if commit:
-            self.db.commit()
-
-        return route_id
+        return self.db.register_route(recipe=recipe, commit=commit)
 
     ### QUOTING
 

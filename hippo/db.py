@@ -1794,6 +1794,50 @@ class Database:
 
         return subsite_tag_id
 
+    def register_route(
+        self,
+        *,
+        recipe: "Recipe",
+        commit: bool = True,
+    ) -> int:
+        """
+        Insert a single-product :class:`.Recipe` into the :class:`.Database`.
+
+        :param recipe: The :class:`.Recipe` object to be registered
+        :param commit: Commit the changes to the :class:`.Database`, defaults to ``True``
+        :returns: The :class:`.Route` ID
+        """
+        
+        assert recipe.num_products == 1
+
+        # register the route
+        route_id = self.insert_route(product_id=recipe.product.id, commit=False)
+
+        assert route_id
+
+        # reactions
+        for ref in recipe.reactions.ids:
+            self.insert_component(
+                component_type=1, ref=ref, route=route_id, commit=False
+            )
+
+        # reactants
+        for ref, amount in recipe.reactants.id_amount_pairs:
+            self.insert_component(
+                component_type=2, ref=ref, route=route_id, amount=amount, commit=False
+            )
+
+        # intermediates
+        for ref, amount in recipe.intermediates.id_amount_pairs:
+            self.insert_component(
+                component_type=3, ref=ref, route=route_id, amount=amount, commit=False
+            )
+
+        if commit:
+            self.commit()
+
+        return route_id
+
     ### SELECTION
 
     def select(
