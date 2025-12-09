@@ -2647,8 +2647,14 @@ class IngredientSet:
                     none=none,
                 )
 
-            prices = [Price(a, b) for a, b in result]
-            quoted = sum(prices, Price.null())
+            if result:
+                prices = [Price(a, b) for a, b in result]
+                quoted = sum(prices, Price.null())
+
+            else:
+                quoted = Price.null()
+                self.df["quote_id"] = None
+                pairs = {i: q for i, q in enumerate(self.df["quote_id"])}
 
         else:
 
