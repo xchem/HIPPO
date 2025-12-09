@@ -6,22 +6,35 @@ STACK = "production"
 ## CONFIGURE CLEANUP
 
 CLEANUP_FILES = [
-    # f"{TARGET}.tar.gz",
+    f"{TARGET}.tar.gz",
 ]
 
 CLEANUP_DIRS = [
-    # TARGET,
+    TARGET,
 ]
 
 ## CONFIGURE DATABASE
 
+## CONFIGURE TESTS
+
+CLEANUP = True
+DOWNLOAD = False
+SETUP = True
+ADD_HITS = True
+SCAFFOLDS = True
+SUBSITES = True
+
 ### SQLITE
 
-DB = "db_test.sqlite"
+# DB = "db_test.sqlite"
 
-CLEANUP_FILES.append(DB)
+# CLEANUP_FILES.append(DB)
 
 ### POSTGRES
+
+SCAFFOLDS = False
+
+# local testing
 
 DB = dict(
     username="postgres",
@@ -30,11 +43,13 @@ DB = dict(
     port=5432,
 )
 
-## DISABLE TESTS
+# DLS deployment
 
-CLEANUP = True
-DOWNLOAD = False
-SETUP = True
-ADD_HITS = True
-SCAFFOLDS = True
-SUBSITES = True
+# from os import environ
+
+# DB = dict(
+#     username=environ["HIPPO_POSTGRES_USERNAME"],
+#     password=environ["HIPPO_POSTGRES_PASSWORD"],
+#     host="localhost",
+#     port=5555,
+# )
