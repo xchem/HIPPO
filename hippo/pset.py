@@ -443,6 +443,7 @@ class PoseTable:
         """
 
         from pandas import Series
+        from numpy import ndarray, int64
 
         match key:
 
@@ -468,18 +469,21 @@ class PoseTable:
                 or isinstance(key, tuple)
                 or isinstance(key, set)
                 or isinstance(key, Series)
+                or isinstance(key, ndarray)
             ):
 
                 indices = []
                 for i in key:
                     if isinstance(i, int):
                         index = i
+                    elif isinstance(i, int64):
+                        index = int(i)
                     elif isinstance(i, str):
                         index = self.db.get_pose_id(alias=i)
                         if not index:
                             index = self.db.get_pose_id(inchikey=i)
                     else:
-                        raise NotImplementedError
+                        raise NotImplementedError(type(i))
 
                     assert index
                     indices.append(index)
