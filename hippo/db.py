@@ -30,6 +30,25 @@ class Database:
 
     """
 
+    TABLES = [
+        "compound"
+        "inspiration"
+        "scaffold"
+        "reaction"
+        "reactant"
+        "pose"
+        "tag"
+        "quote"
+        "target"
+        "feature"
+        "route"
+        "component"
+        "compound_pattern_bfp"
+        "interaction"
+        "subsite"
+        "subsite_tag"
+    ]
+
     SQL_STRING_PLACEHOLDER = "?"
     SQL_PK_DATATYPE = "INTEGER"
     SQL_SCHEMA_PREFIX = ""
