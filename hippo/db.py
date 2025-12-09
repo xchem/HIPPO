@@ -1807,7 +1807,7 @@ class Database:
         :param commit: Commit the changes to the :class:`.Database`, defaults to ``True``
         :returns: The :class:`.Route` ID
         """
-        
+
         assert recipe.num_products == 1
 
         # register the route

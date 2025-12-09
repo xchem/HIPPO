@@ -1341,27 +1341,27 @@ class Recipe:
         products = self.products.compounds
 
         for i, c in mrich.track(enumerate(products), total=len(products)):
-    
+
             try:
                 reactions = c.reactions
             except Exception as e:
                 mrich.error(f"Error getting {c}'s reactions", e)
                 continue
-        
+
             for reaction in reactions:
-        
+
                 try:
                     recipes = reaction.get_recipes(supplier=supplier)
                 except Exception as e:
                     mrich.error(f"Error getting {reaction}'s ({c}) recipes", e)
                     continue
-        
+
                 for recipe in recipes:
-        
+
                     route = self.db.register_route(recipe=recipe)
-        
+
                     mrich.print(f"registered {route=}")
-    
+
         self.db.prune_duplicate_routes()
 
     def write_CAR_csv(
@@ -1587,7 +1587,7 @@ class Recipe:
             df["downstream_product_ids"] = df["compound_id"].apply(
                 lambda x: product_lookup.get(x, set())
             )
-    
+
             df["downstream_reaction_ids"] = df["compound_id"].apply(
                 lambda x: reaction_lookup[x]["ids"]
             )
@@ -1596,7 +1596,9 @@ class Recipe:
             )
         except KeyError as e:
             mrich.error(f"Reactant C{e} is missing downstream reaction")
-            mrich.error("Are all routes enumerated? Try running calculate_missing_routes()")
+            mrich.error(
+                "Are all routes enumerated? Try running calculate_missing_routes()"
+            )
             return None
 
         df["num_downstream_reactions"] = df["downstream_reaction_ids"].apply(len)
