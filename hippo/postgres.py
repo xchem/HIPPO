@@ -133,7 +133,7 @@ class PostgresDatabase(Database):
 
     COMPOUND_PROPERTY_FUNCTIONS = {
         "num_heavy_atoms": "hippo.mol_numheavyatoms",
-        "formula": "hippo.mol_formula",
+        "formula": ("hippo.mol_formula", ", false, false"),
         "num_rings": "hippo.mol_numrings",
         "molecular_weight": "hippo.mol_amw",
     }

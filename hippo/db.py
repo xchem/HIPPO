@@ -148,7 +148,7 @@ class Database:
 
     COMPOUND_PROPERTY_FUNCTIONS = {
         "num_heavy_atoms": "mol_num_hvyatms",
-        "formula": "mol_formula",
+        "formula": ("mol_formula", ", false, false"),
         "num_rings": "mol_num_rings",
         "molecular_weight": "mol_amw",
     }
@@ -3407,8 +3407,13 @@ class Database:
 
         function = self.COMPOUND_PROPERTY_FUNCTIONS[prop]
 
+        if not isinstance(function, str):
+            function, extra = function
+        else:
+            extra = ""
+
         (val,) = self.select_where(
-            query=f"{function}(compound_mol)",
+            query=f"{function}(compound_mol{extra})",
             table="compound",
             key="id",
             value=compound_id,
