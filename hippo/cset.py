@@ -2187,37 +2187,46 @@ class CompoundSet:
 
         mrich.var("#clusters", len(clustered))
 
-        keep = set()
-
+        mrich.debug("getting route lookup..." "")
         route_lookup = self.db.get_product_id_routes_dict()
 
+        mrich.debug("getting reactant lookup..." "")
+        reactant_lookup = self.db.get_route_id_reactant_ids_dict()
+
+        keep = set()
         for cluster, elabs in clustered.items():
 
-            assert len(cluster) == 1
+            for scaffold in cluster:
 
-            # routes = RouteSet.from_product_ids(self.db, ids=[cluster[0].id], progress=False)
-            routes = RouteSet.from_ids(
-                self.db, route_lookup[cluster[0].id], progress=False
-            )
+                mrich.debug(scaffold.id, len(elabs), len(keep))
 
-            assert len(routes) == 1
-            scaffold_reactants = set(routes[0].reactants.ids)
+                route_ids = route_lookup[scaffold.id]
 
-            for elab in elabs:
+                if len(route_ids) > 1:
+                    mrich.warning(f"scaffold {scaffold} has multiple routes")
 
-                # routes = RouteSet.from_product_ids(self.db, ids=[elab.id], progress=False)
-                routes = RouteSet.from_ids(
-                    self.db, route_lookup[elab.id], progress=False
-                )
+                for route_id in route_ids:
 
-                assert len(routes) == 1
+                    scaffold_reactants = reactant_lookup[route_id]
 
-                reactants = set(routes[0].reactants.ids)
+                    for elab in elabs:
 
-                common = scaffold_reactants & reactants
+                        routes = RouteSet.from_ids(
+                            self.db, route_lookup[elab.id], progress=False
+                        )
 
-                if common:
-                    keep.add(elab.id)
+                        route_ids = route_lookup[elab.id]
+
+                        if len(route_ids) != 1:
+                            mrich.error(f"elab {elab.id} has {route_ids=}")
+                            continue
+
+                        reactants = reactant_lookup[list(route_ids)[0]]
+
+                        common = scaffold_reactants & reactants
+
+                        if common:
+                            keep.add(elab.id)
 
         return CompoundSet(self.db, keep)
 
