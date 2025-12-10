@@ -2165,6 +2165,62 @@ class CompoundSet:
             compounds=self, amount=amount, supplier=supplier
         )
 
+    def split_by_scaffolds(self) -> "dict[CompoundSet, CompoundSet]":
+        """Split this set into subsets clustered by scaffold compound"""
+
+        cluster_dict = self.db.get_compound_cluster_dict(cset=self)
+
+        subsets = {}
+        for cluster, elabs in cluster_dict.items():
+            cluster = CompoundSet(self.db, list(cluster))
+            subsets[cluster] = CompoundSet(self.db, list(elabs))
+
+        return subsets
+
+    def despaghettify(self) -> "CompoundSet":
+        """Reduce this set to only compounds that elaborate a single reactant at a time.
+        Requires routes to be present in the database."""
+
+        from .recipe import RouteSet
+
+        clustered = self.split_by_scaffolds()
+
+        mrich.var("#clusters", len(clustered))
+
+        keep = set()
+
+        route_lookup = self.db.get_product_id_routes_dict()
+
+        for cluster, elabs in clustered.items():
+
+            assert len(cluster) == 1
+
+            # routes = RouteSet.from_product_ids(self.db, ids=[cluster[0].id], progress=False)
+            routes = RouteSet.from_ids(
+                self.db, route_lookup[cluster[0].id], progress=False
+            )
+
+            assert len(routes) == 1
+            scaffold_reactants = set(routes[0].reactants.ids)
+
+            for elab in elabs:
+
+                # routes = RouteSet.from_product_ids(self.db, ids=[elab.id], progress=False)
+                routes = RouteSet.from_ids(
+                    self.db, route_lookup[elab.id], progress=False
+                )
+
+                assert len(routes) == 1
+
+                reactants = set(routes[0].reactants.ids)
+
+                common = scaffold_reactants & reactants
+
+                if common:
+                    keep.add(elab.id)
+
+        return CompoundSet(self.db, keep)
+
     ### DUNDERS
 
     def __len__(self) -> int:
