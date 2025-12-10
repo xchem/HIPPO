@@ -228,7 +228,7 @@ class Compound:
                 from .cset import CompoundSet
 
                 self._scaffolds = CompoundSet(
-                    self.db, ids, name=f"scaffold scaffolds of {self}"
+                    self.db, ids, name=f"scaffolds of {self}"
                 )
                 self._total_changes = self.db.total_changes
         return self._scaffolds
