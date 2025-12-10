@@ -2550,23 +2550,24 @@ class RouteSet:
     ### FACTORIES
 
     @classmethod
-    def from_ids(cls, db: "Database", ids: list | set):
+    def from_ids(cls, db: "Database", ids: list | set, progress: bool = True):
         """Generate a routeset from a set of :class:`.Route` IDs
 
         :param db: database to link
         :param ids: :class:`.Route` database IDs
+        :param progress: show progress bar
         """
 
-        routes = [
-            db.get_route(id=route_id)
-            for route_id in mrich.track(ids, prefix="Getting routes")
-        ]
+        if progress:
+            ids = mrich.track(ids, prefix="Getting routes")
+
+        routes = [db.get_route(id=route_id) for route_id in ids]
 
         self = cls.__new__(cls)
         return RouteSet(db, routes)
 
     @classmethod
-    def from_product_ids(cls, db: "Database", ids: list | set):
+    def from_product_ids(cls, db: "Database", ids: list | set, progress: bool = True):
         """Generate a routeset from a set of product :class:`.Compound` IDs
 
         :param db: database to link
@@ -2584,7 +2585,7 @@ class RouteSet:
 
         route_ids = [i for i, in records]
 
-        return cls.from_ids(db, route_ids)
+        return cls.from_ids(db, route_ids, progress=progress)
 
     @classmethod
     def from_json(
@@ -2956,6 +2957,10 @@ class RouteSet:
     def __iter__(self):
         """Iterate over routes in this set"""
         return iter(self.data.values())
+
+    def __getitem__(self, key):
+        """Get a specific route in this set"""
+        return list(self.data.values())[key]
 
 
 class RecipeSet:
