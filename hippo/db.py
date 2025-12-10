@@ -3432,6 +3432,25 @@ class Database:
 
         return lookup
 
+    def get_route_id_reactant_ids_dict(self) -> dict[int, set[int]]:
+        """Get a dictionary mapping :class:`.Route` ID's to their reactant :class:`.Compound` IDs"""
+
+        sql = """
+        SELECT route_id, component_ref FROM route
+        INNER JOIN component
+        ON component_route = route_id
+        WHERE component_type = 2
+        """
+
+        c = self.execute(sql)
+
+        lookup = {}
+        for route_id, route_reactant in c:
+            lookup.setdefault(route_id, set())
+            lookup[route_id].add(route_reactant)
+
+        return lookup
+
     def get_compound_id_pose_ids_dict(self, cset: "CompoundSet") -> dict[int, set]:
         """Get a dictionary mapping :class:`.Compound` ID's to their associated :class:`.Pose` ID's"""
         records = self.execute(
