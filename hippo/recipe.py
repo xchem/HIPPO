@@ -1484,7 +1484,10 @@ class Recipe:
         return df
 
     def write_reactant_csv(
-        self, file: "str | Path", return_df: bool = False
+        self,
+        file: "str | Path",
+        reaction_type_counts: bool = True,
+        return_df: bool = False,
     ) -> "DataFrame | None":
         """Detailed CSV output including reactant information for purchasing and information on the downstream synthetic use
 
@@ -1564,6 +1567,9 @@ class Recipe:
             reaction_lookup.setdefault(reactant_id, dict(ids=set(), types=set()))
             reaction_lookup[reactant_id]["ids"].add(reaction_id)
             reaction_lookup[reactant_id]["types"].add(reaction_type)
+            reaction_lookup[reactant_id].setdefault("counts", {})
+            reaction_lookup[reactant_id]["counts"].setdefault(reaction_type, 0)
+            reaction_lookup[reactant_id]["counts"][reaction_type] += 1
 
         smiles_lookup = self.db.get_compound_id_smiles_dict(self.reactants.compounds)
 
@@ -1650,12 +1656,26 @@ class Recipe:
             "quoted_purity",
             "quoted_smiles",
             "quote_date",
+            "num_downstream_products",
             "num_downstream_reaction_types",
             "num_downstream_reactions",
-            "num_downstream_products",
+        ]
+
+        if reaction_type_counts:
+            for i, row in df.iterrows():
+
+                counts = reaction_lookup[row["compound_id"]]["counts"]
+
+                for reaction_type, count in counts.items():
+                    key = f"num_downstream ({reaction_type})"
+                    df.loc[i, key] = count
+                    if key not in cols:
+                        cols.append(key)
+
+        cols += [
+            "downstream_product_ids",
             "downstream_reaction_types",
             "downstream_reaction_ids",
-            "downstream_product_ids",
         ]
 
         df = df[[c for c in cols if c in df.columns]]
