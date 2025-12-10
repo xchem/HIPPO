@@ -1335,12 +1335,14 @@ class Recipe:
             permitted_reactions=self.reactions, return_ids=return_ids
         )
 
-    def calculate_missing_routes(
+    def register_missing_routes(
         self, missing_only: bool = True, supplier: str = "Enamine"
     ) -> None:
         """Calculate missing routes to products of this Recipe"""
 
-        products = self.products.compounds
+        return products.compounds.register_missing_routes(
+            missing_only=missing_only, supplier=supplier
+        )
 
         if missing_only:
             from .cset import CompoundSet
