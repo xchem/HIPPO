@@ -63,7 +63,7 @@ class HIPPO:
 
             self._db = PostgresDatabase(animal=self, **db)
 
-        elif not isinstance(db, Path):
+        else:
 
             ### INITIALISE SQLITE DATABASE
 
