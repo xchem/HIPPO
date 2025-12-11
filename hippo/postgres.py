@@ -206,7 +206,7 @@ class PostgresDatabase(Database):
     def path(self) -> None:
         """PostgresDatabase path"""
         # raise NotImplementedError("PostgresDatabase has no path")
-        return f"postgresql://{self.username}:{self.password}@{self.host}:{self.port}"
+        return f"postgresql://{self.username}@{self.host}:{self.port}"
 
     @property
     def username(self) -> str:
@@ -356,11 +356,15 @@ class PostgresDatabase(Database):
         batch_size: int = None,
     ):
         """Execute arbitrary SQL with retry if database is locked."""
+
+        returning = "RETURNING" in sql
+
         if debug:
             from .tools import strip_sql
 
             mrich.debug(strip_sql(sql))
             mrich.debug("len(payload):", len(payload))
+            mrich.debug(f"{returning=}")
 
         if time:
             import re
@@ -377,13 +381,17 @@ class PostgresDatabase(Database):
             n = len(batches)
 
             results = []
-            for i, batch in enumerate(mrich.track(batches, prefix="executing")):
+            for i, batch in enumerate(mrich.track(batches, prefix="batch execution")):
                 mrich.set_progress_field("i", i)
                 mrich.set_progress_field("n", n)
-                result = self.cursor.executemany(sql, batch)
 
-                if result:
-                    results.append(result)
+                self.cursor.executemany(sql, batch, returning=returning)
+
+                if returning:
+                    result = [self.cursor.fetchone() for _ in self.cursor.results()]
+
+                    if result:
+                        results.append(result)
 
             else:
                 mrich.set_progress_field("i", n)
@@ -395,7 +403,12 @@ class PostgresDatabase(Database):
 
         else:
 
-            records = self.cursor.executemany(sql, payload)
+            self.cursor.executemany(sql, payload, returning=returning)
+
+            if returning:
+                records = [self.cursor.fetchone() for _ in self.cursor.results()]
+            else:
+                records = None
 
         if time:
             sql = re.sub(r"\s+", " ", sql).strip()
@@ -532,11 +545,13 @@ class PostgresDatabase(Database):
 
         """
 
-        # from itertools import batched
-        from json import dump
-        from .animal import HIPPO
-        from rdkit.Chem import Mol
         import re
+        import pandas as pd
+        from json import dump
+        from rdkit.Chem import Mol
+        from datetime import datetime
+
+        from .animal import HIPPO
 
         mrich.var("source", source)
         mrich.var("batch_size", batch_size)
@@ -558,11 +573,61 @@ class PostgresDatabase(Database):
 
         source = HIPPO("source", source_path)
 
+        ### helper functions
+
+        def executemany(table, sql, payload):
+
+            n = self.count(table)
+            mrich.var(f"destination: #{table}s", n)
+
+            result = self.executemany(sql, payload, batch_size=batch_size)
+
+            if d := self.count(table) - n:
+                mrich.success("Inserted", d, f"new {table}s")
+            else:
+                mrich.warning("Inserted", d, f"new {table}s")
+
+            return result
+
+        def dump_json(data, file):
+            mrich.writing(file)
+            dump(data, open(file, "wt"))
+
+        def dump_xlsx(data, file):
+            mrich.writing(file)
+
+            meta = []
+            for key, value in data.items():
+                if not isinstance(value, dict):
+                    meta.append(dict(key=key, value=value))
+
+            meta_df = pd.DataFrame(meta).set_index("key")
+
+            source = meta_df.loc["source", "value"]
+            destination = meta_df.loc["destination", "value"]
+
+            sheets = {}
+            for key, value in data.items():
+                if isinstance(value, dict):
+
+                    df = pd.DataFrame(
+                        [{source: k, destination: v} for k, v in value.items()]
+                    )
+                    sheets[key] = df.set_index(source)
+
+            with pd.ExcelWriter(file) as writer:
+
+                meta_df.to_excel(writer, sheet_name="meta")
+
+                for name, df in sheets.items():
+                    df.to_excel(writer, sheet_name=name, index=True)
+
         try:
 
             migration_data = {
                 "source": str(source_path.resolve()),
                 "destination": self.path,
+                "time": str(datetime.now()),
             }
 
             ### compounds
@@ -598,7 +663,8 @@ class PostgresDatabase(Database):
                 dict(inchikey=b, smiles=c, alias=d) for a, b, c, d in compound_records
             ]
 
-            # self.executemany(sql, compound_dicts, batch_size=batch_size)
+            # do the insertion
+            # executemany("compound", sql, compound_dicts)
 
             # map to the destination records
             destination_inchikey_map = self.get_compound_inchikey_id_dict(
@@ -635,7 +701,7 @@ class PostgresDatabase(Database):
             ON CONFLICT DO NOTHING;
             """
 
-            # self.executemany(sql, scaffold_records, batch_size=batch_size)
+            # executemany("scaffold", sql, scaffold_records)
 
             ### targets
 
@@ -739,8 +805,10 @@ class PostgresDatabase(Database):
                 for i, inchikey, alias, smiles, path, compound_id, target_id, mol, fingerprint, energy_score, distance_score, inspiration_score, metadata in pose_records
             ]
 
+            mrich.var("source: #poses", len(pose_dicts))
+
             # do the insertion
-            # self.executemany(sql, pose_dicts, batch_size=batch_size)
+            # executemany("pose", sql, pose_dicts)
 
             # map to the destination records
             destination_pose_path_map = self.get_pose_path_id_dict()
@@ -813,7 +881,7 @@ class PostgresDatabase(Database):
             ON CONFLICT DO NOTHING;
             """
 
-            # self.executemany(sql, inspiration_dicts, batch_size=batch_size)
+            # executemany("inspiration", sql, inspiration_dicts)
 
             ### tags
 
@@ -862,7 +930,7 @@ class PostgresDatabase(Database):
                 multiple=True,
             )
 
-            mrich.var("source: #tag records", len(tag_records))
+            mrich.var("source: #tags", len(tag_records))
 
             if tag_name_map:
                 mrich.warning("renamed", len(tag_name_map), "tags")
@@ -900,17 +968,180 @@ class PostgresDatabase(Database):
             migration_data["tag_name_map"] = tag_name_map
 
             # do the insertion
-            # self.executemany(sql, tag_dicts, batch_size=batch_size)
+            # executemany("tag", sql, tag_dicts)
 
-            ### reactions
+            ### reactions & reactants
+
+            def get_reaction_id_reaction_dict_map(db, compound_id_map=None):
+
+                # reactions
+                reaction_records = db.select(
+                    table="reaction",
+                    query="reaction_id, reaction_type, reaction_product, reaction_product_yield",
+                    multiple=True,
+                )
+
+                reaction_id_reaction_dict_map = {
+                    i: dict(
+                        id=i,
+                        type=t,
+                        product=(
+                            compound_id_map[product_id]
+                            if compound_id_map
+                            else product_id
+                        ),
+                        product_yield=product_yield,
+                    )
+                    for i, t, product_id, product_yield in reaction_records
+                }
+
+                # reactants
+                reactant_records = db.select(
+                    table="reactant",
+                    query="reactant_amount, reactant_reaction, reactant_compound",
+                    multiple=True,
+                )
+
+                # combine
+                for amount, reaction_id, compound_id in reactant_records:
+                    compound_id = (
+                        compound_id_map[compound_id] if compound_id_map else compound_id
+                    )
+
+                    reaction_id_reaction_dict_map[reaction_id].setdefault(
+                        "reactants", set()
+                    )
+                    reaction_id_reaction_dict_map[reaction_id]["reactants"].add(
+                        (compound_id, amount)
+                    )
+
+                    reaction_id_reaction_dict_map[reaction_id].setdefault(
+                        "reactant_ids", set()
+                    )
+                    reaction_id_reaction_dict_map[reaction_id]["reactant_ids"].add(
+                        compound_id
+                    )
+
+                return reaction_id_reaction_dict_map, reactant_records
+
+            # get source reaction data
+            source_reaction_dicts, reactant_records = get_reaction_id_reaction_dict_map(
+                source.db, compound_id_map
+            )
+            mrich.var("source: #reactions", len(source_reaction_dicts))
+
+            # get destination reaction data
+            destination_reaction_dicts, _ = get_reaction_id_reaction_dict_map(self)
+            mrich.var("destination: #reactions", len(destination_reaction_dicts))
+
+            # create keyed lookups
+
+            source_reaction_lookup = {
+                (d["product"], d["type"], tuple(sorted(list(d["reactant_ids"])))): d[
+                    "id"
+                ]
+                for d in source_reaction_dicts.values()
+            }
+
+            destination_reaction_lookup = {
+                (d["product"], d["type"], tuple(sorted(list(d["reactant_ids"])))): d[
+                    "id"
+                ]
+                for d in destination_reaction_dicts.values()
+            }
+
+            # work out which source reactions are not in the destination and create a map for existing reactions
+
+            reaction_id_map = {}
+            new_reaction_dicts = []
+
+            for key, reaction_id in list(source_reaction_lookup.items()):
+
+                if key in destination_reaction_lookup:
+                    # EXISTING REACTION
+                    reaction_id_map[reaction_id] = destination_reaction_lookup[key]
+
+                else:
+
+                    # NEW REACTION
+                    new_reaction_dicts.append(source_reaction_dicts[reaction_id])
+
+            mrich.var("existing #reactions:", len(reaction_id_map))
+            mrich.var("new #reactions:", len(new_reaction_dicts))
+
+            # reaction insertion query
+            sql = """
+            INSERT INTO hippo.reaction(
+                reaction_type, 
+                reaction_product, 
+                reaction_product_yield
+            )
+            VALUES(
+                %(type)s,
+                %(product)s,
+                %(product_yield)s
+            )
+            ON CONFLICT DO NOTHING
+            RETURNING reaction_id;
+            """
+
+            # massage the data
+            reaction_dicts = [
+                dict(
+                    type=d["type"],
+                    product=d["product"],
+                    product_yield=d["product_yield"],
+                )
+                for d in new_reaction_dicts
+            ]
+
+            # do the insertion
+            inserted_reaction_ids = executemany("reaction", sql, reaction_dicts)
+
+            if inserted_reaction_ids:
+                inserted_reaction_ids = [i for i, in inserted_reaction_ids]
+            else:
+                inserted_reaction_ids = []
+
+            # add to the map
+            for reaction_dict, new_reaction_id in zip(
+                new_reaction_dicts, inserted_reaction_ids
+            ):
+                reaction_id = reaction_dict["id"]
+                reaction_id_map[reaction_id] = new_reaction_id
+
+            migration_data["reaction_id_map"] = reaction_id_map
+
+            # reactant insertion query
+            sql = """
+            INSERT INTO hippo.reactant(
+                reactant_amount, 
+                reactant_reaction, 
+                reactant_compound
+            )
+            VALUES(
+                %(amount)s,
+                %(reaction)s,
+                %(compound)s
+            )
+            ON CONFLICT DO NOTHING;
+            """
+
+            reactant_dicts = [
+                dict(
+                    amount=amount,
+                    reaction=reaction_id_map[reaction_id],
+                    compound=compound_id_map[compound_id],
+                )
+                for amount, reaction_id, compound_id in reactant_records
+            ]
+
+            mrich.var("source: #reactants", len(reactant_dicts))
+
+            # do the insertion
+            # executemany("reactant", sql, reactant_dicts)
 
             ### quotes
-
-            ### reactants
-
-            ### routes
-
-            ### components
 
             ### features
 
@@ -920,14 +1151,19 @@ class PostgresDatabase(Database):
 
             ### subsite_tags
 
+            ### routes (skip?)
+
+            ### components (skip?)
+
             raise NotImplementedError
 
             mrich.success(
-                "Migration staged. Don't forget to review and commit or rollback the changes!"
+                "Migration staged. Please review and db.commit() or db.rollback() the changes"
             )
 
         except Exception as e:
             self.rollback()
+
             mrich.error(e)
 
             json_file_name = (
@@ -937,8 +1173,13 @@ class PostgresDatabase(Database):
                 f"{source.db.path.name.removesuffix('.sqlite')}_migration_partial.xlsx"
             )
 
-        mrich.writing(json_file_name)
-        dump(migration_data, open(json_file_name, "wt"))
+            dump_json(migration_data, json_file_name)
+            dump_xlsx(migration_data, xlsx_file_name)
+
+            # raise
+
+        dump_json(migration_data, json_file_name)
+        dump_xlsx(migration_data, xlsx_file_name)
 
         return migration_data
 
