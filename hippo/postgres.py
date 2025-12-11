@@ -802,7 +802,21 @@ class PostgresDatabase(Database):
                     inspiration_score=inspiration_score,
                     metadata=metadata,
                 )
-                for i, inchikey, alias, smiles, path, compound_id, target_id, mol, fingerprint, energy_score, distance_score, inspiration_score, metadata in pose_records
+                for (
+                    i,
+                    inchikey,
+                    alias,
+                    smiles,
+                    path,
+                    compound_id,
+                    target_id,
+                    mol,
+                    fingerprint,
+                    energy_score,
+                    distance_score,
+                    inspiration_score,
+                    metadata,
+                ) in pose_records
             ]
 
             mrich.var("source: #poses", len(pose_dicts))
