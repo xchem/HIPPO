@@ -3930,6 +3930,19 @@ class Database:
             compound_inchikey: compound_id for compound_inchikey, compound_id in records
         }
 
+    def get_compound_smiles_id_dict(self) -> dict[str, int]:
+        """Get a dictionary mapping :class:`.Compound` smiles to their ID's"""
+
+        records = self.select(
+            table="compound",
+            query="compound_smiles, compound_id",
+            multiple=True,
+        )
+
+        return {
+            compound_smiles: compound_id for compound_smiles, compound_id in records
+        }
+
     def get_compound_id_inchikey_dict(
         self, cset: "CompoundSet | None" = None
     ) -> dict[int, str]:

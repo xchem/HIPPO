@@ -351,7 +351,7 @@ class PostgresDatabase(Database):
         sql,
         payload=None,
         *,
-        debug: bool = True,
+        debug: bool = False,
         time: bool = False,
         batch_size: int = None,
     ):
@@ -372,7 +372,7 @@ class PostgresDatabase(Database):
 
             start = perf_counter()
 
-        if batch_size:
+        if batch_size and batch_size < len(payload):
 
             from itertools import batched, chain
 
@@ -529,6 +529,13 @@ class PostgresDatabase(Database):
     def migrate_sqlite(
         self,
         source: str | Path,
+        *,
+        reactions: bool = True,
+        scaffolds: bool = True,
+        features: bool = True,
+        interactions: bool = True,
+        subsites: bool = True,
+        quotes: bool = True,
         batch_size: int = 5_000,
         tag_compound_id_regex: list[tuple[str, str]] | None = None,
         # tag_name_map: "Callable" = None,
@@ -545,13 +552,25 @@ class PostgresDatabase(Database):
 
         """
 
-        import re
-        import pandas as pd
-        from json import dump
-        from rdkit.Chem import Mol
         from datetime import datetime
 
         from .animal import HIPPO
+        from .migration import (
+            migrate_compounds,
+            migrate_scaffolds,
+            migrate_targets,
+            migrate_poses,
+            migrate_pose_references,
+            migrate_inspirations,
+            migrate_tags,
+            migrate_reactions_and_reactants,
+            migrate_features,
+            migrate_interactions,
+            migrate_subsites,
+            migrate_quotes,
+            dump_xlsx,
+            dump_json,
+        )
 
         mrich.var("source", source)
         mrich.var("batch_size", batch_size)
@@ -575,605 +594,145 @@ class PostgresDatabase(Database):
 
         ### helper functions
 
-        def executemany(table, sql, payload):
-
-            n = self.count(table)
-            mrich.var(f"destination: #{table}s", n)
-
-            result = self.executemany(sql, payload, batch_size=batch_size)
-
-            if d := self.count(table) - n:
-                mrich.success("Inserted", d, f"new {table}s")
-            else:
-                mrich.warning("Inserted", d, f"new {table}s")
-
-            return result
-
-        def dump_json(data, file):
-            mrich.writing(file)
-            dump(data, open(file, "wt"))
-
-        def dump_xlsx(data, file):
-            mrich.writing(file)
-
-            meta = []
-            for key, value in data.items():
-                if not isinstance(value, dict):
-                    meta.append(dict(key=key, value=value))
-
-            meta_df = pd.DataFrame(meta).set_index("key")
-
-            source = meta_df.loc["source", "value"]
-            destination = meta_df.loc["destination", "value"]
-
-            sheets = {}
-            for key, value in data.items():
-                if isinstance(value, dict):
-
-                    df = pd.DataFrame(
-                        [{source: k, destination: v} for k, v in value.items()]
-                    )
-                    sheets[key] = df.set_index(source)
-
-            with pd.ExcelWriter(file) as writer:
-
-                meta_df.to_excel(writer, sheet_name="meta")
-
-                for name, df in sheets.items():
-                    df.to_excel(writer, sheet_name=name, index=True)
-
         try:
 
             migration_data = {
                 "source": str(source_path.resolve()),
                 "destination": self.path,
                 "time": str(datetime.now()),
+                "tag_compound_id_regex": tag_compound_id_regex,
             }
 
             ### compounds
 
-            # source data
-            compound_records = source.db.select(
-                table="compound",
-                query="compound_id, compound_inchikey, compound_smiles, compound_alias",
-                multiple=True,
+            migration_data = migrate_compounds(
+                source=source.db,
+                destination=self,
+                migration_data=migration_data,
+                batch_size=batch_size,
+                # execute=False,
             )
-
-            mrich.var("source: #compounds", len(compound_records))
-
-            # insertion query
-            sql = """
-            INSERT INTO hippo.compound(
-                compound_inchikey, 
-                compound_smiles, 
-                compound_mol, 
-                compound_alias
-            )
-            VALUES(
-                %(inchikey)s, 
-                %(smiles)s, 
-                hippo.mol_from_smiles(%(smiles)s), 
-                %(alias)s
-            )
-            ON CONFLICT DO NOTHING;
-            """
-
-            # format the data
-            compound_dicts = [
-                dict(inchikey=b, smiles=c, alias=d) for a, b, c, d in compound_records
-            ]
-
-            # do the insertion
-            # executemany("compound", sql, compound_dicts)
-
-            # map to the destination records
-            destination_inchikey_map = self.get_compound_inchikey_id_dict(
-                inchikeys=[b for a, b, c, d in compound_records]
-            )
-
-            compound_id_map = {
-                a: destination_inchikey_map.get(b) for a, b, c, d in compound_records
-            }
-
-            migration_data["compound_id_map"] = compound_id_map
 
             ### scaffolds
 
-            # source data
-            scaffold_records = source.db.select(
-                table="scaffold",
-                query="scaffold_base, scaffold_superstructure",
-                multiple=True,
-            )
+            if scaffolds:
 
-            # map to new IDs
-            scaffold_records = [
-                (compound_id_map[a], compound_id_map[b]) for a, b in scaffold_records
-            ]
-
-            mrich.var("source: #scaffolds", len(scaffold_records))
-
-            # insert new data
-
-            sql = """
-            INSERT INTO hippo.scaffold(scaffold_base, scaffold_superstructure)
-            VALUES(%s, %s)
-            ON CONFLICT DO NOTHING;
-            """
-
-            # executemany("scaffold", sql, scaffold_records)
+                migration_data = migrate_scaffolds(
+                    source=source.db,
+                    destination=self,
+                    migration_data=migration_data,
+                    batch_size=batch_size,
+                    # execute=False,
+                )
 
             ### targets
 
-            # source data
-            target_records = source.db.select(
-                table="target", query="target_id, target_name", multiple=True
+            migration_data = migrate_targets(
+                source=source.db,
+                destination=self,
+                migration_data=migration_data,
+                batch_size=batch_size,
+                # execute=False,
             )
-
-            # do the insertion
-            for i, name in target_records:
-                self.insert_target(name=name, warn_duplicate=False)
-
-            # map to the destination records
-            destination_target_name_map = {
-                name: i
-                for i, name in self.select(
-                    table="target", query="target_id, target_name", multiple=True
-                )
-            }
-
-            target_id_map = {
-                i: destination_target_name_map[name] for i, name in target_records
-            }
-
-            migration_data["target_id_map"] = target_id_map
 
             ### poses
 
-            pose_fields = [
-                "pose_id",
-                "pose_inchikey",
-                "pose_alias",
-                "pose_smiles",
-                "pose_path",
-                "pose_compound",
-                "pose_target",
-                # "CASE WHEN pose_mol IS NOT NULL THEN mol_to_binary_mol(pose_mol) ELSE pose_mol END",
-                "pose_mol",
-                "pose_fingerprint",
-                "pose_energy_score",
-                "pose_distance_score",
-                "pose_inspiration_score",
-                "pose_metadata",
-            ]
-
-            # source data
-            pose_records = source.db.select(
-                table="pose", query=", ".join(pose_fields), multiple=True
+            migration_data = migrate_poses(
+                source=source.db,
+                destination=self,
+                migration_data=migration_data,
+                batch_size=batch_size,
+                # execute=False,
             )
-
-            # insertion query
-            sql = """
-            INSERT INTO hippo.pose(
-                pose_inchikey,
-                pose_alias,
-                pose_smiles,
-                pose_path,
-                pose_compound,
-                pose_target,
-                pose_mol,
-                pose_fingerprint,
-                pose_energy_score,
-                pose_distance_score,
-                pose_inspiration_score,
-                pose_metadata
-            )
-            VALUES(
-                %(inchikey)s,
-                %(alias)s,
-                %(smiles)s,
-                %(path)s,
-                %(compound)s,
-                %(target)s,
-                hippo.mol_from_pkl(%(mol)s),
-                %(fingerprint)s,
-                %(energy_score)s,
-                %(distance_score)s,
-                %(inspiration_score)s,
-                %(metadata)s
-            )
-            ON CONFLICT DO NOTHING;
-            """
-
-            # massage the data
-            pose_dicts = [
-                dict(
-                    id=i,
-                    inchikey=inchikey,
-                    alias=alias,
-                    smiles=smiles,
-                    path=path,
-                    compound=compound_id_map[compound_id],
-                    target=target_id_map[target_id],
-                    mol=Mol(mol).ToBinary() if mol else None,
-                    fingerprint=fingerprint,
-                    energy_score=energy_score,
-                    distance_score=distance_score,
-                    inspiration_score=inspiration_score,
-                    metadata=metadata,
-                )
-                for (
-                    i,
-                    inchikey,
-                    alias,
-                    smiles,
-                    path,
-                    compound_id,
-                    target_id,
-                    mol,
-                    fingerprint,
-                    energy_score,
-                    distance_score,
-                    inspiration_score,
-                    metadata,
-                ) in pose_records
-            ]
-
-            mrich.var("source: #poses", len(pose_dicts))
-
-            # do the insertion
-            # executemany("pose", sql, pose_dicts)
-
-            # map to the destination records
-            destination_pose_path_map = self.get_pose_path_id_dict()
-
-            # return destination_pose_path_map
-
-            pose_id_map = {
-                p["id"]: destination_pose_path_map[p["path"]] for p in pose_dicts
-            }
-
-            migration_data["pose_id_map"] = pose_id_map
 
             ### pose references
 
-            # source data
-            reference_records = source.db.select(
-                table="pose",
-                query="pose_id, pose_reference",
-                multiple=True,
+            migration_data = migrate_pose_references(
+                source=source.db,
+                destination=self,
+                migration_data=migration_data,
+                batch_size=batch_size,
+                # execute=False,
             )
-
-            # map to new IDs
-            reference_dicts = [
-                dict(pose=pose_id_map[a], reference=pose_id_map[b])
-                for a, b in reference_records
-                if b
-            ]
-
-            mrich.var("source: #references", len(reference_dicts))
-
-            # insert new data
-
-            sql = """
-            UPDATE hippo.pose
-            SET pose_reference = %(reference)s
-            WHERE pose_id = %(pose)s;
-            """
-
-            # self.executemany(sql, reference_dicts, batch_size=batch_size)
 
             ### inspirations
 
-            # source data
-            inspiration_records = source.db.select(
-                table="inspiration",
-                query="inspiration_original, inspiration_derivative",
-                multiple=True,
+            migration_data = migrate_inspirations(
+                source=source.db,
+                destination=self,
+                migration_data=migration_data,
+                batch_size=batch_size,
+                # execute=False,
             )
-
-            # map to new IDs
-            inspiration_dicts = [
-                dict(original=pose_id_map[a], derivative=pose_id_map[b])
-                for a, b in inspiration_records
-                if b
-            ]
-
-            mrich.var("source: #inspirations", len(inspiration_dicts))
-
-            # insert new data
-
-            sql = """
-            INSERT INTO hippo.inspiration(
-                inspiration_original, 
-                inspiration_derivative
-            )
-            VALUES (
-                %(original)s,
-                %(derivative)s
-            )
-            ON CONFLICT DO NOTHING;
-            """
-
-            # executemany("inspiration", sql, inspiration_dicts)
 
             ### tags
 
-            # unique tag names
-
-            tag_names = source.db.select(
-                table="tag", query="DISTINCT tag_name", multiple=True
+            migration_data = migrate_tags(
+                source=source.db,
+                destination=self,
+                migration_data=migration_data,
+                batch_size=batch_size,
+                # execute=False,
             )
-
-            tag_names = sorted([t for t, in tag_names])
-
-            # rename tags based on regex
-
-            tag_name_map = {}
-            for tag in tag_names:
-                for pattern, template in tag_compound_id_regex:
-
-                    match = re.match(pattern, tag)
-
-                    if not match:
-                        continue
-
-                    groups = match.groups()
-
-                    assert (
-                        len(groups) == 1
-                    ), f"tag_compound_id_regex replacement not supported with multiple groups, {pattern=}"
-
-                    groups = [g for g in groups]
-
-                    compound_id = int(groups[0])
-                    new_compound_id = compound_id_map[compound_id]
-
-                    replacement = template.format(new_compound_id=new_compound_id)
-
-                    new_tag = re.sub(pattern, replacement, tag)
-
-                    tag_name_map[tag] = new_tag
-
-                    break
-
-            # source data
-            tag_records = source.db.select(
-                table="tag",
-                query="tag_name, tag_compound, tag_pose",
-                multiple=True,
-            )
-
-            mrich.var("source: #tags", len(tag_records))
-
-            if tag_name_map:
-                mrich.warning("renamed", len(tag_name_map), "tags")
-
-            # insertion query
-            sql = """
-            INSERT INTO hippo.tag(
-                tag_name, 
-                tag_compound, 
-                tag_pose
-            )
-            VALUES(
-                %(name)s, 
-                %(compound)s, 
-                %(pose)s
-            )
-            ON CONFLICT DO NOTHING;
-            """
-
-            # format the data
-            tag_dicts = [
-                dict(
-                    name=tag_name_map.get(a, a),
-                    compound=compound_id_map[b] if b else None,
-                    pose=pose_id_map[c] if c else None,
-                )
-                for a, b, c in tag_records
-            ]
-
-            # add unchanged tags
-            for tag in tag_names:
-                if tag not in tag_name_map:
-                    tag_name_map[tag] = tag
-
-            migration_data["tag_name_map"] = tag_name_map
-
-            # do the insertion
-            # executemany("tag", sql, tag_dicts)
 
             ### reactions & reactants
 
-            def get_reaction_id_reaction_dict_map(db, compound_id_map=None):
+            if reactions:
 
-                # reactions
-                reaction_records = db.select(
-                    table="reaction",
-                    query="reaction_id, reaction_type, reaction_product, reaction_product_yield",
-                    multiple=True,
+                migration_data = migrate_reactions_and_reactants(
+                    source=source.db,
+                    destination=self,
+                    migration_data=migration_data,
+                    batch_size=batch_size,
                 )
-
-                reaction_id_reaction_dict_map = {
-                    i: dict(
-                        id=i,
-                        type=t,
-                        product=(
-                            compound_id_map[product_id]
-                            if compound_id_map
-                            else product_id
-                        ),
-                        product_yield=product_yield,
-                    )
-                    for i, t, product_id, product_yield in reaction_records
-                }
-
-                # reactants
-                reactant_records = db.select(
-                    table="reactant",
-                    query="reactant_amount, reactant_reaction, reactant_compound",
-                    multiple=True,
-                )
-
-                # combine
-                for amount, reaction_id, compound_id in reactant_records:
-                    compound_id = (
-                        compound_id_map[compound_id] if compound_id_map else compound_id
-                    )
-
-                    reaction_id_reaction_dict_map[reaction_id].setdefault(
-                        "reactants", set()
-                    )
-                    reaction_id_reaction_dict_map[reaction_id]["reactants"].add(
-                        (compound_id, amount)
-                    )
-
-                    reaction_id_reaction_dict_map[reaction_id].setdefault(
-                        "reactant_ids", set()
-                    )
-                    reaction_id_reaction_dict_map[reaction_id]["reactant_ids"].add(
-                        compound_id
-                    )
-
-                return reaction_id_reaction_dict_map, reactant_records
-
-            # get source reaction data
-            source_reaction_dicts, reactant_records = get_reaction_id_reaction_dict_map(
-                source.db, compound_id_map
-            )
-            mrich.var("source: #reactions", len(source_reaction_dicts))
-
-            # get destination reaction data
-            destination_reaction_dicts, _ = get_reaction_id_reaction_dict_map(self)
-            mrich.var("destination: #reactions", len(destination_reaction_dicts))
-
-            # create keyed lookups
-
-            source_reaction_lookup = {
-                (d["product"], d["type"], tuple(sorted(list(d["reactant_ids"])))): d[
-                    "id"
-                ]
-                for d in source_reaction_dicts.values()
-            }
-
-            destination_reaction_lookup = {
-                (d["product"], d["type"], tuple(sorted(list(d["reactant_ids"])))): d[
-                    "id"
-                ]
-                for d in destination_reaction_dicts.values()
-            }
-
-            # work out which source reactions are not in the destination and create a map for existing reactions
-
-            reaction_id_map = {}
-            new_reaction_dicts = []
-
-            for key, reaction_id in list(source_reaction_lookup.items()):
-
-                if key in destination_reaction_lookup:
-                    # EXISTING REACTION
-                    reaction_id_map[reaction_id] = destination_reaction_lookup[key]
-
-                else:
-
-                    # NEW REACTION
-                    new_reaction_dicts.append(source_reaction_dicts[reaction_id])
-
-            mrich.var("existing #reactions:", len(reaction_id_map))
-            mrich.var("new #reactions:", len(new_reaction_dicts))
-
-            # reaction insertion query
-            sql = """
-            INSERT INTO hippo.reaction(
-                reaction_type, 
-                reaction_product, 
-                reaction_product_yield
-            )
-            VALUES(
-                %(type)s,
-                %(product)s,
-                %(product_yield)s
-            )
-            ON CONFLICT DO NOTHING
-            RETURNING reaction_id;
-            """
-
-            # massage the data
-            reaction_dicts = [
-                dict(
-                    type=d["type"],
-                    product=d["product"],
-                    product_yield=d["product_yield"],
-                )
-                for d in new_reaction_dicts
-            ]
-
-            # do the insertion
-            inserted_reaction_ids = executemany("reaction", sql, reaction_dicts)
-
-            if inserted_reaction_ids:
-                inserted_reaction_ids = [i for i, in inserted_reaction_ids]
-            else:
-                inserted_reaction_ids = []
-
-            # add to the map
-            for reaction_dict, new_reaction_id in zip(
-                new_reaction_dicts, inserted_reaction_ids
-            ):
-                reaction_id = reaction_dict["id"]
-                reaction_id_map[reaction_id] = new_reaction_id
-
-            migration_data["reaction_id_map"] = reaction_id_map
-
-            # reactant insertion query
-            sql = """
-            INSERT INTO hippo.reactant(
-                reactant_amount, 
-                reactant_reaction, 
-                reactant_compound
-            )
-            VALUES(
-                %(amount)s,
-                %(reaction)s,
-                %(compound)s
-            )
-            ON CONFLICT DO NOTHING;
-            """
-
-            reactant_dicts = [
-                dict(
-                    amount=amount,
-                    reaction=reaction_id_map[reaction_id],
-                    compound=compound_id_map[compound_id],
-                )
-                for amount, reaction_id, compound_id in reactant_records
-            ]
-
-            mrich.var("source: #reactants", len(reactant_dicts))
-
-            # do the insertion
-            # executemany("reactant", sql, reactant_dicts)
-
-            ### quotes
 
             ### features
 
+            if features or interactions:
+
+                migration_data = migrate_features(
+                    source=source.db,
+                    destination=self,
+                    migration_data=migration_data,
+                    batch_size=batch_size,
+                    # execute=False,
+                )
+
             ### interactions
+
+            if interactions:
+
+                migration_data = migrate_interactions(
+                    source=source.db,
+                    destination=self,
+                    migration_data=migration_data,
+                    batch_size=batch_size,
+                    # execute=False,
+                )
 
             ### subsites
 
-            ### subsite_tags
+            if subsites:
 
-            ### routes (skip?)
+                migration_data = migrate_subsites(
+                    source=source.db,
+                    destination=self,
+                    migration_data=migration_data,
+                    batch_size=batch_size,
+                    # execute=False,
+                )
 
-            ### components (skip?)
+            ### quotes
 
-            raise NotImplementedError
+            if quotes:
 
-            mrich.success(
-                "Migration staged. Please review and db.commit() or db.rollback() the changes"
-            )
+                migration_data = migrate_quotes(
+                    source=source.db,
+                    destination=self,
+                    migration_data=migration_data,
+                    batch_size=batch_size,
+                    # execute=False,
+                )
 
         except Exception as e:
             self.rollback()
@@ -1190,10 +749,14 @@ class PostgresDatabase(Database):
             dump_json(migration_data, json_file_name)
             dump_xlsx(migration_data, xlsx_file_name)
 
-            # raise
+            raise
 
         dump_json(migration_data, json_file_name)
         dump_xlsx(migration_data, xlsx_file_name)
+
+        mrich.success(
+            "Migration staged. Please review and db.commit() or db.rollback() the changes"
+        )
 
         return migration_data
 
