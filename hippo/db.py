@@ -148,7 +148,7 @@ class Database:
 
     COMPOUND_PROPERTY_FUNCTIONS = {
         "num_heavy_atoms": "mol_num_hvyatms",
-        "formula": ("mol_formula", ", false, false"),
+        "formula": "mol_formula",
         "num_rings": "mol_num_rings",
         "molecular_weight": "mol_amw",
     }
@@ -571,6 +571,8 @@ class Database:
     ):
         """Execute arbitrary SQL with retry if database is locked."""
         if debug:
+            from .tools import strip_sql
+
             mrich.debug(sql)
 
         while True:
@@ -594,6 +596,9 @@ class Database:
                 else:
                     raise
             except Exception as e:
+                from .tools import strip_sql
+
+                mrich.error(strip_sql(sql))
                 raise
 
     def executemany(self, sql, payload, *, retry: float | None = 1) -> None:
@@ -4235,7 +4240,8 @@ class Database:
 
         else:
             records = self.execute(
-                """SELECT pose_id, pose_path FROM pose 
+                f"""
+            SELECT pose_id, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose 
             WHERE pose_path IS NOT NULL"""
             ).fetchall()
 

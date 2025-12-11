@@ -284,8 +284,6 @@ class PostgresDatabase(Database):
                 dbname=self.dbname,
             )
 
-            conn.execute("SET client_encoding TO 'UTF8'")
-
             with conn.cursor() as c:
                 c.execute(
                     """
@@ -303,6 +301,8 @@ class PostgresDatabase(Database):
                 raise ValueError(
                     "'mol' datatype not defined, is the rdkit postgres cartridge installed correctly?"
                 )
+
+            conn.execute("SET client_encoding TO 'UTF8'")
 
         except Exception as e:
             mrich.error("Could not connect to", self.path)
@@ -336,8 +336,9 @@ class PostgresDatabase(Database):
             else:
                 records = self.cursor.execute(sql)
         except Exception as e:
-            mrich.error(e)
-            mrich.print(strip_sql(sql))
+            # mrich.error(e)
+            # mrich.print(strip_sql(sql))
+            self.rollback()
             raise
 
         if time:
@@ -350,14 +351,16 @@ class PostgresDatabase(Database):
         sql,
         payload=None,
         *,
-        debug: bool = False,
+        debug: bool = True,
         time: bool = False,
+        batch_size: int = None,
     ):
         """Execute arbitrary SQL with retry if database is locked."""
         if debug:
             from .tools import strip_sql
 
             mrich.debug(strip_sql(sql))
+            mrich.debug("len(payload):", len(payload))
 
         if time:
             import re
@@ -365,7 +368,34 @@ class PostgresDatabase(Database):
 
             start = perf_counter()
 
-        records = self.cursor.executemany(sql, payload)
+        if batch_size:
+
+            from itertools import batched, chain
+
+            batches = list(batched(payload, batch_size))
+
+            n = len(batches)
+
+            results = []
+            for i, batch in enumerate(mrich.track(batches, prefix="executing")):
+                mrich.set_progress_field("i", i)
+                mrich.set_progress_field("n", n)
+                result = self.cursor.executemany(sql, batch)
+
+                if result:
+                    results.append(result)
+
+            else:
+                mrich.set_progress_field("i", n)
+
+            if results:
+                records = list(chain.from_iterable(results))
+            else:
+                records = None
+
+        else:
+
+            records = self.cursor.executemany(sql, payload)
 
         if time:
             sql = re.sub(r"\s+", " ", sql).strip()
@@ -376,6 +406,7 @@ class PostgresDatabase(Database):
     def rollback(self) -> None:
         """rollback (not relevant for sqlite)"""
         self.connection.rollback()
+        self.connection.execute("SET client_encoding TO 'UTF8'")
 
     def sql_return_id_str(self, key: str) -> str:
         """Add this to SQL queries to return the entry primary key"""
@@ -482,217 +513,434 @@ class PostgresDatabase(Database):
 
     ### MIGRATIONS
 
-    def migrate(
-        cls,
-        source: Path,
-        batch_size: int = 10000,
-    ) -> None:
-        """Migrate records from a SQLite :class:`.Database` to this :class:`.PostgresDatabase`"""
+    def migrate_sqlite(
+        self,
+        source: str | Path,
+        batch_size: int = 5_000,
+        tag_compound_id_regex: list[tuple[str, str]] | None = None,
+        # tag_name_map: "Callable" = None,
+        # rename_tag_compound_shortcodes: bool = True
+    ) -> dict:
+        """Migrate records from a SQLite :class:`.Database` to this :class:`.PostgresDatabase`
 
-        raise NotImplementedError
+        :param source: path to source sqlite database
+        :param batch_size: SQL insertion batch size
+        :param tag_compound_id_regex: Provide regex to identify compound ID's to replace in tag names, defaults to `[(r"^C([0-9]+)", "C{new_compound_id}")]`
 
+        The default tag_compound_id_regex means that tags such as "C123 85 percent analogues" are replaced with "C234 85 percent analogues",
+        where 123 is the compound ID in the source database, and 234 in the destination.
+
+        """
+
+        # from itertools import batched
+        from json import dump
         from .animal import HIPPO
+        from rdkit.Chem import Mol
+        import re
 
-        source_path = Path(source)
+        mrich.var("source", source)
+        mrich.var("batch_size", batch_size)
 
+        source_path = Path(source).resolve()
         assert source_path.exists()
 
-        source = HIPPO("source", source)
+        json_file_name = f"{source_path.name.removesuffix('.sqlite')}_migration.json"
+        xlsx_file_name = f"{source_path.name.removesuffix('.sqlite')}_migration.xlsx"
+        mrich.var("json_file_name", json_file_name)
+        mrich.var("xlsx_file_name", xlsx_file_name)
 
-        ### compounds
+        if not tag_compound_id_regex:
+            tag_compound_id_regex = [
+                (r"^C([0-9]+)", "C{new_compound_id}"),
+            ]
 
-        # source data
-        compound_records = source.select(
-            table="compound",
-            query="compound_id, compound_inchikey, compound_smiles, compound_alias",
-            multiple=True,
-        )
+        mrich.var("tag_compound_id_regex", tag_compound_id_regex)
 
-        # insertion query
-        sql = """
-        INSERT INTO hippo.compound(
-            compound_inchikey, 
-            compound_smiles, 
-            compound_mol, 
-            compound_alias
-        )
-        VALUES(
-            %(inchikey)s, 
-            %(smiles)s, 
-            hippo.mol_from_smiles(%(smiles)s), 
-            %(alias)s
-        )
-        ON CONFLICT DO NOTHING;
-        """
+        source = HIPPO("source", source_path)
 
-        # format the data
-        new_compound_records = [
-            dict(inchikey=b, smiles=c, alias=d) for a, b, c, d in compound_records
-        ]
+        try:
 
-        # do the insertion
-        self.execute(sql, new_compound_records)
+            migration_data = {
+                "source": str(source_path.resolve()),
+                "destination": self.path,
+            }
 
-        # map to the destination records
-        destination_inchikey_map = self.get_compound_inchikey_id_dict(
-            inchikeys=[b for a, b, c, d in compound_records]
-        )
-        compound_id_map = {
-            a: destination_inchikey_map[b] for a, b, c, d in compound_records
-        }
+            ### compounds
 
-        ### scaffolds
+            # source data
+            compound_records = source.db.select(
+                table="compound",
+                query="compound_id, compound_inchikey, compound_smiles, compound_alias",
+                multiple=True,
+            )
 
-        # source data
-        scaffold_records = source.select(
-            table="scaffold",
-            query="scaffold_base, scaffold_superstructure",
-            multiple=True,
-        )
+            mrich.var("source: #compounds", len(compound_records))
 
-        # map to new IDs
-        scaffold_records = [
-            (compound_id_map[a], compound_id_map[b]) for a, b in scaffold_records
-        ]
+            # insertion query
+            sql = """
+            INSERT INTO hippo.compound(
+                compound_inchikey, 
+                compound_smiles, 
+                compound_mol, 
+                compound_alias
+            )
+            VALUES(
+                %(inchikey)s, 
+                %(smiles)s, 
+                hippo.mol_from_smiles(%(smiles)s), 
+                %(alias)s
+            )
+            ON CONFLICT DO NOTHING;
+            """
 
-        # insert new data
+            # format the data
+            compound_dicts = [
+                dict(inchikey=b, smiles=c, alias=d) for a, b, c, d in compound_records
+            ]
 
-        sql = """
-        INSERT INTO hippo.scaffold(scaffold_base, scaffold_superstructure)
-        VALUES(%s, %s)
-        ON CONFLICT DO NOTHING;
-        """
+            # self.executemany(sql, compound_dicts, batch_size=batch_size)
 
-        self.execute(sql, scaffold_records)
+            # map to the destination records
+            destination_inchikey_map = self.get_compound_inchikey_id_dict(
+                inchikeys=[b for a, b, c, d in compound_records]
+            )
 
-        ### targets
+            compound_id_map = {
+                a: destination_inchikey_map.get(b) for a, b, c, d in compound_records
+            }
 
-        # source data
-        target_records = source.select(
-            table="target", query="target_id, target_name", multiple=True
-        )
+            migration_data["compound_id_map"] = compound_id_map
 
-        # do the insertion
-        for i, name in target_records:
-            self.insert_target(name, warn_duplicate=False)
+            ### scaffolds
 
-        # map to the destination records
-        destination_target_name_map = {
-            name: i
-            for i, name in self.select(
+            # source data
+            scaffold_records = source.db.select(
+                table="scaffold",
+                query="scaffold_base, scaffold_superstructure",
+                multiple=True,
+            )
+
+            # map to new IDs
+            scaffold_records = [
+                (compound_id_map[a], compound_id_map[b]) for a, b in scaffold_records
+            ]
+
+            mrich.var("source: #scaffolds", len(scaffold_records))
+
+            # insert new data
+
+            sql = """
+            INSERT INTO hippo.scaffold(scaffold_base, scaffold_superstructure)
+            VALUES(%s, %s)
+            ON CONFLICT DO NOTHING;
+            """
+
+            # self.executemany(sql, scaffold_records, batch_size=batch_size)
+
+            ### targets
+
+            # source data
+            target_records = source.db.select(
                 table="target", query="target_id, target_name", multiple=True
             )
-        }
-        target_id_map = {
-            i: destination_target_name_map[name] for i, name in target_records
-        }
 
-        ### poses
+            # do the insertion
+            for i, name in target_records:
+                self.insert_target(name=name, warn_duplicate=False)
 
-        pose_fields = [
-            "pose_id",
-            "pose_inchikey",
-            "pose_alias",
-            "pose_smiles",
-            "pose_path",
-            "pose_compound",
-            "pose_target",
-            "hippo.mol_to_pkl(pose_mol)",
-            "pose_fingerprint",
-            "pose_energy_score",
-            "pose_distance_score",
-            "pose_inspiration_score",
-            "pose_metadata",
-        ]
+            # map to the destination records
+            destination_target_name_map = {
+                name: i
+                for i, name in self.select(
+                    table="target", query="target_id, target_name", multiple=True
+                )
+            }
 
-        # source data
-        pose_records = source.select(
-            table="pose", query=", ".join(pose_fields), multiple=True
-        )
+            target_id_map = {
+                i: destination_target_name_map[name] for i, name in target_records
+            }
 
-        # insertion query
-        sql = """
-        INSERT INTO hippo.pose(
-            pose_inchikey,
-            pose_alias,
-            pose_smiles,
-            pose_path,
-            pose_compound,
-            pose_target,
-            pose_mol,
-            pose_fingerprint,
-            pose_energy_score,
-            pose_distance_score,
-            pose_inspiration_score,
-            pose_metadata
-        )
-        VALUES(
-            %(inchikey)s,
-            %(alias)s,
-            %(smiles)s,
-            %(path)s,
-            %(compound)s,
-            %(target)s,
-            mol_frok_pkl(%(mol)s),
-            %(fingerprint)s,
-            %(energy_score)s,
-            %(distance_score)s,
-            %(inspiration_score)s,
-            %(metadata)s,
-        )
-        ON CONFLICT DO NOTHING;
-        """
+            migration_data["target_id_map"] = target_id_map
 
-        # massage the data
-        pose_dicts = [
-            dict(
-                id=i,
-                inchikey=inchikey,
-                alias=alias,
-                smiles=smiles,
-                path=path,
-                compound=compound_id_map[compound_id],
-                target=target_id_map[target_id],
-                mol=mol,
-                fingerprint=fingerprint,
-                energy_score=energy_score,
-                distance_score=distance_score,
-                inspiration_score=inspiration_score,
-                metadata=metadata,
+            ### poses
+
+            pose_fields = [
+                "pose_id",
+                "pose_inchikey",
+                "pose_alias",
+                "pose_smiles",
+                "pose_path",
+                "pose_compound",
+                "pose_target",
+                # "CASE WHEN pose_mol IS NOT NULL THEN mol_to_binary_mol(pose_mol) ELSE pose_mol END",
+                "pose_mol",
+                "pose_fingerprint",
+                "pose_energy_score",
+                "pose_distance_score",
+                "pose_inspiration_score",
+                "pose_metadata",
+            ]
+
+            # source data
+            pose_records = source.db.select(
+                table="pose", query=", ".join(pose_fields), multiple=True
             )
-            for i, inchikey, alias, smiles, path, compound_id, target_id, mol, fingerprint, energy_score, distance_score, inspiration_score, metadata in pose_records
-        ]
 
-        # do the insertion
-        self.execute(sql, [p[1:] for p in pose_records])
+            # insertion query
+            sql = """
+            INSERT INTO hippo.pose(
+                pose_inchikey,
+                pose_alias,
+                pose_smiles,
+                pose_path,
+                pose_compound,
+                pose_target,
+                pose_mol,
+                pose_fingerprint,
+                pose_energy_score,
+                pose_distance_score,
+                pose_inspiration_score,
+                pose_metadata
+            )
+            VALUES(
+                %(inchikey)s,
+                %(alias)s,
+                %(smiles)s,
+                %(path)s,
+                %(compound)s,
+                %(target)s,
+                hippo.mol_from_pkl(%(mol)s),
+                %(fingerprint)s,
+                %(energy_score)s,
+                %(distance_score)s,
+                %(inspiration_score)s,
+                %(metadata)s
+            )
+            ON CONFLICT DO NOTHING;
+            """
 
-        # map to the destination records
-        destination_pose_path_map = self.get_pose_path_id_dict()
-        pose_id_map = {p[0]: destination_pose_path_map[p[5]] for p in pose_records}
+            # massage the data
+            pose_dicts = [
+                dict(
+                    id=i,
+                    inchikey=inchikey,
+                    alias=alias,
+                    smiles=smiles,
+                    path=path,
+                    compound=compound_id_map[compound_id],
+                    target=target_id_map[target_id],
+                    mol=Mol(mol).ToBinary() if mol else None,
+                    fingerprint=fingerprint,
+                    energy_score=energy_score,
+                    distance_score=distance_score,
+                    inspiration_score=inspiration_score,
+                    metadata=metadata,
+                )
+                for i, inchikey, alias, smiles, path, compound_id, target_id, mol, fingerprint, energy_score, distance_score, inspiration_score, metadata in pose_records
+            ]
 
-        ### pose references
+            # do the insertion
+            # self.executemany(sql, pose_dicts, batch_size=batch_size)
 
-        ### inspirations
+            # map to the destination records
+            destination_pose_path_map = self.get_pose_path_id_dict()
 
-        ### tags
+            # return destination_pose_path_map
 
-        ### reactions
+            pose_id_map = {
+                p["id"]: destination_pose_path_map[p["path"]] for p in pose_dicts
+            }
 
-        ### quotes
+            migration_data["pose_id_map"] = pose_id_map
 
-        ### reactants
+            ### pose references
 
-        ### routes
+            # source data
+            reference_records = source.db.select(
+                table="pose",
+                query="pose_id, pose_reference",
+                multiple=True,
+            )
 
-        ### components
+            # map to new IDs
+            reference_dicts = [
+                dict(pose=pose_id_map[a], reference=pose_id_map[b])
+                for a, b in reference_records
+                if b
+            ]
 
-        ### features
+            mrich.var("source: #references", len(reference_dicts))
 
-        ### interactions
+            # insert new data
 
-        ### subsites
+            sql = """
+            UPDATE hippo.pose
+            SET pose_reference = %(reference)s
+            WHERE pose_id = %(pose)s;
+            """
 
-        ### subsite_tags
+            # self.executemany(sql, reference_dicts, batch_size=batch_size)
+
+            ### inspirations
+
+            # source data
+            inspiration_records = source.db.select(
+                table="inspiration",
+                query="inspiration_original, inspiration_derivative",
+                multiple=True,
+            )
+
+            # map to new IDs
+            inspiration_dicts = [
+                dict(original=pose_id_map[a], derivative=pose_id_map[b])
+                for a, b in inspiration_records
+                if b
+            ]
+
+            mrich.var("source: #inspirations", len(inspiration_dicts))
+
+            # insert new data
+
+            sql = """
+            INSERT INTO hippo.inspiration(
+                inspiration_original, 
+                inspiration_derivative
+            )
+            VALUES (
+                %(original)s,
+                %(derivative)s
+            )
+            ON CONFLICT DO NOTHING;
+            """
+
+            # self.executemany(sql, inspiration_dicts, batch_size=batch_size)
+
+            ### tags
+
+            # unique tag names
+
+            tag_names = source.db.select(
+                table="tag", query="DISTINCT tag_name", multiple=True
+            )
+
+            tag_names = sorted([t for t, in tag_names])
+
+            # rename tags based on regex
+
+            tag_name_map = {}
+            for tag in tag_names:
+                for pattern, template in tag_compound_id_regex:
+
+                    match = re.match(pattern, tag)
+
+                    if not match:
+                        continue
+
+                    groups = match.groups()
+
+                    assert (
+                        len(groups) == 1
+                    ), f"tag_compound_id_regex replacement not supported with multiple groups, {pattern=}"
+
+                    groups = [g for g in groups]
+
+                    compound_id = int(groups[0])
+                    new_compound_id = compound_id_map[compound_id]
+
+                    replacement = template.format(new_compound_id=new_compound_id)
+
+                    new_tag = re.sub(pattern, replacement, tag)
+
+                    tag_name_map[tag] = new_tag
+
+                    break
+
+            # source data
+            tag_records = source.db.select(
+                table="tag",
+                query="tag_name, tag_compound, tag_pose",
+                multiple=True,
+            )
+
+            mrich.var("source: #tag records", len(tag_records))
+
+            if tag_name_map:
+                mrich.warning("renamed", len(tag_name_map), "tags")
+
+            # insertion query
+            sql = """
+            INSERT INTO hippo.tag(
+                tag_name, 
+                tag_compound, 
+                tag_pose
+            )
+            VALUES(
+                %(name)s, 
+                %(compound)s, 
+                %(pose)s
+            )
+            ON CONFLICT DO NOTHING;
+            """
+
+            # format the data
+            tag_dicts = [
+                dict(
+                    name=tag_name_map.get(a, a),
+                    compound=compound_id_map[b] if b else None,
+                    pose=pose_id_map[c] if c else None,
+                )
+                for a, b, c in tag_records
+            ]
+
+            # add unchanged tags
+            for tag in tag_names:
+                if tag not in tag_name_map:
+                    tag_name_map[tag] = tag
+
+            migration_data["tag_name_map"] = tag_name_map
+
+            # do the insertion
+            # self.executemany(sql, tag_dicts, batch_size=batch_size)
+
+            ### reactions
+
+            ### quotes
+
+            ### reactants
+
+            ### routes
+
+            ### components
+
+            ### features
+
+            ### interactions
+
+            ### subsites
+
+            ### subsite_tags
+
+            raise NotImplementedError
+
+            mrich.success(
+                "Migration staged. Don't forget to review and commit or rollback the changes!"
+            )
+
+        except Exception as e:
+            self.rollback()
+            mrich.error(e)
+
+            json_file_name = (
+                f"{source.db.path.name.removesuffix('.sqlite')}_migration_partial.json"
+            )
+            xlsx_file_name = (
+                f"{source.db.path.name.removesuffix('.sqlite')}_migration_partial.xlsx"
+            )
+
+        mrich.writing(json_file_name)
+        dump(migration_data, open(json_file_name, "wt"))
+
+        return migration_data
 
     ### MAINTENANCE
 
