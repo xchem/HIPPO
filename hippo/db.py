@@ -5457,7 +5457,7 @@ def backup(
     source: Path | str,
     destination: Path | str | None = None,
     pages: int = 10_000,
-) -> None:
+) -> "Path":
     """Create a backup of the database"""
 
     from .tools import dt_hash
@@ -5483,3 +5483,5 @@ def backup(
             src.backup(dst, pages=pages, progress=progress)
 
         dst.close()
+
+    return destination
