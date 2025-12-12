@@ -536,7 +536,7 @@ class PostgresDatabase(Database):
         interactions: bool = True,
         subsites: bool = True,
         quotes: bool = True,
-        batch_size: int = 5_000,
+        batch_size: int = 10_000,
         tag_compound_id_regex: list[tuple[str, str]] | None = None,
         # pose_path_compound_id_regex: list[tuple[str, str]] | None = None,
         # pose_path_pose_id_regex: list[tuple[str, str]] | None = None,
@@ -586,7 +586,7 @@ class PostgresDatabase(Database):
 
         if not tag_compound_id_regex:
             tag_compound_id_regex = [
-                (r"^C([0-9]+).*$", "C{new_compound_id}"),
+                (r"^C([0-9]+)", "C{new_compound_id}"),
             ]
         mrich.var("tag_compound_id_regex", tag_compound_id_regex)
 
@@ -768,10 +768,14 @@ class PostgresDatabase(Database):
             dump_json(migration_data, json_file_name)
             dump_xlsx(migration_data, xlsx_file_name)
 
+            source.db.close()
+
             raise
 
         dump_json(migration_data, json_file_name)
         dump_xlsx(migration_data, xlsx_file_name)
+
+        source.db.close()
 
         mrich.success(
             "Migration staged. Please review and db.commit() or db.rollback() the changes"
