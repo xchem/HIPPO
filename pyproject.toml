@@ -33,6 +33,7 @@ dependencies = [
     "openmm",
     "apsw",
     "python-louvain",
+    "psycopg[binary]",
 ]
 [project.urls]
 "Homepage" = "https://hippo.winokan.com"
