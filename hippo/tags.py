@@ -56,7 +56,7 @@ class TagTable:
         SELECT tag_name,
         COUNT(DISTINCT tag_compound),
         COUNT(DISTINCT tag_pose)
-        FROM {self.db.SQL_SCHEMA}tag
+        FROM {self.db.SQL_SCHEMA_PREFIX}tag
         GROUP BY tag_name
         ORDER BY tag_name;
         """
@@ -74,7 +74,7 @@ class TagTable:
 
         sql = f"""
         SELECT tag_name, COUNT(DISTINCT pose_compound) 
-        FROM {self.db.SQL_SCHEMA}tag
+        FROM {self.db.SQL_SCHEMA_PREFIX}tag
         INNER JOIN pose
         ON tag_pose = pose_id
         GROUP BY tag_name
