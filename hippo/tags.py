@@ -52,8 +52,8 @@ class TagTable:
 
         from pandas import DataFrame
 
-        sql = """
-        SELECT tag_name,
+        sql = f"""
+        SELECT {self.db.SQL_SCHEMA}tag_name,
         COUNT(DISTINCT tag_compound),
         COUNT(DISTINCT tag_pose)
         FROM tag
@@ -72,8 +72,8 @@ class TagTable:
 
         # compounds with poses
 
-        sql = """
-        SELECT tag_name, COUNT(DISTINCT pose_compound) FROM tag
+        sql = f"""
+        SELECT tag_name, COUNT(DISTINCT pose_compound) FROM {self.db.SQL_SCHEMA}tag
         INNER JOIN pose
         ON tag_pose = pose_id
         GROUP BY tag_name
