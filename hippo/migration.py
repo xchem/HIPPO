@@ -240,6 +240,12 @@ def migrate_poses(
 
     mrich.var("source: #poses", len(pose_dicts))
 
+    ### THIS DEVELOPMENT WAS NOT COMPLETED,
+    ### TO IMPLEMENT WOULD REQUIRE FIRST INSERTING ALL
+    ### UPSTREAM REFERENCES AND INSPIRATIONS SO THEIR IDS
+    ### ARE IN THE POSE_ID_MAP
+    # pose_dicts = rename_pose_paths(pose_dicts, migration_data)
+
     # do the insertion
     if execute:
         executemany(destination, "pose", sql, pose_dicts, batch_size)
@@ -392,7 +398,8 @@ def migrate_tags(
 
             new_tag = re.sub(pattern, replacement, tag)
 
-            tag_name_map[tag] = new_tag
+            if new_tag != tag:
+                tag_name_map[tag] = new_tag
 
             break
 
@@ -1190,6 +1197,97 @@ def executemany(
         mrich.warning("Inserted", d, f"new {table}s")
 
     return result
+
+
+def rename_pose_paths(
+    pose_dicts: list[dict],
+    migration_data: dict,
+) -> list[dict]:
+    """Uses regex to rename ID's in pose paths"""
+
+    import re
+
+    mrich.var(
+        "pose_path_compound_id_regex", migration_data["pose_path_compound_id_regex"]
+    )
+    mrich.var("pose_path_pose_id_regex", migration_data["pose_path_pose_id_regex"])
+
+    # compound IDs
+
+    pose_path_map = {}
+    # pose_path_map_log = {}
+
+    for pose_dict in pose_dicts:
+
+        orig_path = pose_dict["path"]
+
+        path = orig_path
+
+        for pattern, template in migration_data["pose_path_compound_id_regex"]:
+
+            if orig_path in pose_path_map:
+                path = pose_path_map[orig_path]
+
+            match = re.match(pattern, path)
+
+            if not match:
+                # if "fake.mol" in path:
+                #     print("NO MATCH", pattern, path)
+                #     raise NotImplementedError
+                continue
+
+            groups = match.groups()
+
+            assert (
+                len(groups) == 1
+            ), f"pose_path_compound_id_regex replacement not supported with multiple groups, {pattern=}"
+
+            groups = [g for g in groups]
+
+            compound_id = int(groups[0])
+            new_compound_id = migration_data["compound_id_map"][compound_id]
+
+            replacement = template.format(new_compound_id=new_compound_id)
+
+            new_path = re.sub(pattern, replacement, path)
+
+            if new_path != path:
+                pose_path_map[orig_path] = new_path
+
+    raise NotImplementedError("pose_path_pose_id_regex development was not completed")
+
+    #     for pattern, template in migration_data["pose_path_pose_id_regex"]:
+
+    #         if orig_path in pose_path_map:
+    #             path = pose_path_map[orig_path]
+
+    #         match = re.match(pattern, path)
+
+    #         if not match:
+    #             # if "fake.mol" in path:
+    #             #     print("NO MATCH", pattern, path)
+    #             #     raise NotImplementedError
+    #             continue
+
+    #         groups = match.groups()
+
+    #         assert (
+    #             len(groups) == 1
+    #         ), f"pose_path_pose_id_regex replacement not supported with multiple groups, {pattern=}"
+
+    #         groups = [g for g in groups]
+
+    #         pose_id = int(groups[0])
+    #         new_pose_id = migration_data["pose_id_map"][pose_id]
+
+    #         replacement = template.format(new_pose_id=new_pose_id)
+
+    #         new_path = re.sub(pattern, replacement, path)
+
+    #         if new_path != path:
+    #             pose_path_map[orig_path] = new_path
+
+    return pose_dicts
 
 
 def dump_json(data: dict, file: str) -> None:

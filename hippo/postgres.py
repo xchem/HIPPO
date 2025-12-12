@@ -538,6 +538,9 @@ class PostgresDatabase(Database):
         quotes: bool = True,
         batch_size: int = 5_000,
         tag_compound_id_regex: list[tuple[str, str]] | None = None,
+        # pose_path_compound_id_regex: list[tuple[str, str]] | None = None,
+        # pose_path_pose_id_regex: list[tuple[str, str]] | None = None,
+        # overwrite_quotes: bool = True,
     ) -> None:
         """Migrate records from a SQLite :class:`.Database` to this :class:`.PostgresDatabase`
 
@@ -583,10 +586,26 @@ class PostgresDatabase(Database):
 
         if not tag_compound_id_regex:
             tag_compound_id_regex = [
-                (r"^C([0-9]+)", "C{new_compound_id}"),
+                (r"^C([0-9]+).*$", "C{new_compound_id}"),
             ]
-
         mrich.var("tag_compound_id_regex", tag_compound_id_regex)
+
+        ### THIS DEV WAS NOT COMPLETED
+
+        # if not pose_path_compound_id_regex:
+        #     pose_path_compound_id_regex = [
+        #         (r"\/.*\/C([0-9]+)-P[0-9]+\.fake\.mol$", "C{new_compound_id}"),
+        #     ]
+        # mrich.var("pose_path_compound_id_regex", pose_path_compound_id_regex)
+
+        # if not pose_path_pose_id_regex:
+        #     pose_path_pose_id_regex = [
+        #         (r"\/.*\/C[0-9]+-P([0-9]+)\.fake\.mol$", "P{new_pose_id}"),
+        #         (r"\/.*\/[A-Z]{14}-[A-Z]{10}-[A-Z]-P([0-9]+)-P[0-9]+-P[0-9]+-[0-9]{6}.fake.mol$", "P{new_pose_id}"),
+        #         (r"\/.*\/[A-Z]{14}-[A-Z]{10}-[A-Z]-P[0-9]+-P([0-9]+)-P[0-9]+-[0-9]{6}.fake.mol$", "P{new_pose_id}"),
+        #         (r"\/.*\/[A-Z]{14}-[A-Z]{10}-[A-Z]-P[0-9]+-P[0-9]+-P([0-9]+)-[0-9]{6}.fake.mol$", "P{new_pose_id}"),
+        #     ]
+        # mrich.var("pose_path_pose_id_regex", pose_path_pose_id_regex)
 
         source = HIPPO("source", source_path)
 
@@ -599,6 +618,8 @@ class PostgresDatabase(Database):
                 "destination": self.path,
                 "time": str(datetime.now()),
                 "tag_compound_id_regex": tag_compound_id_regex,
+                # "pose_path_compound_id_regex": pose_path_compound_id_regex,
+                # "pose_path_pose_id_regex": pose_path_pose_id_regex,
             }
 
             ### compounds
