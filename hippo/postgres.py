@@ -538,9 +538,7 @@ class PostgresDatabase(Database):
         quotes: bool = True,
         batch_size: int = 5_000,
         tag_compound_id_regex: list[tuple[str, str]] | None = None,
-        # tag_name_map: "Callable" = None,
-        # rename_tag_compound_shortcodes: bool = True
-    ) -> dict:
+    ) -> None:
         """Migrate records from a SQLite :class:`.Database` to this :class:`.PostgresDatabase`
 
         :param source: path to source sqlite database
@@ -758,8 +756,6 @@ class PostgresDatabase(Database):
             "Migration staged. Please review and db.commit() or db.rollback() the changes"
         )
 
-        return migration_data
-
     ### MAINTENANCE
 
     def _drop_schema(self) -> None:
@@ -769,10 +765,31 @@ class PostgresDatabase(Database):
         self.commit()
 
     def _drop_tables(self) -> None:
-        """Delete all HIPPO tables"""
+        """Delete all HIPPO tables and restart sequences"""
 
         for table in self.TABLES:
-            self.execute(f"DROP TABLE IF EXISTS {table};")
+            self.execute(f"DROP TABLE IF EXISTS {self.SQL_SCHEMA}.{table} CASCADE;")
+
+        # sql = f"""
+        # DO $$
+        # DECLARE
+        #     seq RECORD;
+        # BEGIN
+        #     FOR seq IN
+        #         SELECT sequence_schema, sequence_name
+        #         FROM information_schema.sequences
+        #         WHERE sequence_schema = '{self.SQL_SCHEMA}'
+        #     LOOP
+        #         EXECUTE format(
+        #             'ALTER SEQUENCE %I.%I RESTART WITH 1;',
+        #             seq.sequence_schema,
+        #             seq.sequence_name
+        #         );
+        #     END LOOP;
+        # END $$;
+        # """
+
+        # self.execute(sql)
 
         self.commit()
 
