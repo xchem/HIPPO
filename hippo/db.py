@@ -3175,9 +3175,6 @@ class Database:
         mrich.var("#compounds", self.count("compound"))
         mrich.var("#scaffold defs", n_before)
 
-        if not self.engine == "sqlite3":
-            raise NotImplementedError
-
         sql = """
         SELECT compound_id, compound_mol, compound_pattern_bfp 
         FROM compound
