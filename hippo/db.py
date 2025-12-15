@@ -596,9 +596,8 @@ class Database:
                 else:
                     raise
             except Exception as e:
-                from .tools import strip_sql
-
-                mrich.error(strip_sql(sql))
+                # from .tools import strip_sql
+                # mrich.error(strip_sql(sql))
                 raise
 
     def executemany(
@@ -2971,6 +2970,8 @@ class Database:
             )
             """
 
+            self.executemany(sql, values)
+
         else:
 
             match self.engine:
@@ -3309,8 +3310,21 @@ class Database:
             multiple=True,
         )
 
+        match self.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO tag(tag_name, tag_compound) 
+                VALUES (?,?)
+                """
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.tag(tag_name, tag_compound) 
+                VALUES (%s,%s)
+                ON CONFLICT DO NOTHING;
+                """
+
         self.executemany(
-            """INSERT OR IGNORE INTO tag (tag_name, tag_compound) VALUES (?,?)""",
+            sql,
             [("MurckoScaffold", i) for i, in murcko_ids],
         )
 
@@ -3325,7 +3339,7 @@ class Database:
             )
 
             self.executemany(
-                """INSERT OR IGNORE INTO tag (tag_name, tag_compound) VALUES (?,?)""",
+                sql,
                 [("GenericMurckoScaffold", i) for i, in generic_ids],
             )
 
