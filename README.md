@@ -122,7 +122,7 @@ Initialise database
 Run in foreground
 
 ```bash
-/opt/homebrew/opt/postgresql@18/bin/postgres -D /opt/homebrew/var/postgresql@18
+/opt/homebrew/opt/postgresql@18/bin/postgres -D /opt/homebrew/var/postgresql@18 -p 5432
 ```
 
 Install psycopg
