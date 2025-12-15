@@ -284,9 +284,9 @@ class Reaction:
 
             triples = self.db.execute(
                 f"""
-                SELECT reactant_compound, SUM(quote_id), SUM(reaction_id) FROM reactant 
-                LEFT JOIN quote ON quote_compound = reactant_compound
-                LEFT JOIN reaction ON reaction_product = reactant_compound 
+                SELECT reactant_compound, SUM(quote_id), SUM(reaction_id) FROM {self.db.SQL_SCHEMA_PREFIX}reactant 
+                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}quote ON quote_compound = reactant_compound
+                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON reaction_product = reactant_compound 
                 WHERE reactant_reaction = {self.id}
                 GROUP BY reactant_compound
             """
@@ -298,12 +298,12 @@ class Reaction:
                 f"""
                 WITH filtered_quotes AS
                 (
-                    SELECT * FROM quote
+                    SELECT * FROM {self.db.SQL_SCHEMA_PREFIX}quote
                     WHERE quote_supplier = "{supplier}"
                 )
-                SELECT reactant_compound, SUM(quote_id), SUM(reaction_id) FROM reactant 
+                SELECT reactant_compound, SUM(quote_id), SUM(reaction_id) FROM {self.db.SQL_SCHEMA_PREFIX}reactant 
                 LEFT JOIN filtered_quotes ON quote_compound = reactant_compound
-                LEFT JOIN reaction ON reaction_product = reactant_compound 
+                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON reaction_product = reactant_compound 
                 WHERE reactant_reaction = {self.id}
                 GROUP BY reactant_compound
             """

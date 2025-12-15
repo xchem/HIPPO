@@ -22,6 +22,9 @@ def migrate_compounds(
 
     mrich.var("source: #compounds", len(compound_records))
 
+    if not compound_records:
+        return migration_data
+
     # insertion query
     sql = """
     INSERT INTO hippo.compound(
@@ -79,6 +82,9 @@ def migrate_scaffolds(
         multiple=True,
     )
 
+    if not scaffold_records:
+        return migration_data
+
     # map to new IDs
     scaffold_records = [
         (
@@ -118,6 +124,9 @@ def migrate_targets(
     target_records = source.select(
         table="target", query="target_id, target_name", multiple=True
     )
+
+    if not target_records:
+        return migration_data
 
     # do the insertion
     for i, name in target_records:
@@ -170,6 +179,9 @@ def migrate_poses(
     pose_records = source.select(
         table="pose", query=", ".join(pose_fields), multiple=True
     )
+
+    if not pose_records:
+        return migration_data
 
     # insertion query
     sql = """
@@ -279,6 +291,9 @@ def migrate_pose_references(
         multiple=True,
     )
 
+    if not reference_records:
+        return migration_data
+
     # map to new IDs
     reference_dicts = [
         dict(
@@ -321,6 +336,9 @@ def migrate_inspirations(
         query="inspiration_original, inspiration_derivative",
         multiple=True,
     )
+
+    if not inspiration_records:
+        return migration_data
 
     # map to new IDs
     inspiration_dicts = [
@@ -371,6 +389,9 @@ def migrate_tags(
     tag_names = source.select(table="tag", query="DISTINCT tag_name", multiple=True)
 
     tag_names = sorted([t for t, in tag_names])
+
+    if not tag_names:
+        return migration_data
 
     # rename tags based on regex
 
@@ -470,6 +491,9 @@ def migrate_reactions_and_reactants(
         source, migration_data["compound_id_map"]
     )
     mrich.var("source: #reactions", len(source_reaction_dicts))
+
+    if not source_reaction_dicts:
+        return migration_data
 
     # get destination reaction data
     destination_reaction_dicts, _ = get_reaction_id_reaction_dict_map(destination)
@@ -610,6 +634,9 @@ def migrate_features(
 
     mrich.var("source: #features", len(feature_records))
 
+    if not feature_records:
+        return migration_data
+
     # insertion query
     sql = """
     INSERT INTO hippo.feature(
@@ -741,6 +768,9 @@ def migrate_interactions(
     )
 
     mrich.var("source: #interactions", len(interaction_records))
+
+    if not interaction_records:
+        return migration_data
 
     # insertion query
     sql = """
@@ -879,6 +909,9 @@ def migrate_subsites(
     )
 
     mrich.var("source: #subsites", len(subsite_records))
+
+    if not subsite_records:
+        return migration_data
 
     # insertion query
     sql = """
@@ -1025,6 +1058,9 @@ def migrate_quotes(
 
     mrich.var("source: #quotes", len(quote_records))
 
+    if not quote_records:
+        return migration_data
+
     # insertion query
     sql = """
     INSERT INTO hippo.quote(
@@ -1060,7 +1096,7 @@ def migrate_quotes(
     quote_dicts = [
         dict(
             smiles=smiles,
-            amount=amount,
+            amount=round(amount, 3),
             supplier=supplier,
             catalogue=catalogue,
             entry=entry,
@@ -1093,7 +1129,7 @@ def migrate_quotes(
 
     # map to the destination records
     quote_map = {
-        (amount, supplier, catalogue, entry): i
+        (round(amount, 3), supplier, catalogue, entry): i
         for (
             i,
             smiles,
@@ -1115,7 +1151,7 @@ def migrate_quotes(
     }
 
     quote_id_map = {
-        i: quote_map[(amount, supplier, catalogue, entry)]
+        i: quote_map[(round(amount, 3), supplier, catalogue, entry)]
         for (
             i,
             smiles,

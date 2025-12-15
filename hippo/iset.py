@@ -203,8 +203,8 @@ class InteractionSet:
             target = target.id
 
         sql = f"""
-        SELECT interaction_id FROM {self.table}
-        INNER JOIN feature
+        SELECT interaction_id FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON interaction_feature = feature_id
         WHERE feature_target = {target}
         AND feature_residue_number = {residue_number}
@@ -299,8 +299,8 @@ class InteractionSet:
         """Get a list of ``(residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT DISTINCT feature_residue_number, feature_chain_name FROM {self.table}
-        INNER JOIN feature
+        SELECT DISTINCT feature_residue_number, feature_chain_name FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON feature_id = interaction_feature
         WHERE interaction_id IN {self.str_ids}
         """
@@ -312,8 +312,8 @@ class InteractionSet:
         """Get a list of ``(residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_residue_number, feature_chain_name FROM {self.table}
-        INNER JOIN feature
+        SELECT DISTINCT interaction_pose, feature_residue_number, feature_chain_name FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON feature_id = interaction_feature
         WHERE interaction_id IN {self.str_ids}
         """
@@ -335,7 +335,7 @@ class InteractionSet:
         """Get a list of ``(residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT interaction_pose FROM {self.table}
+        SELECT interaction_pose FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         WHERE interaction_id IN {self.str_ids}
         """
 
@@ -356,8 +356,8 @@ class InteractionSet:
         """Get a list of ``(residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, interaction_type, feature_residue_number, feature_chain_name FROM {self.table}
-        INNER JOIN feature
+        SELECT DISTINCT interaction_pose, interaction_type, feature_residue_number, feature_chain_name FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON feature_id = interaction_feature
         WHERE interaction_id IN {self.str_ids}
         """
@@ -379,8 +379,8 @@ class InteractionSet:
         """Get a list of ``(interaction_type, residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT DISTINCT interaction_type, feature_residue_number, feature_chain_name FROM {self.table}
-        INNER JOIN feature
+        SELECT DISTINCT interaction_type, feature_residue_number, feature_chain_name FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON feature_id = interaction_feature
         WHERE interaction_id IN {self.str_ids}
         """
@@ -393,7 +393,7 @@ class InteractionSet:
 
         (count,) = self.db.execute(
             f"""
-        SELECT COUNT(DISTINCT interaction_feature) FROM {self.table}
+        SELECT COUNT(DISTINCT interaction_feature) FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         WHERE interaction_id IN {self.str_ids}
         """
         ).fetchone()
@@ -408,7 +408,7 @@ class InteractionSet:
             f"""
         WITH counts AS
         (
-            SELECT interaction_feature, COUNT(1) AS count FROM {self.table}
+            SELECT interaction_feature, COUNT(1) AS count FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
             WHERE interaction_id IN {self.str_ids}
             GROUP BY interaction_feature
         )
@@ -425,7 +425,7 @@ class InteractionSet:
 
         counts = self.db.execute(
             f"""
-        SELECT interaction_feature, COUNT(1) AS count FROM interaction
+        SELECT interaction_feature, COUNT(1) AS count FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         WHERE interaction_id IN {self.str_ids}
         GROUP BY interaction_feature
         """
@@ -507,7 +507,7 @@ class InteractionSet:
 
         sql = f"""
         SELECT interaction_id, MIN(interaction_distance)
-        FROM {table}
+        FROM {self.db.SQL_SCHEMA_PREFIX}{table}
         WHERE interaction_id IN {self.str_ids}
         AND interaction_type = "Hydrogen Bond"
         GROUP BY interaction_atom_ids
@@ -521,7 +521,7 @@ class InteractionSet:
 
         sql = f"""
         SELECT interaction_id, MIN(interaction_distance)
-        FROM {table}
+        FROM {self.db.SQL_SCHEMA_PREFIX}{table}
         WHERE interaction_id IN {self.str_ids}
         AND interaction_type = "π-stacking"
         GROUP BY interaction_feature
@@ -539,7 +539,7 @@ class InteractionSet:
 
         sql = f"""
         SELECT interaction_id, MIN(interaction_distance)
-        FROM {table}
+        FROM {self.db.SQL_SCHEMA_PREFIX}{table}
         WHERE interaction_id IN {self.str_ids}
         AND interaction_type = "π-cation"
         GROUP BY interaction_atom_ids
@@ -554,7 +554,7 @@ class InteractionSet:
 
         sql = f"""
         SELECT interaction_id, MIN(interaction_distance)
-        FROM {table}
+        FROM {self.db.SQL_SCHEMA_PREFIX}{table}
         WHERE interaction_id IN {self.str_ids}
         AND interaction_type = "Electrostatic"
         GROUP BY interaction_atom_ids
@@ -569,7 +569,7 @@ class InteractionSet:
 
         sql = f"""
         SELECT interaction_id
-        FROM {table}
+        FROM {self.db.SQL_SCHEMA_PREFIX}{table}
         WHERE interaction_id IN {self.str_ids}
         AND interaction_type = "Sulfur-Sulfur"
         """
@@ -582,7 +582,7 @@ class InteractionSet:
 
         sql = f"""
         SELECT interaction_id, interaction_distance
-        FROM {table}
+        FROM {self.db.SQL_SCHEMA_PREFIX}{table}
         WHERE interaction_id IN {self.str_ids}
         AND interaction_type = "Hydrophobic"
         """
@@ -691,7 +691,7 @@ class InteractionSet:
 
         sql = f"""
         SELECT interaction_id, MIN(interaction_distance)
-        FROM {table}
+        FROM {self.db.SQL_SCHEMA_PREFIX}{table}
         WHERE interaction_id IN {hydrophobic_keeper_iset.str_ids}
         GROUP BY interaction_feature
         """

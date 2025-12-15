@@ -1556,9 +1556,9 @@ def plot_compound_price(
 
             if style == "scatter":
 
-                sql = """
+                sql = f"""
 				SELECT quote_compound, quote_amount, MIN(quote_price), quote_lead_time, compound_smiles, COUNT(DISTINCT reactant_reaction)
-				FROM quote 
+				FROM {animal.db.SQL_SCHEMA_PREFIX}quote 
 				INNER JOIN compound ON quote.quote_compound = compound.compound_id
 				INNER JOIN reactant ON quote.quote_compound = reactant.reactant_compound
 				WHERE quote_amount >= {min_amount}
@@ -1611,11 +1611,11 @@ def plot_compound_price(
 
             if style == "scatter":
 
-                sql = """
+                sql = f"""
 				SELECT quote_compound, quote_amount, MIN(quote_price), quote_lead_time, compound_smiles, COUNT(DISTINCT reactant_reaction)
-				FROM quote 
-				INNER JOIN compound ON quote.quote_compound = compound.compound_id
-				INNER JOIN reactant ON quote.quote_compound = reactant.reactant_compound
+				FROM {animal.db.SQL_SCHEMA_PREFIX}quote 
+				INNER JOIN {animal.db.SQL_SCHEMA_PREFIX}compound ON quote.quote_compound = compound.compound_id
+				INNER JOIN {animal.db.SQL_SCHEMA_PREFIX}reactant ON quote.quote_compound = reactant.reactant_compound
 				WHERE quote_amount >= {min_amount}
 				AND quote_compound IN {str_ids}
 				GROUP BY quote_compound

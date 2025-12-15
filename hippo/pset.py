@@ -775,7 +775,7 @@ class PoseSet:
         """Return a list of unique sets of inspiration :class:`.Pose` IDs"""
 
         sql = f"""
-        SELECT inspiration_derivative, inspiration_original FROM inspiration
+        SELECT inspiration_derivative, inspiration_original FROM {self.db.SQL_SCHEMA_PREFIX}inspiration
         WHERE inspiration_derivative IN {self.str_ids}
         """
 
@@ -894,8 +894,10 @@ class PoseSet:
         from itertools import combinations
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_id, interaction_type FROM interaction 
-        INNER JOIN feature ON interaction_feature = feature_id
+        SELECT DISTINCT interaction_pose, feature_id, interaction_type 
+        FROM {self.db.SQL_SCHEMA_PREFIX}interaction 
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature 
+        ON interaction_feature = feature_id
         WHERE interaction_pose IN {self.str_ids}
         """
 
@@ -943,8 +945,10 @@ class PoseSet:
         # get interaction records
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_residue_name, feature_residue_number, interaction_type FROM interaction 
-        INNER JOIN feature ON interaction_feature = feature_id
+        SELECT DISTINCT interaction_pose, feature_residue_name, feature_residue_number, interaction_type 
+        FROM {self.db.SQL_SCHEMA_PREFIX}interaction 
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature 
+        ON interaction_feature = feature_id
         WHERE interaction_pose IN {self.str_ids}
         """
 
@@ -1056,7 +1060,8 @@ class PoseSet:
         from numpy import std
 
         sql = f"""
-        SELECT COUNT(DISTINCT subsite_tag_ref) FROM subsite_tag
+        SELECT COUNT(DISTINCT subsite_tag_ref) 
+        FROM {self.db.SQL_SCHEMA_PREFIX}subsite_tag
         WHERE subsite_tag_pose IN {self.str_ids}
         GROUP BY subsite_tag_pose
         """
@@ -1072,7 +1077,8 @@ class PoseSet:
         """Return a list of subsite id's of member poses"""
 
         sql = f"""
-        SELECT DISTINCT subsite_tag_ref FROM subsite_tag
+        SELECT DISTINCT subsite_tag_ref 
+        FROM {self.db.SQL_SCHEMA_PREFIX}subsite_tag
         WHERE subsite_tag_pose IN {self.str_ids}
         """
 
@@ -1092,7 +1098,8 @@ class PoseSet:
         from numpy import mean
 
         sql = f"""
-        SELECT pose_energy_score FROM pose
+        SELECT pose_energy_score 
+        FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         """
 
@@ -1106,7 +1113,8 @@ class PoseSet:
         from numpy import mean
 
         sql = f"""
-        SELECT pose_distance_score FROM pose
+        SELECT pose_distance_score 
+        FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         """
 
@@ -1321,7 +1329,7 @@ class PoseSet:
 
         sql = f"""
         SELECT {query}
-        FROM pose
+        FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         """
 
@@ -1634,7 +1642,8 @@ class PoseSet:
         """Choose the best placed pose (best distance_score) grouped by compound"""
 
         sql = f"""
-        SELECT pose_id, MIN(pose_distance_score) FROM pose
+        SELECT pose_id, MIN(pose_distance_score) 
+        FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         GROUP BY pose_compound
         """
@@ -1678,7 +1687,7 @@ class PoseSet:
             return PoseSet(self.db, ids)
 
         sql = f"""
-        SELECT pose_id FROM pose
+        SELECT pose_id FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         AND pose_{key} {operator} {value}
         """
@@ -1808,10 +1817,10 @@ class PoseSet:
 
         tuples = df[f"mocassin_{score_type}({alpha},{beta})"].items()
 
-        sql = """UPDATE pose SET pose_inspiration_score = ?2 WHERE pose_id = ?1"""
+        sql = f"""UPDATE {self.db.SQL_SCHEMA_PREFIX}pose SET pose_inspiration_score = {self.db.SQL_STRING_PLACEHOLDER} WHERE pose_id = {self.db.SQL_STRING_PLACEHOLDER}"""
 
         mrich.debug("Updating pose_inspiration_score values")
-        self.db.executemany(sql, tuples)
+        self.db.executemany(sql, [(b, a) for a, b in tuples])
         self.db.commit()
 
         return df
@@ -2752,8 +2761,8 @@ class PoseSet:
         from pandas import DataFrame
 
         sql = f"""
-        SELECT subsite_id, subsite_name, COUNT(DISTINCT subsite_tag_pose) FROM subsite
-        INNER JOIN subsite_tag
+        SELECT subsite_id, subsite_name, COUNT(DISTINCT subsite_tag_pose) FROM {self.db.SQL_SCHEMA_PREFIX}subsite
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}subsite_tag
         ON subsite_id = subsite_tag_ref
         WHERE subsite_tag_pose IN {self.str_ids}
         GROUP BY subsite_name
@@ -2814,7 +2823,7 @@ class PoseSet:
 
         self.db.execute(
             f"""
-            UPDATE pose
+            UPDATE {self.db.SQL_SCHEMA_PREFIX}pose
             SET pose_reference = NULL
             WHERE pose_id IN {str_ids}
         """

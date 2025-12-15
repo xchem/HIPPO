@@ -318,8 +318,8 @@ class Recipe:
             # raise NotImplementedError
             ids = reactions.db.execute(
                 f"""
-                SELECT DISTINCT compound_id FROM compound
-                LEFT JOIN reactant ON compound_id = reactant_compound
+                SELECT DISTINCT compound_id FROM {self.db.SQL_SCHEMA_PREFIX}compound
+                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reactant ON compound_id = reactant_compound
                 WHERE reactant_compound IS NULL
                 AND compound_id IN {products.str_ids}
             """
@@ -1483,8 +1483,8 @@ class Recipe:
         route_ids = self.get_routes(return_ids=True)
 
         sql = f"""
-        SELECT component_ref, route_product FROM component
-        INNER JOIN route ON route_id = component_route
+        SELECT component_ref, route_product FROM {self.db.SQL_SCHEMA_PREFIX}component
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}route ON route_id = component_route
         WHERE component_type = 2
         AND component_ref IN {self.reactants.compounds.str_ids}
         AND component_route IN {str(tuple(route_ids)).replace(',)',')')}
@@ -1496,20 +1496,20 @@ class Recipe:
 
         sql = f"""
         WITH reactants AS (
-            SELECT component_ref AS reactant_id, component_route AS route_id FROM component
+            SELECT component_ref AS reactant_id, component_route AS route_id FROM {self.db.SQL_SCHEMA_PREFIX}component
             WHERE component_type = 2
             AND component_ref IN {self.reactants.compounds.str_ids}
         ),
 
         reactions AS (
-            SELECT component_ref AS reaction_id, component_route AS route_id, reaction_type FROM component
-            INNER JOIN reaction ON component_ref = reaction_id
+            SELECT component_ref AS reaction_id, component_route AS route_id, reaction_type FROM {self.db.SQL_SCHEMA_PREFIX}component
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON component_ref = reaction_id
             WHERE component_type = 1
             AND component_ref IN {self.reactions.str_ids}
         )
 
-        SELECT reactants.reactant_id, reactions.reaction_id, reactions.reaction_type FROM reactants
-        INNER JOIN reactions ON reactants.route_id = reactions.route_id
+        SELECT reactants.reactant_id, reactions.reaction_id, reactions.reaction_type FROM {self.db.SQL_SCHEMA_PREFIX}reactants
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactions ON reactants.route_id = reactions.route_id
         """
         reaction_lookup = {}
         for reactant_id, reaction_id, reaction_type in self.db.execute(sql):
@@ -2597,8 +2597,8 @@ class RouteSet:
     def reactant_ids(self) -> list[int]:
         """Get the :class:`.Compound` ID's of the reactants"""
         sql = f"""
-        SELECT DISTINCT component_ref FROM component
-        INNER JOIN route ON component_route = route_id
+        SELECT DISTINCT component_ref FROM {self.db.SQL_SCHEMA_PREFIX}component
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}route ON component_route = route_id
         WHERE component_type = 2
         AND route_id IN {self.str_ids}
         """
@@ -2711,7 +2711,7 @@ class RouteSet:
                 CASE 
                     WHEN quote_supplier IN {suppliers_str} THEN 1 
                 END) AS [count_valid] 
-            FROM quote
+            FROM {self.db.SQL_SCHEMA_PREFIX}quote
             GROUP BY quote_compound
         ),
 
@@ -2722,8 +2722,8 @@ class RouteSet:
                     WHEN count_valid = 0 THEN 1 
                     WHEN count_valid IS NULL THEN 1 
                 END) 
-            AS [count_unavailable] FROM route
-            INNER JOIN component ON component_route = route_id
+            AS [count_unavailable] FROM {self.db.SQL_SCHEMA_PREFIX}route
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component ON component_route = route_id
             LEFT JOIN possible_reactants ON quote_compound = component_ref
             WHERE component_type = 2
             GROUP BY route_id

@@ -97,13 +97,22 @@ class TagTable:
     def rename(self, old: str, new: str) -> None:
         """Rename all instances of a tag across the database"""
 
-        sql = """
-        UPDATE OR IGNORE tag
-        SET tag_name = ?2
-        WHERE tag_name = ?1;
-        """
+        match self.db.engine:
+            case "sqlite3":
+                sql = """
+                UPDATE OR IGNORE tag
+                SET tag_name = ?
+                WHERE tag_name = ?;
+                """
+            case "psycopg":
+                sql = """
+                UPDATE hippo.tag
+                SET tag_name = %s
+                WHERE tag_name = %s
+                ON CONFLICT DO NOTHING;
+                """
 
-        self.db.execute(sql, (str(old), str(new)))
+        self.db.execute(sql, (str(new), str(old)))
 
         self.delete(old)
 
@@ -196,7 +205,12 @@ class TagSet(MutableSet):
         :param tag: tag to delete
 
         """
-        sql = f'DELETE FROM tag WHERE tag_name="{tag}" AND tag_{self.parent.table} = {self.parent.id}'
+        sql = f"""
+        DELETE FROM {self.db.SQL_SCHEMA_PREFIX}tag 
+        WHERE tag_name="{tag}" 
+        AND tag_{self.parent.table} = {self.parent.id}
+        """
+
         self.db.execute(sql)
 
     def _clear_tags_from_db(
@@ -208,7 +222,11 @@ class TagSet(MutableSet):
         :param tag: tag to delete
 
         """
-        sql = f"DELETE FROM tag WHERE tag_{self.parent.table} = {self.parent.id}"
+        sql = f"""
+        DELETE FROM {self.db.SQL_SCHEMA_PREFIX}tag 
+        WHERE tag_{self.parent.table} = {self.parent.id}
+        """
+
         self.db.execute(sql)
 
     def _add_tag_to_db(

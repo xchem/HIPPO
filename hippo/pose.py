@@ -493,14 +493,15 @@ class Pose:
 
             sql = f"""
             WITH inspirations AS (
-                SELECT SUM(mol_num_hvyatms(compound_mol)) AS sum, inspiration_derivative FROM inspiration
-                INNER JOIN pose ON inspiration_original = pose_id
-                INNER JOIN compound ON pose_compound = compound_id
+                SELECT SUM({self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(compound_mol)) AS sum, inspiration_derivative 
+                FROM {self.db.SQL_SCHEMA_PREFIX}inspiration
+                INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose ON inspiration_original = pose_id
+                INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound ON pose_compound = compound_id
                 WHERE inspiration_derivative = {self.id}
             )
-            SELECT mol_num_hvyatms(compound_mol) - sum FROM inspirations
-            INNER JOIN pose ON inspiration_derivative = pose_id
-            INNER JOIN compound ON compound_id = pose_compound
+            SELECT {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(compound_mol) - sum FROM inspirations
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose ON inspiration_derivative = pose_id
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound ON compound_id = pose_compound
             """
 
             result = self.db.execute(sql).fetchone()

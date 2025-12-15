@@ -601,7 +601,9 @@ class Database:
                 mrich.error(strip_sql(sql))
                 raise
 
-    def executemany(self, sql, payload, *, retry: float | None = 1) -> None:
+    def executemany(
+        self, sql, payload, *, retry: float | None = 1, batch_size: int = None
+    ) -> None:
         """Execute arbitrary SQL
 
         :param sql: SQL query
@@ -615,15 +617,28 @@ class Database:
 
             return executemany(self.path, sql, payload)
 
+        if batch_size and batch_size < len(payload):
+
+            from itertools import batched
+
+            batches = list(batched(payload, batch_size))
+
+            n = len(batches)
+
+            for i, batch in enumerate(mrich.track(batches, prefix="batch execution")):
+                mrich.set_progress_field("i", i)
+                mrich.set_progress_field("n", n)
+
+                self.executemany(sql, batch, batch_size=None, retry=retry)
+
+            return
+
         try:
             return self.cursor.executemany(sql, payload)
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and retry:
-                with mrich.clock(
-                    f"SQLite Database is locked, waiting {retry} second(s)..."
-                ):
-                    time.sleep(retry)
-                mrich.print("[debug]SQLite Database was locked, retrying...")
+                mrich.print("[debug]SQLite Database was locked, waiting...")
+                time.sleep(retry)
                 return self.executemany(sql=sql, payload=payload, retry=retry)
             else:
                 raise
@@ -1305,9 +1320,9 @@ class Database:
             derivative, int
         ), "Must pass an integer ID or Pose object (derivative)"
 
-        sql = """
-        INSERT INTO inspiration(inspiration_original, inspiration_derivative)
-        VALUES(?1, ?2)
+        sql = f"""
+        INSERT INTO {self.SQL_SCHEMA_PREFIX}inspiration(inspiration_original, inspiration_derivative)
+        VALUES({self.SQL_STRING_PLACEHOLDER}, {self.SQL_STRING_PLACEHOLDER})
         """
 
         try:
@@ -1363,9 +1378,9 @@ class Database:
             # mrich.warning(f"Skipped self-referential scaffold assignment (C{scaffold})")
             return None
 
-        sql = """
-        INSERT INTO scaffold(scaffold_base, scaffold_superstructure)
-        VALUES(?1, ?2)
+        sql = f"""
+        INSERT INTO {self.SQL_SCHEMA_PREFIX}scaffold(scaffold_base, scaffold_superstructure)
+        VALUES({self.SQL_STRING_PLACEHOLDER}, {self.SQL_STRING_PLACEHOLDER})
         """
 
         try:
@@ -1411,9 +1426,9 @@ class Database:
         # assert isinstance(product, Compound), f'incompatible {product=}'
         assert isinstance(type, str), f"incompatible {type=}"
 
-        sql = """
-        INSERT INTO reaction(reaction_type, reaction_product, reaction_product_yield)
-        VALUES(?1, ?2, ?3)
+        sql = f"""
+        INSERT INTO {self.SQL_SCHEMA_PREFIX}reaction(reaction_type, reaction_product, reaction_product_yield)
+        VALUES({self.SQL_STRING_PLACEHOLDER}, {self.SQL_STRING_PLACEHOLDER}, {self.SQL_STRING_PLACEHOLDER})
         """
 
         try:
@@ -1456,7 +1471,7 @@ class Database:
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}reactant(reactant_amount, reactant_reaction, reactant_compound)
-        VALUES(?1, ?2, ?3)
+        VALUES({self.SQL_STRING_PLACEHOLDER}, {self.SQL_STRING_PLACEHOLDER}, {self.SQL_STRING_PLACEHOLDER})
         """
 
         try:
@@ -1542,22 +1557,78 @@ class Database:
         else:
             date_str = "date()"
 
-        sql = f"""
-        INSERT or REPLACE INTO {self.SQL_SCHEMA_PREFIX}quote(
-            quote_smiles,
-            quote_amount,
-            quote_supplier,
-            quote_catalogue,
-            quote_entry,
-            quote_lead_time,
-            quote_price,
-            quote_currency,
-            quote_purity,
-            quote_compound,
-            quote_date
-        )
-        VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, {date_str});
-        """
+        match self.engine:
+            case "sqlite3":
+                sql = f"""
+                INSERT OR REPLACE INTO quote(
+                    quote_smiles,
+                    quote_amount,
+                    quote_supplier,
+                    quote_catalogue,
+                    quote_entry,
+                    quote_lead_time,
+                    quote_price,
+                    quote_currency,
+                    quote_purity,
+                    quote_compound,
+                    quote_date
+                )
+                VALUES(
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    {date_str}
+                );
+                """
+            case "psycopg":
+                sql = f"""
+                INSERT OR REPLACE INTO quote(
+                    quote_smiles,
+                    quote_amount,
+                    quote_supplier,
+                    quote_catalogue,
+                    quote_entry,
+                    quote_lead_time,
+                    quote_price,
+                    quote_currency,
+                    quote_purity,
+                    quote_compound,
+                    quote_date
+                )
+                VALUES(
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    ?, 
+                    {date_str}
+                )
+                ON CONFLICT
+                DO UPDATE
+                    quote_smiles = EXCLUDED.quote_smiles,
+                    quote_amount = EXCLUDED.quote_amount,
+                    quote_supplier = EXCLUDED.quote_supplier,
+                    quote_catalogue = EXCLUDED.quote_catalogue,
+                    quote_entry = EXCLUDED.quote_entry,
+                    quote_lead_time = EXCLUDED.quote_lead_time,
+                    quote_price = EXCLUDED.quote_price,
+                    quote_currency = EXCLUDED.quote_currency,
+                    quote_purity = EXCLUDED.quote_purity,
+                    quote_compound = EXCLUDED.quote_compound,
+                    quote_date = EXCLUDED.quote_date;
+                """
 
         try:
             self.execute(
@@ -1843,9 +1914,9 @@ class Database:
 
         """
 
-        sql = """
-        INSERT INTO route(route_product)
-        VALUES(?1)
+        sql = f"""
+        INSERT INTO {self.SQL_SCHEMA_PREFIX}route(route_product)
+        VALUES({self.SQL_STRING_PLACEHOLDER})
         """
 
         product_id = int(product_id)
@@ -1889,11 +1960,20 @@ class Database:
 
         """
 
-        sql = f"""
-        INSERT INTO {self.SQL_SCHEMA_PREFIX}component(component_route, component_type, component_ref, component_amount)
-        VALUES(:component_route, :component_type, :component_ref, :component_amount)
-        {self.sql_return_id_str('component')}
-        """
+        match self.engine:
+            case "sqlite3":
+
+                sql = """
+                INSERT INTO component(component_route, component_type, component_ref, component_amount)
+                VALUES(:component_route, :component_type, :component_ref, :component_amount)
+                """
+
+            case "psycopg":
+
+                sql = """
+                INSERT INTO hippo.component(component_route, component_type, component_ref, component_amount)
+                VALUES(%(component_route)s, %(component_type)s, %(component_ref)s, %(component_amount)s)
+                """
 
         route = int(route)
         ref = int(ref)
@@ -2036,7 +2116,18 @@ class Database:
             interaction_angle,
             interaction_energy
         )
-        VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        VALUES(
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER}
+        );
         """
 
         try:
@@ -2088,7 +2179,7 @@ class Database:
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}subsite(subsite_target, subsite_name)
-        VALUES(?1, ?2)
+        VALUES({self.SQL_STRING_PLACEHOLDER}, {self.SQL_STRING_PLACEHOLDER})
         """
 
         try:
@@ -2148,7 +2239,7 @@ class Database:
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}subsite_tag(subsite_tag_ref, subsite_tag_pose)
-        VALUES(?1, ?2)
+        VALUES({self.SQL_STRING_PLACEHOLDER}, {self.SQL_STRING_PLACEHOLDER})
         """
 
         try:
@@ -2641,11 +2732,22 @@ class Database:
 
         # set values
 
-        sql = f"""
-        UPDATE {self.SQL_SCHEMA_PREFIX}component
-        SET component_amount = :component_amount
-        WHERE component_type = :component_type;
-        """
+        match self.engine:
+            case "sqlite3":
+
+                sql = """
+                UPDATE component
+                SET component_amount = :component_amount
+                WHERE component_type = :component_type;
+                """
+
+            case "psycopg":
+
+                sql = """
+                UPDATE hippo.component
+                SET component_amount = %(component_amount)s
+                WHERE component_type = %(component_type)s;
+                """
 
         self.execute(sql, dict(component_amount=None, component_type=1))
         self.execute(sql, dict(component_amount=1.0, component_type=2))
@@ -2675,7 +2777,7 @@ class Database:
         """Update the compound pattern BFP table"""
         self.execute(
             f"""
-            INSERT INTO {self.SQL_SCHEMA_PREFIX}compound_pattern_bfp
+            INSERT INTO compound_pattern_bfp
             SELECT c.compound_id, c.compound_pattern_bfp FROM {self.SQL_SCHEMA_PREFIX}compound AS c
             LEFT JOIN compound_pattern_bfp as fp
             ON c.compound_id = fp.compound_id
@@ -2745,7 +2847,7 @@ class Database:
 
         sql = f"""
         UPDATE {self.SQL_SCHEMA_PREFIX}compound
-        SET compound_mol = mol_from_smiles(compound_smiles);
+        SET compound_mol = {self.SQL_SCHEMA_PREFIX}mol_from_smiles(compound_smiles);
         """
 
         with mrich.loading("Reinitialising compounds..."):
@@ -2761,11 +2863,19 @@ class Database:
 
         count = self.count_where(table="pose", key="mol", value="NOT null")
 
-        sql = f"""
-        SELECT pose_id, pose_compound, mol_to_smiles(mol_from_binary_mol(pose_mol))
-        FROM {self.SQL_SCHEMA_PREFIX}pose
-        WHERE pose_mol IS NOT null
-        """
+        match self.engine:
+            case "sqlite3":
+                sql = """
+                SELECT pose_id, pose_compound, mol_to_smiles(mol_from_binary_mol(pose_mol))
+                FROM pose
+                WHERE pose_mol IS NOT null
+                """
+            case "psycopg":
+                sql = """
+                SELECT pose_id, pose_compound, hippo.mol_to_smiles(hippo.mol_from_pkl(pose_mol))
+                FROM hippo.pose
+                WHERE pose_mol IS NOT null
+                """
 
         c = self.execute(sql)
 
@@ -2784,16 +2894,16 @@ class Database:
                 continue
 
             if comp_id != pose_compound:
-                fix.add((pose_id, comp_id))
+                fix.add((comp_id, pose_id))
                 fix_count += 1
                 mrich.set_progress_field("#fix", fix_count)
 
         mrich.var("#fix", len(fix))
 
-        sql = """
-        UPDATE pose
-        SET pose_compound = ?2
-        WHERE pose_id = ?1
+        sql = f"""
+        UPDATE {self.SQL_SCHEMA_PREFIX}pose
+        SET pose_compound = {self.SQL_STRING_PLACEHOLDER}
+        WHERE pose_id = {self.SQL_STRING_PLACEHOLDER}
         """
 
         self.executemany(sql, list(fix))
@@ -2863,15 +2973,32 @@ class Database:
 
         else:
 
-            sql = f"""
-            INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}compound(compound_inchikey, compound_smiles, compound_mol)
-            VALUES(?1, ?2, mol_from_smiles(?2))
-            """
+            match self.engine:
+                case "sqlite3":
+                    sql = """
+                    INSERT OR IGNORE INTO compound(compound_inchikey, compound_smiles, compound_mol)
+                    VALUES(?1, ?2, mol_from_smiles(?2))
+                    """
 
-        if debug:
-            mrich.debug("Inserting...")
+                    if debug:
+                        mrich.debug("Inserting...")
 
-        self.executemany(sql, values)
+                    self.executemany(sql, values)
+
+                case "psycopg":
+                    sql = """
+                    INSERT INTO hippo.compound(compound_inchikey, compound_smiles, compound_mol)
+                    VALUES(
+                        %(inchikey)s, 
+                        %(smiles)s, 
+                        hippo.mol_from_smiles(%(smiles)s)
+                    )
+                    ON CONFLICT DO NOTHING;
+                    """
+
+                    self.executemany(
+                        sql, [dict(inchikey=i, smiles=s) for i, s in values]
+                    )
 
         if self.auto_compute_bfps:
             self.update_compound_pattern_bfp_table()
@@ -2907,22 +3034,67 @@ class Database:
 
         ### POSES
 
-        sql = f"""
-        INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}pose(
-            pose_inchikey, 
-            pose_smiles, 
-            pose_alias, 
-            pose_reference, 
-            pose_path, 
-            pose_compound, 
-            pose_target, 
-            pose_mol, 
-            pose_energy_score, 
-            pose_distance_score, 
-            pose_metadata
-        )
-        VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-        """
+        match self.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO pose(
+                    pose_inchikey, 
+                    pose_smiles, 
+                    pose_alias, 
+                    pose_reference, 
+                    pose_path, 
+                    pose_compound, 
+                    pose_target, 
+                    pose_mol, 
+                    pose_energy_score, 
+                    pose_distance_score, 
+                    pose_metadata
+                )
+                VALUES(
+                    :inchikey, 
+                    :smiles, 
+                    :alias, 
+                    :reference, 
+                    :path, 
+                    :compound, 
+                    :target, 
+                    :mol, 
+                    :energy_score, 
+                    :distance_score, 
+                    :metadata
+                )
+                """
+
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.pose(
+                    pose_inchikey, 
+                    pose_smiles, 
+                    pose_alias, 
+                    pose_reference, 
+                    pose_path, 
+                    pose_compound, 
+                    pose_target, 
+                    pose_mol, 
+                    pose_energy_score, 
+                    pose_distance_score, 
+                    pose_metadata
+                )
+                VALUES(
+                    %(inchikey)s, 
+                    %(smiles)s, 
+                    %(alias)s, 
+                    %(reference)s, 
+                    %(path)s, 
+                    %(compound)s, 
+                    %(target)s, 
+                    %(mol)s, 
+                    %(energy_score)s, 
+                    %(distance_score)s, 
+                    %(metadata)s
+                )
+                ON CONFLICT DO NOTHING;
+                """
 
         values = []
         for i, d in enumerate(dicts):
@@ -2937,18 +3109,18 @@ class Database:
 
             try:
                 values.append(
-                    (
-                        str(d["inchikey"]),
-                        str(d["smiles"]),
-                        alias,
-                        reference_id,
-                        str(d["path"]),
-                        int(d["compound_id"]),
-                        int(d["target_id"]),
-                        d["mol"].ToBinary(),
-                        float(d["energy_score"]),
-                        float(d["distance_score"]),
-                        dumps(d["metadata"]),
+                    dict(
+                        inchikey=str(d["inchikey"]),
+                        smiles=str(d["smiles"]),
+                        alias=alias,
+                        reference=reference_id,
+                        path=str(d["path"]),
+                        compound=int(d["compound_id"]),
+                        target=int(d["target_id"]),
+                        mol=d["mol"].ToBinary(),
+                        energy_score=float(d["energy_score"]),
+                        distance_score=float(d["distance_score"]),
+                        metadata=dumps(d["metadata"]),
                     )
                 )
             except KeyError as e:
@@ -2975,10 +3147,19 @@ class Database:
             for inspiration_id in d["inspiration_ids"]:
                 values.append((inspiration_id, derivative_id))
 
-        sql = """
-        INSERT OR IGNORE INTO inspiration(inspiration_original, inspiration_derivative)
-        VALUES(?1, ?2)
-        """
+        match self.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO inspiration(inspiration_original, inspiration_derivative)
+                VALUES(?1, ?2)
+                """
+
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.inspiration(inspiration_original, inspiration_derivative)
+                VALUES(%s, %s)
+                ON CONFLICT DO NOTHING;
+                """
 
         self.executemany(sql, values)
         self.commit()
@@ -2993,6 +3174,9 @@ class Database:
         mrich.var("#compounds", self.count("compound"))
         mrich.var("#scaffold defs", n_before)
 
+        if not self.engine == "sqlite3":
+            raise NotImplementedError
+
         sql = """
         SELECT compound_id, compound_mol, compound_pattern_bfp 
         FROM compound
@@ -3003,14 +3187,14 @@ class Database:
 
         self.commit()
 
-        sql = f"""
-            INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}scaffold
-            SELECT ?1, c.compound_id 
-            FROM {self.SQL_SCHEMA_PREFIX}compound AS c, compound_pattern_bfp AS fp
-            WHERE c.compound_id = fp.compound_id
-            AND c.compound_id <> ?1
-            AND mol_is_substruct(c.compound_mol, ?2)
-            AND fp.compound_id MATCH rdtree_subset(?3)
+        sql = """
+        INSERT OR IGNORE INTO scaffold
+        SELECT ?1, c.compound_id 
+        FROM compound AS c, compound_pattern_bfp AS fp
+        WHERE c.compound_id = fp.compound_id
+        AND c.compound_id <> ?1
+        AND mol_is_substruct(c.compound_mol, ?2)
+        AND fp.compound_id MATCH rdtree_subset(?3)
         """
 
         with mrich.loading("Calculating scaffolds..."):
@@ -3159,11 +3343,22 @@ class Database:
 
         mrich.var("#murcko scaffold relations", len(pairs))
 
+        match self.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO scaffold (scaffold_base, scaffold_superstructure) 
+                VALUES (?,?)
+                """
+
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.scaffold (scaffold_base, scaffold_superstructure) 
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING;
+                """
+
         self.executemany(
-            f"""
-            INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}scaffold (scaffold_base, scaffold_superstructure) 
-            VALUES (?,?)
-            """,
+            sql,
             pairs,
         )
 
@@ -3206,12 +3401,21 @@ class Database:
     def set_derivative_subsites(self, commit: bool = True) -> None:
         """Propagate all subsite assignments from inspirations to their derivatives"""
 
-        sql = f"""
-        INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}subsite_tag(subsite_tag_ref, subsite_tag_pose)
-        SELECT subsite_tag_ref, inspiration_derivative FROM {self.SQL_SCHEMA_PREFIX}subsite_tag
-        INNER JOIN {self.SQL_SCHEMA_PREFIX}inspiration
-        ON subsite_tag_pose = inspiration_original
-        """
+        match self.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO subsite_tag(subsite_tag_ref, subsite_tag_pose)
+                SELECT subsite_tag_ref, inspiration_derivative FROM subsite_tag
+                INNER JOIN inspiration ON subsite_tag_pose = inspiration_original
+                """
+
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.subsite_tag(subsite_tag_ref, subsite_tag_pose)
+                SELECT subsite_tag_ref, inspiration_derivative FROM hippo.subsite_tag
+                INNER JOIN hippo.inspiration ON subsite_tag_pose = inspiration_original
+                ON CONFLICT DO NOTHING;
+                """
 
         self.execute(sql)
 
@@ -4329,7 +4533,7 @@ class Database:
 
         sql = f"""
         SELECT DISTINCT interaction_pose, feature_id, interaction_type FROM {self.SQL_SCHEMA_PREFIX}interaction 
-        INNER JOIN feature ON interaction_feature = feature_id
+        INNER JOIN {self.SQL_SCHEMA_PREFIX}feature ON interaction_feature = feature_id
         WHERE interaction_pose IN {pset.str_ids}
         """
 

@@ -1009,13 +1009,23 @@ class Compound:
 
         from .pset import PoseSet
 
-        sql = """
-        SELECT pose_id, inspiration_original FROM compound
-        INNER JOIN scaffold ON compound_id = scaffold_base
-        INNER JOIN pose ON compound_id = pose_compound
-        INNER JOIN inspiration ON pose_id = inspiration_derivative
-        WHERE compound_id = :compound_id
-        """
+        match self.db.engine:
+            case "sqlite3":
+                sql = """
+                SELECT pose_id, inspiration_original FROM compound
+                INNER JOIN scaffold ON compound_id = scaffold_base
+                INNER JOIN pose ON compound_id = pose_compound
+                INNER JOIN inspiration ON pose_id = inspiration_derivative
+                WHERE compound_id = :compound_id
+                """
+            case "psycopg":
+                sql = """
+                SELECT pose_id, inspiration_original FROM hippo.compound
+                INNER JOIN hippo.scaffold ON compound_id = scaffold_base
+                INNER JOIN hippo.pose ON compound_id = pose_compound
+                INNER JOIN hippo.inspiration ON pose_id = inspiration_derivative
+                WHERE compound_id = %(compound_id)s
+                """
 
         with mrich.spinner(f"Querying inspirations for {self}"):
             records = self.db.execute(sql, dict(compound_id=self.id)).fetchall()
