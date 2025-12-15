@@ -350,7 +350,7 @@ class Pose:
         from .tools import sanitise_mol
 
         self._mol = sanitise_mol(m)
-        self.db.update(table="pose", id=self.id, key="pose_mol", value=m.ToBinary())
+        self.db.update_pose_mol(pose_id=self.id, mol=self._mol)
 
     @property
     def protonated_mol(self) -> "rdkit.Chem.Mol":
@@ -493,14 +493,15 @@ class Pose:
 
             sql = f"""
             WITH inspirations AS (
-                SELECT SUM(mol_num_hvyatms(compound_mol)) AS sum, inspiration_derivative FROM inspiration
-                INNER JOIN pose ON inspiration_original = pose_id
-                INNER JOIN compound ON pose_compound = compound_id
+                SELECT SUM({self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(compound_mol)) AS sum, inspiration_derivative 
+                FROM {self.db.SQL_SCHEMA_PREFIX}inspiration
+                INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose ON inspiration_original = pose_id
+                INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound ON pose_compound = compound_id
                 WHERE inspiration_derivative = {self.id}
             )
-            SELECT mol_num_hvyatms(compound_mol) - sum FROM inspirations
-            INNER JOIN pose ON inspiration_derivative = pose_id
-            INNER JOIN compound ON compound_id = pose_compound
+            SELECT {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(compound_mol) - sum FROM inspirations
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose ON inspiration_derivative = pose_id
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound ON compound_id = pose_compound
             """
 
             result = self.db.execute(sql).fetchone()
@@ -948,6 +949,7 @@ class Pose:
                 animal=None,
                 create_blank=False,
                 check_legacy=False,
+                create_indexes=False,
                 debug=False,
             )
 
@@ -992,6 +994,7 @@ class Pose:
 
             if debug:
                 mrich.debug("Getting protein features...")
+
             protein_features = self.target.calculate_features(
                 protein_system, reference_id=self.reference_id
             )
@@ -1181,15 +1184,31 @@ class Pose:
                     mrich.warning(mutation)
 
             if resolve:
+                from .feature import Feature
                 from .iset import InteractionSet
 
                 interactions = InteractionSet.from_pose(
                     self, table="temp_interaction", db=temp_db
                 )
 
-                feature_ids = interactions.feature_ids
+                feature_ids = str(tuple(interactions.feature_ids)).replace(",)", ")")
 
-                feature_cache = {i: self.db.get_feature(id=i) for i in feature_ids}
+                records = self.db.select_all_where(
+                    table="feature", key=f"feature_id IN {feature_ids}", multiple=True
+                )
+
+                feature_cache = {
+                    pk: Feature(
+                        id=pk,
+                        family=family,
+                        target=target,
+                        chain_name=chain_name,
+                        residue_name=residue_name,
+                        residue_number=residue_number,
+                        atom_names=atom_names,
+                    )
+                    for pk, family, target, chain_name, residue_name, residue_number, atom_names in records
+                }
 
                 interactions.resolve(debug=debug, feature_cache=feature_cache)
 

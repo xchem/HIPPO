@@ -534,7 +534,7 @@ class PoseTable:
 
     def __iter__(self):
         """Iterate through all compounds"""
-        return iter(self[i + 1] for i in range(len(self)))
+        return iter(self[i] for i in self.ids)
 
 
 class PoseSet:
@@ -779,7 +779,7 @@ class PoseSet:
         """Return a list of unique sets of inspiration :class:`.Pose` IDs"""
 
         sql = f"""
-        SELECT inspiration_derivative, inspiration_original FROM inspiration
+        SELECT inspiration_derivative, inspiration_original FROM {self.db.SQL_SCHEMA_PREFIX}inspiration
         WHERE inspiration_derivative IN {self.str_ids}
         """
 
@@ -862,6 +862,10 @@ class PoseSet:
     @property
     def best_placed_pose_id(self) -> int:
         """Get the id of the pose with the best distance_score in this subset"""
+
+        if len(self) == 1:
+            return self.ids[0]
+
         query = f"pose_id, MIN(pose_distance_score)"
         query = self.db.select_where(
             table="pose", query=query, key=f"pose_id in {self.str_ids}", multiple=False
@@ -894,8 +898,10 @@ class PoseSet:
         from itertools import combinations
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_id, interaction_type FROM interaction 
-        INNER JOIN feature ON interaction_feature = feature_id
+        SELECT DISTINCT interaction_pose, feature_id, interaction_type 
+        FROM {self.db.SQL_SCHEMA_PREFIX}interaction 
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature 
+        ON interaction_feature = feature_id
         WHERE interaction_pose IN {self.str_ids}
         """
 
@@ -943,8 +949,10 @@ class PoseSet:
         # get interaction records
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_residue_name, feature_residue_number, interaction_type FROM interaction 
-        INNER JOIN feature ON interaction_feature = feature_id
+        SELECT DISTINCT interaction_pose, feature_residue_name, feature_residue_number, interaction_type 
+        FROM {self.db.SQL_SCHEMA_PREFIX}interaction 
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature 
+        ON interaction_feature = feature_id
         WHERE interaction_pose IN {self.str_ids}
         """
 
@@ -1056,7 +1064,8 @@ class PoseSet:
         from numpy import std
 
         sql = f"""
-        SELECT COUNT(DISTINCT subsite_tag_ref) FROM subsite_tag
+        SELECT COUNT(DISTINCT subsite_tag_ref) 
+        FROM {self.db.SQL_SCHEMA_PREFIX}subsite_tag
         WHERE subsite_tag_pose IN {self.str_ids}
         GROUP BY subsite_tag_pose
         """
@@ -1072,7 +1081,8 @@ class PoseSet:
         """Return a list of subsite id's of member poses"""
 
         sql = f"""
-        SELECT DISTINCT subsite_tag_ref FROM subsite_tag
+        SELECT DISTINCT subsite_tag_ref 
+        FROM {self.db.SQL_SCHEMA_PREFIX}subsite_tag
         WHERE subsite_tag_pose IN {self.str_ids}
         """
 
@@ -1092,7 +1102,8 @@ class PoseSet:
         from numpy import mean
 
         sql = f"""
-        SELECT pose_energy_score FROM pose
+        SELECT pose_energy_score 
+        FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         """
 
@@ -1106,7 +1117,8 @@ class PoseSet:
         from numpy import mean
 
         sql = f"""
-        SELECT pose_distance_score FROM pose
+        SELECT pose_distance_score 
+        FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         """
 
@@ -1322,7 +1334,7 @@ class PoseSet:
 
         sql = f"""
         SELECT {query}
-        FROM pose
+        FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         """
 
@@ -1642,7 +1654,8 @@ class PoseSet:
         """Choose the best placed pose (best distance_score) grouped by compound"""
 
         sql = f"""
-        SELECT pose_id, MIN(pose_distance_score) FROM pose
+        SELECT pose_id, MIN(pose_distance_score) 
+        FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         GROUP BY pose_compound
         """
@@ -1686,7 +1699,7 @@ class PoseSet:
             return PoseSet(self.db, ids)
 
         sql = f"""
-        SELECT pose_id FROM pose
+        SELECT pose_id FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         AND pose_{key} {operator} {value}
         """
@@ -1760,63 +1773,7 @@ class PoseSet:
 
         """
 
-        from json import loads
-
-        records = self.db.select_where(
-            table="pose",
-            query="pose_id, pose_target, pose_metadata",
-            key=f"pose_id IN {self.str_ids}",
-            multiple=True,
-        )
-
-        subsites = set()
-        subsite_tags = set()
-
-        for pose_id, pose_target, metadata in records:
-
-            metadata = loads(metadata)
-
-            key = metadata.get(field)
-
-            if not key:
-                mrich.warning(field, "not in metadata pose_id=", pose_id)
-                continue
-
-            subsites.add((pose_target, key))
-            subsite_tags.add((key, pose_id))
-
-        sql = """
-        INSERT OR IGNORE INTO subsite(subsite_target, subsite_name)
-        VALUES(?1, ?2)
-        RETURNING subsite_id
-        """
-
-        records = self.db.executemany(sql, sorted(list(subsites)))
-        subsite_ids = [i for i, in records]
-        subsite_lookup = {name: i for (t, name), i in zip(subsites, subsite_ids)}
-
-        # supplement existing subsites
-        subsite_lookup.update(
-            {
-                n: i
-                for i, n in self.db.select(
-                    table="subsite", query="subsite_id, subsite_name", multiple=True
-                )
-            }
-        )
-
-        sql = """
-        INSERT OR IGNORE INTO subsite_tag(subsite_tag_ref, subsite_tag_pose)
-        VALUES(?1, ?2)
-        """
-
-        subsite_tags = [
-            (subsite_lookup[subsite], pose_id) for subsite, pose_id in subsite_tags
-        ]
-
-        self.db.executemany(sql, subsite_tags)
-
-        self.db.commit()
+        self.db.set_subsites_from_metadata_field(pose_str_ids=self.str_ids, field=field)
 
     def calculate_inspiration_scores(
         self,
@@ -1872,10 +1829,10 @@ class PoseSet:
 
         tuples = df[f"mocassin_{score_type}({alpha},{beta})"].items()
 
-        sql = """UPDATE pose SET pose_inspiration_score = ?2 WHERE pose_id = ?1"""
+        sql = f"""UPDATE {self.db.SQL_SCHEMA_PREFIX}pose SET pose_inspiration_score = {self.db.SQL_STRING_PLACEHOLDER} WHERE pose_id = {self.db.SQL_STRING_PLACEHOLDER}"""
 
         mrich.debug("Updating pose_inspiration_score values")
-        self.db.executemany(sql, tuples)
+        self.db.executemany(sql, [(b, a) for a, b in tuples])
         self.db.commit()
 
         return df
@@ -2818,8 +2775,8 @@ class PoseSet:
         from pandas import DataFrame
 
         sql = f"""
-        SELECT subsite_id, subsite_name, COUNT(DISTINCT subsite_tag_pose) FROM subsite
-        INNER JOIN subsite_tag
+        SELECT subsite_id, subsite_name, COUNT(DISTINCT subsite_tag_pose) FROM {self.db.SQL_SCHEMA_PREFIX}subsite
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}subsite_tag
         ON subsite_id = subsite_tag_ref
         WHERE subsite_tag_pose IN {self.str_ids}
         GROUP BY subsite_name
@@ -2880,7 +2837,7 @@ class PoseSet:
 
         self.db.execute(
             f"""
-            UPDATE pose
+            UPDATE {self.db.SQL_SCHEMA_PREFIX}pose
             SET pose_reference = NULL
             WHERE pose_id IN {str_ids}
         """

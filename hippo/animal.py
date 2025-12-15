@@ -10,7 +10,6 @@ from pathlib import Path
 from rdkit.Chem import Mol
 
 from .pose import Pose
-from .db import Database
 from .tags import TagTable
 from .target import Target
 from .compound import Compound
@@ -43,7 +42,7 @@ class HIPPO:
     def __init__(
         self,
         name: str,
-        db_path: str | Path,
+        db: str | Path | dict,
         copy_from: str | Path | None = None,
         overwrite_existing: bool = False,
         update_legacy: bool = False,
@@ -56,23 +55,34 @@ class HIPPO:
 
         mrich.var("name", name, color="arg")
 
-        if not isinstance(db_path, Path):
-            db_path = Path(db_path)
+        if isinstance(db, dict):
 
-        mrich.var("db_path", db_path, color="file")
+            ### POSTGRES
 
-        self._db_path = db_path
+            from .postgres import PostgresDatabase
 
-        if copy_from:
-            self._db = Database.copy_from(
-                source=copy_from,
-                destination=self.db_path,
-                animal=self,
-                update_legacy=update_legacy,
-                overwrite_existing=overwrite_existing,
-            )
+            self._db = PostgresDatabase(animal=self, **db)
+
         else:
-            self._db = Database(self.db_path, animal=self, update_legacy=update_legacy)
+
+            ### INITIALISE SQLITE DATABASE
+
+            from .db import Database
+
+            db_path = Path(db)
+
+            mrich.var("db_path", db_path, color="file")
+
+            if copy_from:
+                self._db = Database.copy_from(
+                    source=copy_from,
+                    destination=db_path,
+                    animal=self,
+                    update_legacy=update_legacy,
+                    overwrite_existing=overwrite_existing,
+                )
+            else:
+                self._db = Database(db_path, animal=self, update_legacy=update_legacy)
 
         self._compounds = CompoundTable(self.db)
         self._poses = PoseTable(self.db)
@@ -101,10 +111,10 @@ class HIPPO:
     @property
     def db_path(self) -> str:
         """Returns the database path"""
-        return self._db_path
+        return self.db.path
 
     @property
-    def db(self) -> Database:
+    def db(self) -> "Database":
         """Returns the Database object"""
         return self._db
 
@@ -1329,10 +1339,18 @@ class HIPPO:
                     i for i in elab_df[key].unique() if i != scaffold_id
                 ]
 
-                sql = """
-                INSERT OR IGNORE INTO scaffold(scaffold_base, scaffold_superstructure)
-                VALUES(?1, ?2)
-                """
+                match self.db.engine:
+                    case "sqlite3":
+                        sql = """
+                        INSERT OR IGNORE INTO scaffold(scaffold_base, scaffold_superstructure)
+                        VALUES(?1, ?2)
+                        """
+                    case "psycopg":
+                        sql = """
+                        INSERT INTO hippo.scaffold(scaffold_base, scaffold_superstructure)
+                        VALUES(%s, %s)
+                        ON CONFLICT DO NOTHING;
+                        """
 
                 self.db.executemany(sql, [(scaffold_id, i) for i in superstructure_ids])
                 self.db.commit()
@@ -1403,17 +1421,32 @@ class HIPPO:
 
         mrich.debug(f"Registering {len(payload)} poses...")
 
-        sql = """
-        INSERT OR IGNORE INTO pose(
-            pose_reference,
-            pose_path,
-            pose_compound,
-            pose_target,
-            pose_energy_score,
-            pose_distance_score
-        )
-        VALUES(?1, ?2, ?3, ?4, ?5, ?6)
-        """
+        match self.db.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO pose(
+                    pose_reference,
+                    pose_path,
+                    pose_compound,
+                    pose_target,
+                    pose_energy_score,
+                    pose_distance_score
+                )
+                VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+                """
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.pose(
+                    pose_reference,
+                    pose_path,
+                    pose_compound,
+                    pose_target,
+                    pose_energy_score,
+                    pose_distance_score
+                )
+                VALUES(%s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING;
+                """
 
         n_before = self.num_poses
         self.db.executemany(sql, payload)
@@ -1440,10 +1473,18 @@ class HIPPO:
             for inspiration in inspirations.ids:
                 payload.add((inspiration, pose_id))
 
-        sql = """
-        INSERT OR IGNORE INTO inspiration(inspiration_original, inspiration_derivative)
-        VALUES(?1, ?2)
-        """
+        match self.db.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO inspiration(inspiration_original, inspiration_derivative)
+                VALUES(?1, ?2)
+                """
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.inspiration(inspiration_original, inspiration_derivative)
+                VALUES(?%s1, %s)
+                ON CONFLICT DO NOTHING;
+                """
 
         self.db.executemany(sql, list(payload))
         self.db.commit()
@@ -1984,11 +2025,20 @@ class HIPPO:
 
         if update_aliases:
 
-            sql = """
-            UPDATE OR IGNORE compound
-            SET compound_alias = :compound_alias
-            WHERE compound_inchikey = :compound_inchikey;
-            """
+            match self.db.engine:
+                case "sqlite3":
+                    sql = """
+                    UPDATE OR IGNORE compound
+                    SET compound_alias = :compound_alias
+                    WHERE compound_inchikey = :compound_inchikey;
+                    """
+                case "psycopg":
+                    sql = """
+                    UPDATE hippo.compound
+                    SET compound_alias = %(compound_alias)s
+                    WHERE compound_inchikey = %(compound_inchikey)s
+                    ON CONFLICT DO NOTHING;
+                    """
 
             mrich.debug("Updating aliases...")
             self.db.executemany(sql, alias_dicts)
@@ -2014,15 +2064,23 @@ class HIPPO:
                 c_id = inchikey_id_lookup[inchikey]
                 metadata_lookup[c_id]["SoakDB count"] = len(df[df[smiles_col] == old_s])
 
-            sql = """
-            UPDATE compound
-            SET compound_metadata = ?2
-            WHERE compound_id = ?1;
-            """
+            match self.db.engine:
+                case "sqlite3":
+                    sql = """
+                    UPDATE compound
+                    SET compound_metadata = ?
+                    WHERE compound_id = ?;
+                    """
+                case "psycopg":
+                    sql = """
+                    UPDATE hippo.compound
+                    SET compound_metadata = %s
+                    WHERE compound_id = %s;
+                    """
 
             mrich.debug("Updating metadata...")
             self.db.executemany(
-                sql, [(i, dumps(m)) for i, m in metadata_lookup.items()]
+                sql, [(dumps(m), i) for i, m in metadata_lookup.items()]
             )
 
         self.db.commit()
@@ -2260,13 +2318,27 @@ class HIPPO:
 
         reactant_ids = set(v.id if isinstance(v, Compound) else v for v in reactants)
 
-        pairs = self.db.execute(
-            f"""SELECT reactant_reaction, reactant_compound 
+        match self.db.engine:
+            case "sqlite3":
+                sql = """
+                SELECT reactant_reaction, reactant_compound 
                 FROM reactant INNER JOIN reaction 
                 ON reactant.reactant_reaction = reaction.reaction_id 
                 WHERE reaction_type="{type}" 
-                AND reaction_product = {product}"""
-        ).fetchall()
+                AND reaction_product = {product}
+                """
+            case "psycopg":
+                sql = """
+                SELECT reactant_reaction, reactant_compound 
+                FROM hippo.reactant AS reactant INNER JOIN hippo.reaction AS reaction
+                ON reactant.reactant_reaction = reaction.reaction_id 
+                WHERE reaction_type="{type}" 
+                AND reaction_product = {product}
+                """
+
+        sql.format(type=type, product=product)
+
+        pairs = self.db.execute(sql).fetchall()
 
         if pairs:
 
@@ -2362,11 +2434,20 @@ class HIPPO:
             return None
 
         # insert reaction records
-        sql = """
-        INSERT INTO reaction(reaction_type, reaction_product, reaction_product_yield)
-        VALUES(?1, ?2, 1)
-        RETURNING reaction_id
-        """
+
+        match self.db.engine:
+            case "sqlite3":
+                sql = """
+                INSERT INTO reaction(reaction_type, reaction_product, reaction_product_yield)
+                VALUES(?1, ?2, 1)
+                RETURNING reaction_id
+                """
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.reaction(reaction_type, reaction_product, reaction_product_yield)
+                VALUES(%s, %s, 1)
+                RETURNING reaction_id
+                """
 
         payload = list(non_duplicates.keys())
 
@@ -2375,10 +2456,19 @@ class HIPPO:
         self.db.commit()
 
         # insert reactant records
-        sql = """
-        INSERT OR IGNORE INTO reactant(reactant_amount, reactant_reaction, reactant_compound)
-        VALUES(1.0, ?1, ?2)
-        """
+
+        match self.db.engine:
+            case "sqlite3":
+                sql = """
+                INSERT OR IGNORE INTO reactant(reactant_amount, reactant_reaction, reactant_compound)
+                VALUES(1.0, ?1, ?2)
+                """
+            case "psycopg":
+                sql = """
+                INSERT INTO hippo.reactant(reactant_amount, reactant_reaction, reactant_compound)
+                VALUES(1.0, %s, %s)
+                ON CONFLICT DO NOTHING;
+                """
 
         payload = []
         for reaction_id, ((reaction_type, product_id), reactant_ids) in zip(
@@ -2394,15 +2484,18 @@ class HIPPO:
 
         # delete orphaned reactions
 
-        sql = """
-        SELECT reaction_id FROM reaction
+        sql = f"""
+        SELECT reaction_id FROM {self.db.SQL_SCHEMA_PREFIX}reaction
         LEFT JOIN reactant ON reaction_id = reactant_reaction
         WHERE reactant_compound IS NULL
         """
 
         records = self.db.execute(sql).fetchall()
         orphaned_str_ids = str(tuple(r for r, in records)).replace(",)", ")")
-        self.db.execute(f"DELETE FROM reaction WHERE reaction_id IN {orphaned_str_ids}")
+
+        self.db.execute(
+            f"DELETE FROM {self.db.SQL_SCHEMA_PREFIX}reaction WHERE reaction_id IN {orphaned_str_ids}"
+        )
 
         if diff:
             mrich.success(f"Inserted {diff} new reactions")
@@ -2727,9 +2820,25 @@ class HIPPO:
         else:
             inchikeys = self.compounds.inchikeys
 
+        quote_fields = [
+            "quote_id",
+            "quote_smiles",
+            "quote_amount",
+            "quote_supplier",
+            "quote_catalogue",
+            "quote_entry",
+            "quote_lead_time",
+            "quote_price",
+            "quote_currency",
+            "quote_purity",
+            "quote_date",
+            "quote_compound",
+        ]
+
         sql = f"""
-        SELECT quote_id, quote_smiles, quote_amount, quote_supplier, quote_catalogue, quote_entry, quote_lead_time, quote_price, quote_currency, quote_purity, quote_date, quote_compound FROM quote
-        INNER JOIN compound ON quote_compound = compound_id
+        SELECT {', '.join(quote_fields)} 
+        FROM {self.db.SQL_SCHEMA_PREFIX}quote
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound ON quote_compound = compound_id
         WHERE compound_inchikey IN {tuple(inchikeys)}
         """
 
