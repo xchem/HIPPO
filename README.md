@@ -131,6 +131,8 @@ Install psycopg
 pip install psycopg[binary]
 ```
 
+See `images/postgres` for a container including the [RDKit cartridge](https://rdkit.org/docs/Cartridge.html)
+
 ### Connecting to a remote deployment
 
 Check port availability:
@@ -170,5 +172,9 @@ To connect to a specific database with `psql`
 ```bash
 psql -h localhost -U USER -p 5432 -n DATABASE
 ```
+
+### Running tests
+
+To run the unit tests, uncomment and configure `tests/config.py` to the desired postgres deployment. N.B. currently not all tests will succeed.
 
 </details>
