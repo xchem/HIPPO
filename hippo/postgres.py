@@ -519,9 +519,7 @@ class PostgresDatabase(Database):
     ### BULK CALCULATIONS
 
     def calculate_all_scaffolds(self) -> None:
-        raise NotImplementedError
-
-    def calculate_all_murcko_scaffolds(self) -> None:
+        """Placeholder for calculate_all_scaffolds"""
         raise NotImplementedError
 
     ### MIGRATIONS
