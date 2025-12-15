@@ -320,7 +320,7 @@ class PostgresDatabase(Database):
         debug: bool = False,
         time: bool = False,
     ):
-        """Execute arbitrary SQL with retry if database is locked."""
+        """Execute arbitrary SQL"""
         if debug:
             mrich.debug(sql)
 
@@ -355,7 +355,9 @@ class PostgresDatabase(Database):
         time: bool = False,
         batch_size: int = None,
     ):
-        """Execute arbitrary SQL with retry if database is locked."""
+        """Execute arbitrary SQL
+
+        :param batch_size: optional batch size for the execution"""
 
         returning = "RETURNING" in sql
 
@@ -417,7 +419,7 @@ class PostgresDatabase(Database):
         return records
 
     def rollback(self) -> None:
-        """rollback (not relevant for sqlite)"""
+        """rollback the staged changes. not relevant for sqlite"""
         self.connection.rollback()
         self.connection.execute("SET client_encoding TO 'UTF8'")
 
