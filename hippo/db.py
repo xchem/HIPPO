@@ -1587,8 +1587,8 @@ class Database:
                 );
                 """
             case "psycopg":
-                sql = f"""
-                INSERT OR REPLACE INTO quote(
+                sql = """
+                INSERT OR REPLACE INTO hippo.quote(
                     quote_smiles,
                     quote_amount,
                     quote_supplier,
@@ -1602,32 +1602,34 @@ class Database:
                     quote_date
                 )
                 VALUES(
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
                     {date_str}
                 )
                 ON CONFLICT
                 DO UPDATE
-                    quote_smiles = EXCLUDED.quote_smiles,
-                    quote_amount = EXCLUDED.quote_amount,
-                    quote_supplier = EXCLUDED.quote_supplier,
-                    quote_catalogue = EXCLUDED.quote_catalogue,
-                    quote_entry = EXCLUDED.quote_entry,
-                    quote_lead_time = EXCLUDED.quote_lead_time,
-                    quote_price = EXCLUDED.quote_price,
-                    quote_currency = EXCLUDED.quote_currency,
-                    quote_purity = EXCLUDED.quote_purity,
-                    quote_compound = EXCLUDED.quote_compound,
-                    quote_date = EXCLUDED.quote_date;
-                """
+                    hippo.quote.quote_smiles = EXCLUDED.quote_smiles,
+                    hippo.quote.quote_amount = EXCLUDED.quote_amount,
+                    hippo.quote.quote_supplier = EXCLUDED.quote_supplier,
+                    hippo.quote.quote_catalogue = EXCLUDED.quote_catalogue,
+                    hippo.quote.quote_entry = EXCLUDED.quote_entry,
+                    hippo.quote.quote_lead_time = EXCLUDED.quote_lead_time,
+                    hippo.quote.quote_price = EXCLUDED.quote_price,
+                    hippo.quote.quote_currency = EXCLUDED.quote_currency,
+                    hippo.quote.quote_purity = EXCLUDED.quote_purity,
+                    hippo.quote.quote_compound = EXCLUDED.quote_compound,
+                    hippo.quote.quote_date = EXCLUDED.quote_date;
+                """.format(
+                    date_str=date_str
+                )
 
         try:
             self.execute(
