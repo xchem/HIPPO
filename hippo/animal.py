@@ -824,7 +824,7 @@ class HIPPO:
 
                     try:
                         pose_id = int(insp)
-                        inspirations.append(pose_id)
+                        inspiration_list.append(pose_id)
 
                     except ValueError:
                         if (

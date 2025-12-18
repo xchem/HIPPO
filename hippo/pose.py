@@ -884,6 +884,7 @@ class Pose:
         debug: bool = False,
         commit: bool = True,
         mutation_warnings: bool = True,
+        in_memory_db: bool = True,
         delete_temp_table: bool = True,
     ) -> None:
         """Enumerate all valid interactions between this ligand and the protein
@@ -895,6 +896,7 @@ class Pose:
         :param debug: Increase verbosity for debugging
         :param commit: commit the changes to the database (Default value = True)
         :param mutation_warnings: warn when there has been a mutation in the protein (Default value = True)
+        :param in_memory_db: use an in-memory sqlite database when resolving interactions, faster but may break IPyWidgets (Default value = True)
         :param delete_temp_table: delete the temporary interaction table created during interaction resolution (Default value = True)
 
         """
@@ -942,19 +944,24 @@ class Pose:
 
             ### IN-MEMORY DB
 
-            from .db import Database
+            if in_memory_db:
 
-            temp_db = Database(
-                ":memory:",
-                animal=None,
-                create_blank=False,
-                check_legacy=False,
-                create_indexes=False,
-                debug=False,
-            )
+                from .db import Database
 
-            temp_db.create_table_interaction(debug=False)
-            temp_db.commit()
+                temp_db = Database(
+                    ":memory:",
+                    animal=None,
+                    create_blank=False,
+                    check_legacy=False,
+                    create_indexes=False,
+                    debug=False,
+                )
+
+                temp_db.create_table_interaction(debug=False)
+                temp_db.commit()
+
+            else:
+                temp_db = db
 
             ### create temporary table
 
@@ -1217,12 +1224,16 @@ class Pose:
                 table="interaction", key="pose", value=self.id, commit=commit
             )
 
-            self.db.copy_temp_interactions(source_db=temp_db)
+            if in_memory_db:
+                self.db.copy_temp_interactions(source_db=temp_db)
+            else:
+                self.db.copy_temp_interactions()
+
             self.set_has_fingerprint(True, commit=commit)
 
             ### delete temporary table
 
-            if delete_temp_table:
+            if in_memory_db and delete_temp_table:
                 temp_db.close(debug=False)
 
         elif debug:
