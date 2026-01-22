@@ -848,14 +848,14 @@ class HIPPO:
                 ref_str = row.get(reference_col)
                 if ref_str:
                     try:
-                        reference = int(ref_str)
+                        row_reference = int(ref_str)
                     except ValueError:
-                        reference = inspiration_map[ref_str]
+                        row_reference = inspiration_map[ref_str]
                 else:
-                    reference = None
+                    row_reference = None
 
             elif isinstance(reference, Pose):
-                reference = reference.id
+                row_reference = reference.id
 
             # metadata
             metadata = {}
@@ -906,7 +906,7 @@ class HIPPO:
                     path=pose_path,
                     metadata=metadata,
                     inspiration_ids=inspiration_list,
-                    reference_id=reference,
+                    reference_id=row_reference,
                     mol=mol,
                     inchikey=inchikey,
                     smiles=smiles,
