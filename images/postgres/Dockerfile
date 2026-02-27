@@ -101,7 +101,8 @@ RUN ln -sf /usr/lib/postgresql/${PG_MAJOR}/bin/initdb /usr/bin/initdb || true &&
     ln -sf /usr/lib/postgresql/${PG_MAJOR}/bin/psql /usr/bin/psql || true
 
 # Vendor entrypoint (place official script at files/docker-entrypoint.sh)
-COPY files/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# COPY files/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Prepare dirs and permissions
