@@ -2,7 +2,7 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 [project]
-name = "hippo-db"
+name = "xchem-hippo"
 version = "0.3.38"
 authors = [
     { name = "Max Winokan", email = "max@winokan.com" },
@@ -34,9 +34,6 @@ dependencies = [
     "apsw",
     "python-louvain",
 ]
-[project.urls]
-"Homepage" = "https://hippo.winokan.com"
-"Bug Tracker" = "https://github.com/mwinokan/HIPPO/issues"
 [tool.hatch.build]
 include = [
     "hippo/*.py",
