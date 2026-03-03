@@ -7,7 +7,7 @@
 HIPPO Documentation
 ===================
 
-*Hit Interaction Profiling for Procurement Optimisation* (HIPPO) is a chemical database and python toolkit to expedite fragment-based drug discovery.
+*Hit Interaction Profiling for Progression Optimisation* (HIPPO) is a chemical database and python toolkit to expedite fragment-based drug discovery.
 
 Installation
 ============
@@ -37,12 +37,13 @@ Getting started
 
 HIPPO uses an sqlite database with several inter-connected tables and Python-class representations thereof, the core concepts are explained in :doc:`definitions`. Once familiar you can try :doc:`getting_started`.
 
+.. note::
+
+   HIPPO is built primarily as a Python API to be used in interactive :doc:`notebooks` such as in JupyterLab, but where higher performance is needed several tasks are accessible via a :doc:`cli` which can be used in SLURM jobs.
 
 .. toctree::
    :maxdepth: 1
    :caption: Documentation Pages
-
-   Home <self>
 
    Definitions, units, and data types <definitions>
 
@@ -50,17 +51,16 @@ HIPPO uses an sqlite database with several inter-connected tables and Python-cla
 
    Adding data <add_data>
 
-   Interfacing with Syndirella <syndirella>
+   Interfacing with Syndirella and merging algorithms <syndirella>
    
-   Running an FFF campaign <fff>
-   
-   Preparing files for Fragalysis upload <fragalysis>
+   Example Notebooks <notebooks>
 
    Windows installation <windows>
-
-   Random recipe generation <rgen>
+   
+   Command-Line Interface <cli>
 
    API Reference <api_reference>
+   
 
 Core concepts
 =============

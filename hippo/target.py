@@ -47,7 +47,8 @@ class Target:
     @property
     def feature_ids(self) -> list[int]:
         """Returns the target's feature ID's"""
-        feature_ids = self.db.select_where(
+
+        records = self.db.select_where(
             query="feature_id",
             table="feature",
             key="target",
@@ -57,16 +58,26 @@ class Target:
             sort="feature_chain_name, feature_residue_number",
         )
 
-        if feature_ids:
-            feature_ids = [v for v, in feature_ids]
+        if not records:
+            return None
 
-        return feature_ids
+        return [v for v, in records]
 
     @property
     def features(self) -> list["Feature"]:
         """Returns the target's features"""
         if feature_ids := self.feature_ids:
-            return [self.db.get_feature(id=i) for i in feature_ids]
+
+            from .feature import Feature
+
+            feature_ids = str(tuple(feature_ids)).replace(",)", ")")
+
+            records = self.db.select_all_where(
+                table="feature", key=f"feature_id IN {feature_ids}", multiple=True
+            )
+
+            return [Feature(*record) for record in records]
+
         return None
 
     @property
@@ -101,6 +112,7 @@ class Target:
         protein: "mp.System",
         reference_id: int | None = None,
         force: bool = False,
+        debug: bool = False,
     ) -> list["Feature"]:
         """Calculate features from a protein system
 
@@ -114,20 +126,27 @@ class Target:
 
         else:
 
+            if debug:
+                mrich.debug("protein.get_protein_features()")
+
             features = protein.get_protein_features()
 
-            for f in features:
-                self.db.insert_feature(
+            if debug:
+                mrich.debug("inserting features...")
+
+            records = [
+                dict(
                     family=f.family,
                     target=self.id,
                     atom_names=[a.name for a in f.atoms],
                     residue_name=f.res_name,
                     residue_number=f.res_number,
                     chain_name=f.res_chain,
-                    commit=False,
                 )
+                for f in features
+            ]
 
-            self.db.commit()
+            self.db.insert_features(records)
 
             features = self.features
 

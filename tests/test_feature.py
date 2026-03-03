@@ -1,5 +1,4 @@
 from config import *
-from common import animal
 
 NOT_NULL_PROPERTIES = [
     "id",
@@ -19,6 +18,9 @@ def test_properties():
     import hippo
 
     animal = hippo.HIPPO("test", DB)
+
+    animal.db.print_table("feature")
+
     feature = animal.F1
 
     for prop in NOT_NULL_PROPERTIES:

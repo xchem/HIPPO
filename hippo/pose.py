@@ -350,7 +350,7 @@ class Pose:
         from .tools import sanitise_mol
 
         self._mol = sanitise_mol(m)
-        self.db.update(table="pose", id=self.id, key="pose_mol", value=m.ToBinary())
+        self.db.update_pose_mol(pose_id=self.id, mol=self._mol)
 
     @property
     def protonated_mol(self) -> "rdkit.Chem.Mol":
@@ -493,14 +493,15 @@ class Pose:
 
             sql = f"""
             WITH inspirations AS (
-                SELECT SUM(mol_num_hvyatms(compound_mol)) AS sum, inspiration_derivative FROM inspiration
-                INNER JOIN pose ON inspiration_original = pose_id
-                INNER JOIN compound ON pose_compound = compound_id
+                SELECT SUM({self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(compound_mol)) AS sum, inspiration_derivative 
+                FROM {self.db.SQL_SCHEMA_PREFIX}inspiration
+                INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose ON inspiration_original = pose_id
+                INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound ON pose_compound = compound_id
                 WHERE inspiration_derivative = {self.id}
             )
-            SELECT mol_num_hvyatms(compound_mol) - sum FROM inspirations
-            INNER JOIN pose ON inspiration_derivative = pose_id
-            INNER JOIN compound ON compound_id = pose_compound
+            SELECT {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(compound_mol) - sum FROM inspirations
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose ON inspiration_derivative = pose_id
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound ON compound_id = pose_compound
             """
 
             result = self.db.execute(sql).fetchone()
@@ -883,6 +884,7 @@ class Pose:
         debug: bool = False,
         commit: bool = True,
         mutation_warnings: bool = True,
+        in_memory_db: bool = True,
         delete_temp_table: bool = True,
     ) -> None:
         """Enumerate all valid interactions between this ligand and the protein
@@ -894,6 +896,7 @@ class Pose:
         :param debug: Increase verbosity for debugging
         :param commit: commit the changes to the database (Default value = True)
         :param mutation_warnings: warn when there has been a mutation in the protein (Default value = True)
+        :param in_memory_db: use an in-memory sqlite database when resolving interactions, faster but may break IPyWidgets (Default value = True)
         :param delete_temp_table: delete the temporary interaction table created during interaction resolution (Default value = True)
 
         """
@@ -936,20 +939,41 @@ class Pose:
 
             ### clear old interactions
 
-            self.db.delete_where(
-                table="interaction", key="pose", value=self.id, commit=commit
-            )
             self.set_has_fingerprint(False, commit=commit)
             self._interactions = None
 
+            ### IN-MEMORY DB
+
+            if in_memory_db:
+
+                from .db import Database
+
+                temp_db = Database(
+                    ":memory:",
+                    animal=None,
+                    create_blank=False,
+                    check_legacy=False,
+                    create_indexes=False,
+                    debug=False,
+                )
+
+                temp_db.create_table_interaction(debug=False)
+                temp_db.commit()
+
+            else:
+                temp_db = db
+
             ### create temporary table
 
-            if "temp_interaction" in self.db.table_names:
+            if "temp_interaction" in temp_db.table_names:
                 self.db.execute("DROP TABLE temp_interaction")
 
-            self.db.create_table_interaction(table="temp_interaction", debug=False)
+            temp_db.create_table_interaction(table="temp_interaction", debug=False)
 
             ### load the ligand structure
+
+            if debug:
+                mrich.debug("path", self.path)
 
             if self.path.endswith(".pdb"):
                 from molparse import parse
@@ -974,6 +998,10 @@ class Pose:
             ### get features
 
             comp_features = self.features
+
+            if debug:
+                mrich.debug("Getting protein features...")
+
             protein_features = self.target.calculate_features(
                 protein_system, reference_id=self.reference_id
             )
@@ -1140,7 +1168,7 @@ class Pose:
                             print("Prot:", prot_feature, "Lig:", lig_feature)
 
                         # insert into the Database
-                        self.db.insert_interaction(
+                        temp_db.insert_interaction(
                             feature=prot_feature.id,
                             pose=self.id,
                             type=interaction_type,
@@ -1151,7 +1179,7 @@ class Pose:
                             distance=distance,
                             angle=angle,
                             energy=None,
-                            commit=commit,
+                            commit=False,
                             table="temp_interaction",
                         )
 
@@ -1163,20 +1191,50 @@ class Pose:
                     mrich.warning(mutation)
 
             if resolve:
+                from .feature import Feature
                 from .iset import InteractionSet
 
-                interactions = InteractionSet.from_pose(self, table="temp_interaction")
-                interactions.resolve(debug=debug)
-                # self.interactions.resolve(debug=debug, table='temp_interaction')
+                interactions = InteractionSet.from_pose(
+                    self, table="temp_interaction", db=temp_db
+                )
+
+                feature_ids = str(tuple(interactions.feature_ids)).replace(",)", ")")
+
+                records = self.db.select_all_where(
+                    table="feature", key=f"feature_id IN {feature_ids}", multiple=True
+                )
+
+                feature_cache = {
+                    pk: Feature(
+                        id=pk,
+                        family=family,
+                        target=target,
+                        chain_name=chain_name,
+                        residue_name=residue_name,
+                        residue_number=residue_number,
+                        atom_names=atom_names,
+                    )
+                    for pk, family, target, chain_name, residue_name, residue_number, atom_names in records
+                }
+
+                interactions.resolve(debug=debug, feature_cache=feature_cache)
 
             ### transfer interactions from temporary table
-            self.db.copy_temp_interactions()
+            self.db.delete_where(
+                table="interaction", key="pose", value=self.id, commit=commit
+            )
+
+            if in_memory_db:
+                self.db.copy_temp_interactions(source_db=temp_db)
+            else:
+                self.db.copy_temp_interactions()
+
             self.set_has_fingerprint(True, commit=commit)
 
             ### delete temporary table
 
-            if delete_temp_table:
-                self.db.execute("DROP TABLE temp_interaction")
+            if in_memory_db and delete_temp_table:
+                temp_db.close(debug=False)
 
         elif debug:
             mrich.warning(f"{self} is already fingerprinted, no new calculation")

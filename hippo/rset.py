@@ -137,7 +137,12 @@ class ReactionTable:
 
         if not smiles and not mols:
 
-            sql = "SELECT reaction_id, reaction_type, reaction_product, reactant_compound FROM reaction INNER JOIN reactant ON reaction.reaction_id = reactant.reactant_reaction"
+            sql = f"""
+            SELECT reaction_id, reaction_type, reaction_product, reactant_compound 
+            FROM {self.db.SQL_SCHEMA_PREFIX}reaction 
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant 
+            ON reaction.reaction_id = reactant.reactant_reaction
+            """
 
             triples = self.db.execute(sql).fetchall()
 
@@ -151,17 +156,17 @@ class ReactionTable:
 
         else:
 
-            sql = """
+            sql = f"""
             SELECT {query}
-            FROM reaction 
+            FROM {self.db.SQL_SCHEMA_PREFIX}reaction 
 
-            INNER JOIN reactant 
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant 
                 ON reaction.reaction_id = reactant.reactant_reaction
 
-            INNER JOIN compound c_r
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound c_r
                 ON c_r.compound_id = reactant.reactant_compound
 
-            INNER JOIN compound c_p
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound c_p
                 ON c_p.compound_id = reaction.reaction_product
             """
 
@@ -229,16 +234,16 @@ class ReactionTable:
         assert product_yield <= 1.0
 
         sql = f"""
-        UPDATE reaction
-        SET reaction_product_yield = :reaction_product_yield
-        WHERE reaction_type = :reaction_type;
+        UPDATE {self.db.SQL_SCHEMA_PREFIX}reaction
+        SET reaction_product_yield = {self.db.SQL_STRING_PLACEHOLDER}
+        WHERE reaction_type = {self.db.SQL_STRING_PLACEHOLDER}
         """
 
         self.db.execute(
             sql,
-            dict(
-                reaction_product_yield=product_yield,
-                reaction_type=type,
+            (
+                product_yield,
+                type,
             ),
         )
 
@@ -468,8 +473,8 @@ class ReactionSet:
         intermediates = self.intermediates
         product_ids = self.db.execute(
             f"""
-            SELECT compound_id FROM compound
-            INNER JOIN reaction ON compound_id = reaction_product
+            SELECT compound_id FROM {self.db.SQL_SCHEMA_PREFIX}compound
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON compound_id = reaction_product
             WHERE reaction_id IN {self.str_ids}
             AND compound_id NOT IN {intermediates.str_ids}
         """
@@ -485,9 +490,9 @@ class ReactionSet:
         from .cset import CompoundSet
 
         sql = f"""
-            SELECT DISTINCT compound_id FROM compound
-            INNER JOIN reaction ON compound_id = reaction_product
-            INNER JOIN reactant ON compound_id = reactant_compound
+            SELECT DISTINCT compound_id FROM {self.db.SQL_SCHEMA_PREFIX}compound
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON compound_id = reaction_product
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant ON compound_id = reactant_compound
             WHERE reactant_reaction IN {self.str_ids}
         """
         intermediate_ids = self.db.execute(sql).fetchall()
@@ -502,7 +507,7 @@ class ReactionSet:
         from .cset import CompoundSet
 
         sql = f"""
-            SELECT DISTINCT reactant_compound FROM reactant
+            SELECT DISTINCT reactant_compound FROM {self.db.SQL_SCHEMA_PREFIX}reactant
             WHERE reactant_reaction IN {self.str_ids}
         """
         reactant_ids = self.db.execute(sql).fetchall()
@@ -726,3 +731,18 @@ class ReactionSet:
                 self.add(reaction)
             self._name = None
         return self
+
+    def __sub__(
+        self,
+        other: "ReactionSet",
+    ) -> "ReactionSet":
+        """Substract a :class:`.ReactionSet` from this set"""
+        match other:
+            case ReactionSet():
+                ids = set(self.ids) - set(other.ids)
+                return ReactionSet(self.db, ids, sort=False)
+            case int():
+                # assert other in set(self.ids)
+                return ReactionSet(
+                    self.db, [i for i in self.ids if i != other], sort=False
+                )

@@ -12,6 +12,11 @@ from string import ascii_uppercase
 import mrich
 
 
+def strip_sql(sql) -> str:
+    """Reduce unecessary whitespace in SQL"""
+    return re.sub(r"\s+", " ", sql).strip()
+
+
 def df_row_to_dict(df_row) -> dict:
     """Convert a dataframe row to a dictionary
 

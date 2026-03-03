@@ -1,0 +1,28 @@
+---
+# Dev environment for local HIPPO development.
+
+# Backend built from ./Dockerfile
+# sudo docker build --no-cache . -t hippo-backend:latest
+
+# Bring the container up with:
+# sudo docker-compose up
+
+# To clear the system run
+# sudo docker compose down
+
+
+services:
+
+  backend:
+    image: hippo-backend
+    container_name: hippo_backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+    - .:/home/code/HIPPO
+    env_file:
+      - .env
+
+    ports:
+    - "8888:8888"

@@ -210,7 +210,7 @@ class RandomRecipeGenerator(RRGMixin):
         sql = f"""
 		WITH possible_reactants AS (
 			SELECT quote_compound, COUNT(CASE WHEN quote_supplier IN {self.suppliers_str} THEN 1 END) AS [count_valid] 
-            FROM quote
+            FROM {self.db.SQL_SCHEMA_PREFIX}quote
 			GROUP BY quote_compound
 		),
 
@@ -221,14 +221,14 @@ class RandomRecipeGenerator(RRGMixin):
                     WHEN count_valid = 0 THEN 1 
                     WHEN count_valid IS NULL THEN 1 
                 END) 
-            AS [count_unavailable] FROM route
-			INNER JOIN component ON component_route = route_id
+            AS [count_unavailable] FROM {self.db.SQL_SCHEMA_PREFIX}route
+			INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component ON component_route = route_id
 			LEFT JOIN possible_reactants ON quote_compound = component_ref
 			WHERE component_type = 2
 			GROUP BY route_id
 		)
 
-		SELECT route_id FROM route_reactants
+		SELECT route_id FROM {self.db.SQL_SCHEMA_PREFIX}route_reactants
 		WHERE count_unavailable = 0
 		"""
 
@@ -585,7 +585,7 @@ class RandomSelectionGenerator(RRGMixin):
 
             sql = f"""
             SELECT quote_id, quote_compound, quote_amount, quote_supplier, MIN(quote_price) 
-            FROM quote
+            FROM {self.db.SQL_SCHEMA_PREFIX}quote
             WHERE quote_amount >= {self.amount}
             GROUP BY quote_compound
             """
@@ -621,7 +621,7 @@ class RandomSelectionGenerator(RRGMixin):
 
             sql = f"""
             SELECT quote_id, quote_compound, quote_amount, quote_supplier, MIN(quote_price) 
-            FROM quote
+            FROM {self.db.SQL_SCHEMA_PREFIX}quote
             WHERE quote_amount >= {self.amount}
             AND quote_compound IN {compounds.str_ids}
             GROUP BY quote_compound

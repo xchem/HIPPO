@@ -129,9 +129,15 @@ class CompoundTable:
     def reactants(self) -> "CompoundSet":
         """Returns a :class:`.CompoundSet` of all compounds that are used as a reactants"""
         # ids = self.db.select(table='reactant', query='DISTINCT reactant_compound', multiple=True)
-        ids = self.db.execute(
-            "SELECT reactant_compound FROM reactant LEFT JOIN reaction ON reactant.reactant_compound = reaction.reaction_product WHERE reaction.reaction_product IS NULL"
-        ).fetchall()
+
+        sql = f"""
+        SELECT reactant_compound FROM {self.db.SQL_SCHEMA_PREFIX}reactant 
+        LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction 
+        ON reactant_compound = reaction_product 
+        WHERE reaction_product IS NULL
+        """
+
+        ids = self.db.execute(sql).fetchall()
         ids = [q for q, in ids]
         from .cset import CompoundSet
 
@@ -142,9 +148,16 @@ class CompoundTable:
     @property
     def products(self) -> "CompoundSet":
         """Returns a :class:`.CompoundSet` of all compounds that are a product of a reaction but not a reactant"""
-        ids = self.db.execute(
-            "SELECT reaction_product FROM reaction LEFT JOIN reactant ON reaction.reaction_product = reactant.reactant_compound WHERE reactant.reactant_compound IS NULL"
-        ).fetchall()
+
+        sql = f"""
+        SELECT reaction_product 
+        FROM {self.db.SQL_SCHEMA_PREFIX}reaction 
+        LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reactant 
+        ON reaction_product = reactant_compound 
+        WHERE reactant_compound IS NULL
+        """
+
+        ids = self.db.execute(sql).fetchall()
         ids = [q for q, in ids]
         from .cset import CompoundSet
 
@@ -155,9 +168,15 @@ class CompoundTable:
     @property
     def intermediates(self) -> "CompoundSet":
         """Returns a :class:`.CompoundSet` of all compounds that are products and reactants"""
-        ids = self.db.execute(
-            "SELECT DISTINCT reaction_product FROM reaction INNER JOIN reactant ON reaction.reaction_product = reactant.reactant_compound"
-        ).fetchall()
+
+        sql = f"""
+        SELECT DISTINCT reaction_product 
+        FROM {self.db.SQL_SCHEMA_PREFIX}reaction 
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant 
+        ON reaction_product = reactant_compound
+        """
+
+        ids = self.db.execute(sql).fetchall()
         ids = [q for q, in ids]
         from .cset import CompoundSet
 
@@ -421,9 +440,13 @@ class CompoundTable:
         """
         from pandas import DataFrame
 
-        records = self.db.execute(
-            """SELECT compound_id, compound_smiles FROM compound ORDER BY compound_id"""
-        ).fetchall()
+        sql = f"""
+        SELECT compound_id, compound_smiles 
+        FROM {self.db.SQL_SCHEMA_PREFIX}compound 
+        ORDER BY compound_id
+        """
+
+        records = self.db.execute(sql).fetchall()
 
         data = [dict(id=id, smiles=smiles) for id, smiles in records]
 
@@ -819,22 +842,23 @@ class CompoundSet:
 
         """
 
-        query = self.db.execute(
-            f"""
+        sql = f"""
         WITH nums AS (
-            SELECT A.compound_id AS comp_id, 
-            mol_num_hvyatms(A.compound_mol) - mol_num_hvyatms(B.compound_mol) AS diff 
-            FROM compound A, compound B
+            SELECT 
+                A.compound_id AS comp_id, 
+                {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(A.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(B.compound_mol) AS diff 
+            FROM {self.db.SQL_SCHEMA_PREFIX}compound A, {self.db.SQL_SCHEMA_PREFIX}compound B
             WHERE A.compound_base = B.compound_id
             AND A.compound_id IN {self.str_ids}
         )
 
-        SELECT compound_id, diff FROM compound
+        SELECT compound_id, diff FROM {self.db.SQL_SCHEMA_PREFIX}compound
         LEFT JOIN nums
         ON comp_id = compound_id
         WHERE compound_id IN {self.str_ids}
         """
-        ).fetchall()
+
+        query = self.db.execute(sql).fetchall()
 
         lookup = {k: v for k, v in query}
 
@@ -847,23 +871,23 @@ class CompoundSet:
         :returns: average number of atoms added values for compounds which have a scaffold
 
         """
-
-        (avg,) = self.db.execute(
-            f"""
+        sql = f"""
         WITH nums AS (
-            SELECT A.compound_id AS comp_id, 
-            mol_num_hvyatms(A.compound_mol) - mol_num_hvyatms(B.compound_mol) AS diff 
-            FROM compound A, compound B
+            SELECT 
+                A.compound_id AS comp_id, 
+                {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(A.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(B.compound_mol) AS diff 
+            FROM {self.db.SQL_SCHEMA_PREFIX}compound A, {self.db.SQL_SCHEMA_PREFIX}compound B
             WHERE A.compound_base = B.compound_id
             AND A.compound_id IN {self.str_ids}
         )
 
-        SELECT AVG(diff) FROM compound
+        SELECT compound_id, diff FROM {self.db.SQL_SCHEMA_PREFIX}compound
         INNER JOIN nums
         ON comp_id = compound_id
         WHERE compound_id IN {self.str_ids}
         """
-        ).fetchone()
+
+        (avg,) = self.db.execute().fetchone()
 
         return avg
 
@@ -882,7 +906,7 @@ class CompoundSet:
         """Measure of how evenly elaborations are distributed across scaffolds in this set"""
 
         sql = f"""
-        SELECT COUNT(1) FROM scaffold
+        SELECT COUNT(1) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
         WHERE scaffold_superstructure IN {self.str_ids}
         GROUP BY scaffold_base
         """
@@ -907,7 +931,7 @@ class CompoundSet:
 
         (count,) = self.db.execute(
             f"""
-                SELECT COUNT(DISTINCT scaffold_base) FROM scaffold
+                SELECT COUNT(DISTINCT scaffold_base) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
                 WHERE scaffold_superstructure IN {self.str_ids}  
             """
         ).fetchone()
@@ -928,7 +952,7 @@ class CompoundSet:
         """Return a list of :class:`.Compound` ID's for scaffolds of this set"""
         scaffold_ids = self.db.execute(
             f"""
-                SELECT DISTINCT scaffold_base FROM scaffold
+                SELECT DISTINCT scaffold_base FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
                 WHERE scaffold_superstructure IN {self.str_ids}  
             """
         ).fetchall()
@@ -939,7 +963,7 @@ class CompoundSet:
         """Return a count of scaffolds of this set"""
         (count,) = self.db.execute(
             f"""
-                SELECT COUNT(DISTINCT scaffold_base) FROM scaffold
+                SELECT COUNT(DISTINCT scaffold_base) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
                 WHERE scaffold_superstructure IN {self.str_ids}  
             """
         ).fetchone()
@@ -970,7 +994,7 @@ class CompoundSet:
         """Return a count of elaborations of this set"""
         (count,) = self.db.execute(
             f"""
-                SELECT COUNT(DISTINCT scaffold_superstructure) FROM scaffold
+                SELECT COUNT(DISTINCT scaffold_superstructure) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
                 WHERE scaffold_base IN {self.str_ids}  
             """
         ).fetchone()
@@ -1003,7 +1027,7 @@ class CompoundSet:
         """Get a dictionary mapping compound ids to the number of poses"""
 
         sql = f"""
-            SELECT pose_compound, COUNT(1) FROM pose
+            SELECT pose_compound, COUNT(1) FROM {self.db.SQL_SCHEMA_PREFIX}pose
             WHERE pose_compound IN {self.str_ids}
             GROUP BY pose_compound
         """
@@ -1182,10 +1206,10 @@ class CompoundSet:
             f"""
         WITH nums AS (
             SELECT scaffold_base AS base, scaffold_superstructure AS elab, 
-            mol_num_hvyatms(c2.compound_mol) - mol_num_hvyatms(c1.compound_mol) AS diff
-            FROM scaffold
-            INNER JOIN compound AS c1 ON scaffold_base = c1.compound_id
-            INNER JOIN compound AS c2 ON scaffold_superstructure = c2.compound_id
+            {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(c2.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(c1.compound_mol) AS diff
+            FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound AS c1 ON scaffold_base = c1.compound_id
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound AS c2 ON scaffold_superstructure = c2.compound_id
             WHERE scaffold_superstructure IN {self.str_ids}
         ),
 
@@ -1269,7 +1293,7 @@ class CompoundSet:
         sql = f"""
         SELECT tag_name,
         COUNT(DISTINCT tag_compound)
-        FROM tag
+        FROM {self.db.SQL_SCHEMA_PREFIX}tag
         WHERE tag_compound IN {self.str_ids}
         GROUP BY tag_name
         ORDER BY tag_name
@@ -1287,8 +1311,8 @@ class CompoundSet:
         sql = f"""
         SELECT tag_name,
         COUNT(DISTINCT tag_pose)
-        FROM tag
-        INNER JOIN pose
+        FROM {self.db.SQL_SCHEMA_PREFIX}tag
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose
         ON pose_id = tag_pose
         WHERE pose_compound IN {self.str_ids}
         GROUP BY tag_name
@@ -1303,8 +1327,8 @@ class CompoundSet:
         # compounds with poses
 
         sql = f"""
-        SELECT tag_name, COUNT(DISTINCT pose_compound) FROM tag
-        INNER JOIN pose
+        SELECT tag_name, COUNT(DISTINCT pose_compound) FROM {self.db.SQL_SCHEMA_PREFIX}tag
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose
         ON tag_pose = pose_id
         WHERE pose_compound IN {self.str_ids}
         GROUP BY tag_name
@@ -1486,7 +1510,7 @@ class CompoundSet:
         sql = f"""
         SELECT tag_name,
         COUNT(DISTINCT tag_compound)
-        FROM tag
+        FROM {self.db.SQL_SCHEMA_PREFIX}tag
         WHERE tag_compound IN {self.str_ids}
         GROUP BY tag_name
         ORDER BY tag_name;
@@ -1568,8 +1592,10 @@ class CompoundSet:
         if permitted_reactions is not None:
 
             sql = f"""
-            SELECT route_id, route_product, component_ref FROM route
-            INNER JOIN component ON route_id = component_route
+            SELECT route_id, route_product, component_ref 
+            FROM {self.db.SQL_SCHEMA_PREFIX}route
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component 
+            ON route_id = component_route
             WHERE route_product IN {self.str_ids}
             AND component_type = 1
             """
@@ -1612,7 +1638,7 @@ class CompoundSet:
         else:
 
             sql = f"""
-            SELECT route_id FROM route
+            SELECT route_id FROM {self.db.SQL_SCHEMA_PREFIX}route
             WHERE route_product IN {self.str_ids}
             """
 
@@ -1721,7 +1747,7 @@ class CompoundSet:
 
         sql = f"""
         SELECT {query}
-        FROM compound
+        FROM {self.db.SQL_SCHEMA_PREFIX}compound
         WHERE compound_id IN {self.str_ids}
         """
 
@@ -2164,6 +2190,137 @@ class CompoundSet:
         return IngredientSet.from_compounds(
             compounds=self, amount=amount, supplier=supplier
         )
+
+    def split_by_scaffolds(self) -> "dict[CompoundSet, CompoundSet]":
+        """Split this set into subsets clustered by scaffold compound"""
+
+        cluster_dict = self.db.get_compound_cluster_dict(cset=self)
+
+        subsets = {}
+        for cluster, elabs in cluster_dict.items():
+            cluster = CompoundSet(self.db, list(cluster))
+            subsets[cluster] = CompoundSet(self.db, list(elabs))
+
+        return subsets
+
+    def despaghettify(
+        self,
+        register_missing_routes: bool = True,
+        supplier="Enamine",
+    ) -> "CompoundSet":
+        """Reduce this set to only compounds that elaborate a single reactant at a time.
+        Requires routes to be present in the database."""
+
+        from .recipe import RouteSet
+
+        if register_missing_routes:
+            mrich.debug("registering_missing_routes...")
+            route_lookup = self.register_missing_routes(
+                missing_only=True, supplier=supplier
+            )
+
+        mrich.debug("clustering by scaffold...")
+        clustered = self.split_by_scaffolds()
+
+        n = len(clustered)
+        mrich.var("#clusters", n)
+
+        mrich.debug("getting route lookup..." "")
+        route_lookup = self.db.get_product_id_routes_dict()
+
+        mrich.debug("getting reactant lookup..." "")
+        reactant_lookup = self.db.get_route_id_reactant_ids_dict()
+
+        keep = set()
+        for i, (cluster, elabs) in enumerate(clustered.items()):
+
+            for scaffold in cluster:
+
+                mrich.debug(
+                    f"{i}/{n}",
+                    "scaffold:",
+                    scaffold.id,
+                    "#elabs:",
+                    len(elabs),
+                    "#kept:",
+                    len(keep),
+                )
+
+                route_ids = route_lookup.get(scaffold.id)
+
+                if not route_ids:
+                    mrich.error(f"scaffold {scaffold} has no routes")
+                    continue
+
+                elif len(route_ids) > 1:
+                    mrich.warning(f"scaffold {scaffold} has multiple routes")
+
+                for route_id in route_ids:
+
+                    scaffold_reactants = reactant_lookup[route_id]
+
+                    for elab in elabs:
+
+                        route_ids = route_lookup.get(elab.id, set())
+
+                        if len(route_ids) != 1:
+                            mrich.error(f"elab {elab.id} has {route_ids=}")
+                            continue
+
+                        reactants = reactant_lookup[list(route_ids)[0]]
+
+                        common = scaffold_reactants & reactants
+
+                        if len(common) == len(scaffold_reactants) - 1:
+                            keep.add(elab.id)
+
+        return CompoundSet(self.db, keep)
+
+    def register_missing_routes(
+        self, missing_only: bool = True, supplier: str = "Enamine"
+    ) -> None:
+        """Calculate missing routes to compounds in this set"""
+
+        if missing_only:
+            from .cset import CompoundSet
+
+            records = self.db.select_where(
+                table="route",
+                key=f"route_product IN {self.str_ids}",
+                query="route_product",
+                multiple=True,
+            )
+            existing = set(i for i, in records)
+            missing = set(self.ids) - existing
+            return CompoundSet(self.db, missing).register_missing_routes(
+                missing_only=False, supplier=supplier
+            )
+
+        mrich.var("#compounds", len(self))
+
+        for i, c in mrich.track(enumerate(self), total=len(self)):
+
+            try:
+                reactions = c.reactions
+            except Exception as e:
+                mrich.error(f"Error getting {c}'s reactions", e)
+                continue
+
+            for reaction in reactions:
+
+                try:
+                    recipes = reaction.get_recipes(supplier=supplier)
+                except Exception as e:
+                    mrich.error(f"Error getting {reaction}'s ({c}) recipes", e)
+                    continue
+
+                for recipe in recipes:
+
+                    route = self.db.register_route(recipe=recipe)
+
+                    mrich.print(f"registered {route=}")
+
+        self.db.prune_duplicate_routes()
 
     ### DUNDERS
 
@@ -2647,8 +2804,14 @@ class IngredientSet:
                     none=none,
                 )
 
-            prices = [Price(a, b) for a, b in result]
-            quoted = sum(prices, Price.null())
+            if result:
+                prices = [Price(a, b) for a, b in result]
+                quoted = sum(prices, Price.null())
+
+            else:
+                quoted = Price.null()
+                self.df["quote_id"] = None
+                pairs = {i: q for i, q in enumerate(self.df["quote_id"])}
 
         else:
 
@@ -2865,12 +3028,12 @@ class IngredientSet:
         pairs = self.db.execute(
             f"""
             WITH matching_quotes AS (
-                SELECT quote_id, quote_compound, MIN(quote_price) FROM quote
+                SELECT quote_id, quote_compound, MIN(quote_price) FROM {self.db.SQL_SCHEMA_PREFIX}quote
                 WHERE quote_compound IN {self.str_compound_ids}
                 AND quote_amount >= {amount}
                 GROUP BY quote_compound
             )
-            SELECT compound_id, quote_id FROM compound
+            SELECT compound_id, quote_id FROM {self.db.SQL_SCHEMA_PREFIX}compound
             LEFT JOIN matching_quotes ON quote_compound = compound_id
             WHERE compound_id IN {self.str_compound_ids}
         """
