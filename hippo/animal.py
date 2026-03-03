@@ -18,7 +18,12 @@ from .iset import InteractionTable
 from .pset import PoseTable, PoseSet
 from .rset import ReactionTable, ReactionSet
 from .cset import CompoundTable, IngredientSet, CompoundSet
-from .tools import inchikey_from_smiles, sanitise_smiles, SanitisationError
+from .tools import (
+    flat_inchikey,
+    inchikey_from_smiles,
+    sanitise_smiles,
+    SanitisationError,
+)
 
 
 class HIPPO:
@@ -749,7 +754,31 @@ class HIPPO:
         mrich.debug("#smiles", len(smiles))
         mrich.debug("Registering compounds...")
         pairs = self.register_compounds(smiles=smiles, sanitisation_verbosity=False)
-        smiles_lookup = {s1: i for s1, (i, s2) in zip(smiles, pairs)}
+
+        # fix for 2033, replace smiles_lookup generation procedure
+        # smiles_lookup = {s1: i for s1, (i, s2) in zip(smiles, pairs)}
+        # duplicated sanitation in register_compounds
+        smiles_lookup = {}
+        for s in smiles:
+            try:
+                new_smiles = sanitise_smiles(
+                    s,
+                    sanitisation_failed="error",
+                    radical="warning",
+                    verbosity=True,
+                )
+            except SanitisationError as e:
+                mrich.error(f"Could not sanitise {s=}")
+                mrich.error(str(e))
+                continue
+            except AssertionError:
+                mrich.error(f"Could not sanitise {s=}")
+                continue
+
+            # smiles must now be sanitised and should not throw error
+            # in flat_inchikey method
+            smiles_lookup[s] = flat_inchikey(new_smiles)
+
         inchi_lookup = self.db.get_compound_inchikey_id_dict(
             inchikeys=smiles_lookup.values()
         )
