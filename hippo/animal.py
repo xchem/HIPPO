@@ -2336,7 +2336,7 @@ class HIPPO:
                 AND reaction_product = {product}
                 """
 
-        sql.format(type=type, product=product)
+        sql = sql.format(type=type, product=product)
 
         pairs = self.db.execute(sql).fetchall()
 
