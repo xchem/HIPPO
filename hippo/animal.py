@@ -1352,7 +1352,10 @@ class HIPPO:
                         ON CONFLICT DO NOTHING;
                         """
 
-                self.db.executemany(sql, [(scaffold_id, i) for i in superstructure_ids])
+                self.db.executemany(
+                    sql,
+                    [(int(scaffold_id), int(i)) for i in superstructure_ids],
+                )
                 self.db.commit()
 
         # filter poses
