@@ -16,8 +16,6 @@ LABEL authors="Max Winokan"
 # ENV CONDA_DEFAULT_ENV=devenv
 # ENV PATH=/opt/conda/envs/devenv/bin:$PATH
 
-RUN apt install sqlite3
-
 # HIPPO dev branch
 # WORKDIR "/home/code"
 # RUN git clone https://github.com/mwinokan/HIPPO
@@ -37,11 +35,11 @@ RUN mamba install --yes \
     fix-permissions "/home/${NB_USER}"
 
 
-# RUN /opt/conda/envs/devenv/bin/python -m pip install hippo-db syndirella typer neo4j gemmi mrich mpytools
+# RUN /opt/conda/envs/devenv/bin/python -m pip install hippo-db syndirella typer neo4j gemmi mrich mpytools 
 # RUN /opt/conda/envs/devenv/bin/python -m pip uninstall -y hippo-db
 
-RUN python -m pip install hippo-db syndirella typer neo4j gemmi mrich mpytools
-RUN python -m pip uninstall -y hippo-db
+RUN python -m pip install syndirella typer neo4j gemmi mrich mpytools psycopg[binary] molparse rdkit
+RUN pip install rdkit --upgrade
 
 # RUN pip install -r requirements_syndirella_and_hippo_fixed.txt
 # RUN mamba install --yes --file requirements_syndirella_and_hippo.txt

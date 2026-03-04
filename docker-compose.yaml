@@ -23,8 +23,8 @@ services:
   database:
     # this is what I built for myself
     image: hippo-pg
-    image: pgvectorimage
-    # container_name: hippo_pg_db
+    # image: pgvectorimage
+    container_name: hippo_pg_db
     volumes:
     - postgres_data:/var/lib/postgresql/data
     - type: bind
@@ -34,15 +34,14 @@ services:
     environment:
       POSTGRES_PASSWORD: hippo
       POSTGRES_DB: hippo
-      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
     - "5432:5432"
-    # healthcheck:
-    #   test: pg_isready -U postgres -d frag
-    #   interval: 10s
-    #   timeout: 2s
-    #   retries: 5
-    #   start_period: 10s
+    healthcheck:
+      test: pg_isready -U postgres -d hippo
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 10s
 
   backend:
     image: hippo-backend
@@ -50,9 +49,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # command: /bin/bash /code/launch-stack.sh
     volumes:
-    - .:/code/
+    - .:/home/code/HIPPO
     env_file:
       - .env
     environment:
@@ -60,9 +58,9 @@ services:
 
     ports:
     - "8888:8888"
-    # depends_on:
-    #   database:
-    #     condition: service_healthy
+    depends_on:
+      database:
+        condition: service_healthy
 
 
 volumes:

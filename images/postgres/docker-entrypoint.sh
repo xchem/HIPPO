@@ -324,14 +324,15 @@ _pg_want_help() {
 }
 
 _main() {
-	# if first arg looks like a flag, assume we want to run postgres server
-	if [ "${1:0:1}" = '-' ]; then
+    # if first arg looks like a flag, assume we want to run postgres server
+        if [ "${1:0:1}" = '-' ]; then
 		set -- postgres "$@"
 	fi
 
 	if [ "$1" = 'postgres' ] && ! _pg_want_help "$@"; then
 		docker_setup_env
 		# setup data directories and permissions (when run as root)
+                # why is this here?? I'm creating them in dockerfile
 		docker_create_db_directories
 		if [ "$(id -u)" = '0' ]; then
 			# then restart script as postgres user
@@ -373,7 +374,6 @@ _main() {
 			EOM
 		fi
 	fi
-
 	exec "$@"
 }
 

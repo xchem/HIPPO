@@ -78,7 +78,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get update && \
     apt-get install -y --no-install-recommends \
       ca-certificates wget gnupg2 lsb-release dirmngr gettext procps \
-      libcairo2 libfreetype6 libpng16-16 libjpeg62-turbo zlib1g \
+      libcairo2 libfreetype6 libpng16-16 libjpeg62-turbo zlib1g gosu \
       postgresql-${PG_MAJOR} postgresql-server-dev-${PG_MAJOR} && \
     rm -rf /var/lib/apt/lists/*
 
@@ -106,14 +106,16 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Prepare dirs and permissions
-RUN mkdir -p /docker-entrypoint-initdb.d /var/lib/postgresql && chown -R postgres:postgres /var/lib/postgresql /docker-entrypoint-initdb.d /usr/share/postgresql/${PG_MAJOR}/extension
+RUN mkdir -p /docker-entrypoint-initdb.d /var/lib/postgresql/data && chown -R postgres:postgres /var/lib/postgresql /docker-entrypoint-initdb.d /usr/share/postgresql/${PG_MAJOR}/extension
 
 RUN ldconfig
 
 EXPOSE 5432
-VOLUME ["/var/lib/postgresql/data"]
+# adding this in compose file instead
+# VOLUME ["/var/lib/postgresql/data"]
 
-USER postgres
+# entrypoint script needs root user to init db, then drops to postgres
+# USER postgres
 WORKDIR /var/lib/postgresql
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
