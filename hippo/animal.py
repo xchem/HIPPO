@@ -320,7 +320,7 @@ class HIPPO:
                 """name"""
                 return self.name
 
-        subdirs = list(aligned_directory.glob("*[0-9][0-9][0-9][0-9]*"))
+        subdirs = list(aligned_directory.glob("*"))
 
         SUBDIR_PATTERN_FRAGALYSIS = re.compile(r"^.*\d{4}[a-z]$")
         SUBDIR_PATTERN_XCA = re.compile(r"^.*-.\d{4}$")
@@ -387,12 +387,13 @@ class HIPPO:
 
                 from .fragalysis import parse_observation_longcode
 
-                sdf_pattern = re.compile(r"^.*\d{4}[a-z].sdf$")
+                fragalysis_pattern = re.compile(r"^.*\d{4}[a-z].sdf$")
+                pdbid_pattern = re.compile(r"^[A-Za-z0-9]{4}-[a-z].sdf$")
 
                 observations = {}
 
                 for path in list(
-                    sorted(aligned_directory.glob(f"*[0-9][0-9][0-9][0-9][a-z]"))
+                    sorted(aligned_directory.glob(f"*"))
                 ):
 
                     name = path.name
@@ -413,8 +414,17 @@ class HIPPO:
 
                         sdf_name = sdf_path.name
 
+                        if "_ligand" in sdf_name:   # Quick fix, _ligand.sdf are exactly the same as .sdf in aligned_directory.
+                            continue
+
                         # fragalysis SDF
-                        if sdf_pattern.match(sdf_name):
+                        if fragalysis_pattern.match(sdf_name):
+                            sdfs.append(sdf_path)
+                        # fragalysis SDF from PDB id
+                        elif pdbid_pattern.match(sdf_name):
+                            sdfs.append(sdf_path)
+                        else:
+                            mrich.warning(sdf_name, "doesn't not follow neither Fragalysis nor PDB ID patterns")
                             sdfs.append(sdf_path)
 
                     if not sdfs:
