@@ -30,7 +30,4 @@ jobs:
         conda install -c conda-forge -y chemicalite
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test
-      run: |
-        #pytest
-        cd tests
-        python test_A71EV2A.py
+      run: pytest
