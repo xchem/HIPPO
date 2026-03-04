@@ -537,7 +537,7 @@ class Database:
             conn = sqlite3.connect(self.path)
 
             if debug:
-                mrich.debug(f"{sqlite3.version=}")
+                mrich.debug(f"{sqlite3.sqlite_version=}")
 
             conn.enable_load_extension(True)
             conn.load_extension("chemicalite")
