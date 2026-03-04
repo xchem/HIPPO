@@ -17,9 +17,9 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "rdkit >= 2024.9.6",
-    "molparse >= 0.0.41",
-    "mpytools >= 0.0.21",
+    "rdkit>=2024.9.6",
+    "molparse>=0.0.41",
+    "mpytools>=0.0.21",
     "jupyterlab",
     "chardet",
     "pandas",

@@ -15,8 +15,6 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # Test is broken - fix and remove this condition
-    if: false
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python
@@ -30,7 +28,6 @@ jobs:
         conda install -c conda-forge -y chemicalite
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test
-      run: |
-        #pytest
-        cd tests
-        python test_A71EV2A.py
+      run: pytest
+      env:
+        PYTHONPATH: "${{ github.workspace }}"
