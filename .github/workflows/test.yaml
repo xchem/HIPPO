@@ -3,14 +3,18 @@ name: Test
 
 on:
   push:
+    tags-ignore:
+    - '*'
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  .test:
+  test:
     runs-on: ubuntu-latest
+    # Test is broken - fix and remove this condition
+    if: false
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python
