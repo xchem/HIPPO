@@ -71,6 +71,12 @@ HIPPO is automatically released to [PyPI](https://pypi.org/project/hippo-db/) as
 `xchem-hippo` via a Github Action off the using the
 [release](https://github.com/xchem/HIPPO/actions/workflows/release.yaml) workflow.
 
+When you want to make an official release go to the [Releases](https://github.com/xchem/HIPPO/releases) page
+and then click the **Draft a new release** button. Remember to familiarise yourself
+with the xchem release process on the trunk-based-development Wiki
+[Creating releases](https://github.com/xchem/trunk-based-development/wiki/Creating-releases)
+page.
+
 ### Code style
 
 HIPPO is linted using [black](https://pypi.org/project/black/) and commits are
