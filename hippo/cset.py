@@ -2191,6 +2191,137 @@ class CompoundSet:
             compounds=self, amount=amount, supplier=supplier
         )
 
+    def split_by_scaffolds(self) -> "dict[CompoundSet, CompoundSet]":
+        """Split this set into subsets clustered by scaffold compound"""
+
+        cluster_dict = self.db.get_compound_cluster_dict(cset=self)
+
+        subsets = {}
+        for cluster, elabs in cluster_dict.items():
+            cluster = CompoundSet(self.db, list(cluster))
+            subsets[cluster] = CompoundSet(self.db, list(elabs))
+
+        return subsets
+
+    def despaghettify(
+        self,
+        register_missing_routes: bool = True,
+        supplier="Enamine",
+    ) -> "CompoundSet":
+        """Reduce this set to only compounds that elaborate a single reactant at a time.
+        Requires routes to be present in the database."""
+
+        from .recipe import RouteSet
+
+        if register_missing_routes:
+            mrich.debug("registering_missing_routes...")
+            route_lookup = self.register_missing_routes(
+                missing_only=True, supplier=supplier
+            )
+
+        mrich.debug("clustering by scaffold...")
+        clustered = self.split_by_scaffolds()
+
+        n = len(clustered)
+        mrich.var("#clusters", n)
+
+        mrich.debug("getting route lookup..." "")
+        route_lookup = self.db.get_product_id_routes_dict()
+
+        mrich.debug("getting reactant lookup..." "")
+        reactant_lookup = self.db.get_route_id_reactant_ids_dict()
+
+        keep = set()
+        for i, (cluster, elabs) in enumerate(clustered.items()):
+
+            for scaffold in cluster:
+
+                mrich.debug(
+                    f"{i}/{n}",
+                    "scaffold:",
+                    scaffold.id,
+                    "#elabs:",
+                    len(elabs),
+                    "#kept:",
+                    len(keep),
+                )
+
+                route_ids = route_lookup.get(scaffold.id)
+
+                if not route_ids:
+                    mrich.error(f"scaffold {scaffold} has no routes")
+                    continue
+
+                elif len(route_ids) > 1:
+                    mrich.warning(f"scaffold {scaffold} has multiple routes")
+
+                for route_id in route_ids:
+
+                    scaffold_reactants = reactant_lookup[route_id]
+
+                    for elab in elabs:
+
+                        route_ids = route_lookup.get(elab.id, set())
+
+                        if len(route_ids) != 1:
+                            mrich.error(f"elab {elab.id} has {route_ids=}")
+                            continue
+
+                        reactants = reactant_lookup[list(route_ids)[0]]
+
+                        common = scaffold_reactants & reactants
+
+                        if len(common) == len(scaffold_reactants) - 1:
+                            keep.add(elab.id)
+
+        return CompoundSet(self.db, keep)
+
+    def register_missing_routes(
+        self, missing_only: bool = True, supplier: str = "Enamine"
+    ) -> None:
+        """Calculate missing routes to compounds in this set"""
+
+        if missing_only:
+            from .cset import CompoundSet
+
+            records = self.db.select_where(
+                table="route",
+                key=f"route_product IN {self.str_ids}",
+                query="route_product",
+                multiple=True,
+            )
+            existing = set(i for i, in records)
+            missing = set(self.ids) - existing
+            return CompoundSet(self.db, missing).register_missing_routes(
+                missing_only=False, supplier=supplier
+            )
+
+        mrich.var("#compounds", len(self))
+
+        for i, c in mrich.track(enumerate(self), total=len(self)):
+
+            try:
+                reactions = c.reactions
+            except Exception as e:
+                mrich.error(f"Error getting {c}'s reactions", e)
+                continue
+
+            for reaction in reactions:
+
+                try:
+                    recipes = reaction.get_recipes(supplier=supplier)
+                except Exception as e:
+                    mrich.error(f"Error getting {reaction}'s ({c}) recipes", e)
+                    continue
+
+                for recipe in recipes:
+
+                    route = self.db.register_route(recipe=recipe)
+
+                    mrich.print(f"registered {route=}")
+
+        self.db.prune_duplicate_routes()
+
     ### DUNDERS
 
     def __len__(self) -> int:
@@ -2673,8 +2804,14 @@ class IngredientSet:
                     none=none,
                 )
 
-            prices = [Price(a, b) for a, b in result]
-            quoted = sum(prices, Price.null())
+            if result:
+                prices = [Price(a, b) for a, b in result]
+                quoted = sum(prices, Price.null())
+
+            else:
+                quoted = Price.null()
+                self.df["quote_id"] = None
+                pairs = {i: q for i, q in enumerate(self.df["quote_id"])}
 
         else:
 

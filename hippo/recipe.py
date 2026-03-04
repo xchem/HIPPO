@@ -1335,6 +1335,54 @@ class Recipe:
             permitted_reactions=self.reactions, return_ids=return_ids
         )
 
+    def register_missing_routes(
+        self, missing_only: bool = True, supplier: str = "Enamine"
+    ) -> None:
+        """Calculate missing routes to products of this Recipe"""
+
+        return products.compounds.register_missing_routes(
+            missing_only=missing_only, supplier=supplier
+        )
+
+        if missing_only:
+            from .cset import CompoundSet
+
+            records = self.db.select_where(
+                table="route",
+                key=f"route_product IN {products.str_ids}",
+                query="route_product",
+                multiple=True,
+            )
+            existing = set(i for i, in records)
+            missing = set(products.ids) - existing
+            products = CompoundSet(self.db, missing)
+
+        mrich.var("#products", len(products))
+
+        for i, c in mrich.track(enumerate(products), total=len(products)):
+
+            try:
+                reactions = c.reactions
+            except Exception as e:
+                mrich.error(f"Error getting {c}'s reactions", e)
+                continue
+
+            for reaction in reactions:
+
+                try:
+                    recipes = reaction.get_recipes(supplier=supplier)
+                except Exception as e:
+                    mrich.error(f"Error getting {reaction}'s ({c}) recipes", e)
+                    continue
+
+                for recipe in recipes:
+
+                    route = self.db.register_route(recipe=recipe)
+
+                    mrich.print(f"registered {route=}")
+
+        self.db.prune_duplicate_routes()
+
     def write_CAR_csv(
         self, file: "str | Path", return_df: bool = False
     ) -> "DataFrame | None":
@@ -1436,7 +1484,10 @@ class Recipe:
         return df
 
     def write_reactant_csv(
-        self, file: "str | Path", return_df: bool = False
+        self,
+        file: "str | Path",
+        reaction_type_counts: bool = True,
+        return_df: bool = False,
     ) -> "DataFrame | None":
         """Detailed CSV output including reactant information for purchasing and information on the downstream synthetic use
 
@@ -1516,6 +1567,9 @@ class Recipe:
             reaction_lookup.setdefault(reactant_id, dict(ids=set(), types=set()))
             reaction_lookup[reactant_id]["ids"].add(reaction_id)
             reaction_lookup[reactant_id]["types"].add(reaction_type)
+            reaction_lookup[reactant_id].setdefault("counts", {})
+            reaction_lookup[reactant_id]["counts"].setdefault(reaction_type, 0)
+            reaction_lookup[reactant_id]["counts"][reaction_type] += 1
 
         smiles_lookup = self.db.get_compound_id_smiles_dict(self.reactants.compounds)
 
@@ -1554,16 +1608,23 @@ class Recipe:
 
         ### Downstream info
 
-        df["downstream_product_ids"] = df["compound_id"].apply(
-            lambda x: product_lookup.get(x, set())
-        )
+        try:
+            df["downstream_product_ids"] = df["compound_id"].apply(
+                lambda x: product_lookup.get(x, set())
+            )
 
-        df["downstream_reaction_ids"] = df["compound_id"].apply(
-            lambda x: reaction_lookup[x]["ids"]
-        )
-        df["downstream_reaction_types"] = df["compound_id"].apply(
-            lambda x: reaction_lookup[x]["types"]
-        )
+            df["downstream_reaction_ids"] = df["compound_id"].apply(
+                lambda x: reaction_lookup[x]["ids"]
+            )
+            df["downstream_reaction_types"] = df["compound_id"].apply(
+                lambda x: reaction_lookup[x]["types"]
+            )
+        except KeyError as e:
+            mrich.error(f"Reactant C{e} is missing downstream reaction")
+            mrich.error(
+                "Are all routes enumerated? Try running calculate_missing_routes()"
+            )
+            return None
 
         df["num_downstream_reactions"] = df["downstream_reaction_ids"].apply(len)
         df["num_downstream_reaction_types"] = df["downstream_reaction_types"].apply(len)
@@ -1595,12 +1656,26 @@ class Recipe:
             "quoted_purity",
             "quoted_smiles",
             "quote_date",
+            "num_downstream_products",
             "num_downstream_reaction_types",
             "num_downstream_reactions",
-            "num_downstream_products",
+        ]
+
+        if reaction_type_counts:
+            for i, row in df.iterrows():
+
+                counts = reaction_lookup[row["compound_id"]]["counts"]
+
+                for reaction_type, count in counts.items():
+                    key = f"num_downstream ({reaction_type})"
+                    df.loc[i, key] = count
+                    if key not in cols:
+                        cols.append(key)
+
+        cols += [
+            "downstream_product_ids",
             "downstream_reaction_types",
             "downstream_reaction_ids",
-            "downstream_product_ids",
         ]
 
         df = df[[c for c in cols if c in df.columns]]
@@ -2497,23 +2572,24 @@ class RouteSet:
     ### FACTORIES
 
     @classmethod
-    def from_ids(cls, db: "Database", ids: list | set):
+    def from_ids(cls, db: "Database", ids: list | set, progress: bool = True):
         """Generate a routeset from a set of :class:`.Route` IDs
 
         :param db: database to link
         :param ids: :class:`.Route` database IDs
+        :param progress: show progress bar
         """
 
-        routes = [
-            db.get_route(id=route_id)
-            for route_id in mrich.track(ids, prefix="Getting routes")
-        ]
+        if progress:
+            ids = mrich.track(ids, prefix="Getting routes")
+
+        routes = [db.get_route(id=route_id) for route_id in ids]
 
         self = cls.__new__(cls)
         return RouteSet(db, routes)
 
     @classmethod
-    def from_product_ids(cls, db: "Database", ids: list | set):
+    def from_product_ids(cls, db: "Database", ids: list | set, progress: bool = True):
         """Generate a routeset from a set of product :class:`.Compound` IDs
 
         :param db: database to link
@@ -2531,7 +2607,7 @@ class RouteSet:
 
         route_ids = [i for i, in records]
 
-        return cls.from_ids(db, route_ids)
+        return cls.from_ids(db, route_ids, progress=progress)
 
     @classmethod
     def from_json(
@@ -2903,6 +2979,10 @@ class RouteSet:
     def __iter__(self):
         """Iterate over routes in this set"""
         return iter(self.data.values())
+
+    def __getitem__(self, key):
+        """Get a specific route in this set"""
+        return list(self.data.values())[key]
 
 
 class RecipeSet:

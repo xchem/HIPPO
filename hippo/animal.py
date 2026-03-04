@@ -18,7 +18,12 @@ from .iset import InteractionTable
 from .pset import PoseTable, PoseSet
 from .rset import ReactionTable, ReactionSet
 from .cset import CompoundTable, IngredientSet, CompoundSet
-from .tools import inchikey_from_smiles, sanitise_smiles, SanitisationError
+from .tools import (
+    flat_inchikey,
+    inchikey_from_smiles,
+    sanitise_smiles,
+    SanitisationError,
+)
 
 
 class HIPPO:
@@ -749,7 +754,31 @@ class HIPPO:
         mrich.debug("#smiles", len(smiles))
         mrich.debug("Registering compounds...")
         pairs = self.register_compounds(smiles=smiles, sanitisation_verbosity=False)
-        smiles_lookup = {s1: i for s1, (i, s2) in zip(smiles, pairs)}
+
+        # fix for 2033, replace smiles_lookup generation procedure
+        # smiles_lookup = {s1: i for s1, (i, s2) in zip(smiles, pairs)}
+        # duplicated sanitation in register_compounds
+        smiles_lookup = {}
+        for s in smiles:
+            try:
+                new_smiles = sanitise_smiles(
+                    s,
+                    sanitisation_failed="error",
+                    radical="warning",
+                    verbosity=True,
+                )
+            except SanitisationError as e:
+                mrich.error(f"Could not sanitise {s=}")
+                mrich.error(str(e))
+                continue
+            except AssertionError:
+                mrich.error(f"Could not sanitise {s=}")
+                continue
+
+            # smiles must now be sanitised and should not throw error
+            # in flat_inchikey method
+            smiles_lookup[s] = flat_inchikey(new_smiles)
+
         inchi_lookup = self.db.get_compound_inchikey_id_dict(
             inchikeys=smiles_lookup.values()
         )
@@ -824,7 +853,7 @@ class HIPPO:
 
                     try:
                         pose_id = int(insp)
-                        inspirations.append(pose_id)
+                        inspiration_list.append(pose_id)
 
                     except ValueError:
                         if (
@@ -848,14 +877,14 @@ class HIPPO:
                 ref_str = row.get(reference_col)
                 if ref_str:
                     try:
-                        reference = int(ref_str)
+                        row_reference = int(ref_str)
                     except ValueError:
-                        reference = inspiration_map[ref_str]
+                        row_reference = inspiration_map[ref_str]
                 else:
-                    reference = None
+                    row_reference = None
 
             elif isinstance(reference, Pose):
-                reference = reference.id
+                row_reference = reference.id
 
             # metadata
             metadata = {}
@@ -906,7 +935,7 @@ class HIPPO:
                     path=pose_path,
                     metadata=metadata,
                     inspiration_ids=inspiration_list,
-                    reference_id=reference,
+                    reference_id=row_reference,
                     mol=mol,
                     inchikey=inchikey,
                     smiles=smiles,
@@ -1352,7 +1381,10 @@ class HIPPO:
                         ON CONFLICT DO NOTHING;
                         """
 
-                self.db.executemany(sql, [(scaffold_id, i) for i in superstructure_ids])
+                self.db.executemany(
+                    sql,
+                    [(int(scaffold_id), int(i)) for i in superstructure_ids],
+                )
                 self.db.commit()
 
         # filter poses
@@ -2336,7 +2368,7 @@ class HIPPO:
                 AND reaction_product = {product}
                 """
 
-        sql.format(type=type, product=product)
+        sql = sql.format(type=type, product=product)
 
         pairs = self.db.execute(sql).fetchall()
 
@@ -2797,35 +2829,7 @@ class HIPPO:
         :returns: The :class:`.Route` ID
         """
 
-        assert recipe.num_products == 1
-
-        # register the route
-        route_id = self.db.insert_route(product_id=recipe.product.id, commit=False)
-
-        assert route_id
-
-        # reactions
-        for ref in recipe.reactions.ids:
-            self.db.insert_component(
-                component_type=1, ref=ref, route=route_id, commit=False
-            )
-
-        # reactants
-        for ref, amount in recipe.reactants.id_amount_pairs:
-            self.db.insert_component(
-                component_type=2, ref=ref, route=route_id, amount=amount, commit=False
-            )
-
-        # intermediates
-        for ref, amount in recipe.intermediates.id_amount_pairs:
-            self.db.insert_component(
-                component_type=3, ref=ref, route=route_id, amount=amount, commit=False
-            )
-
-        if commit:
-            self.db.commit()
-
-        return route_id
+        return self.db.register_route(recipe=recipe, commit=commit)
 
     ### QUOTING
 

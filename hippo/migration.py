@@ -1089,7 +1089,20 @@ def migrate_quotes(
         %(date)s,
         %(compound)s
     )
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT ON CONSTRAINT UC_quote
+    DO UPDATE SET
+        quote_smiles = EXCLUDED.quote_smiles,
+        quote_amount = EXCLUDED.quote_amount,
+        quote_supplier = EXCLUDED.quote_supplier,
+        quote_catalogue = EXCLUDED.quote_catalogue,
+        quote_entry = EXCLUDED.quote_entry,
+        quote_lead_time = EXCLUDED.quote_lead_time,
+        quote_price = EXCLUDED.quote_price,
+        quote_currency = EXCLUDED.quote_currency,
+        quote_purity = EXCLUDED.quote_purity,
+        quote_date = EXCLUDED.quote_date,
+        quote_compound = EXCLUDED.quote_compound
+    WHERE hippo.quote.quote_date < EXCLUDED.quote_date;
     """
 
     # format the data

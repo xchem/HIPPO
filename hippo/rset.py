@@ -731,3 +731,18 @@ class ReactionSet:
                 self.add(reaction)
             self._name = None
         return self
+
+    def __sub__(
+        self,
+        other: "ReactionSet",
+    ) -> "ReactionSet":
+        """Substract a :class:`.ReactionSet` from this set"""
+        match other:
+            case ReactionSet():
+                ids = set(self.ids) - set(other.ids)
+                return ReactionSet(self.db, ids, sort=False)
+            case int():
+                # assert other in set(self.ids)
+                return ReactionSet(
+                    self.db, [i for i in self.ids if i != other], sort=False
+                )

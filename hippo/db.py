@@ -1587,8 +1587,8 @@ class Database:
                 );
                 """
             case "psycopg":
-                sql = f"""
-                INSERT OR REPLACE INTO quote(
+                sql = """
+                INSERT OR REPLACE INTO hippo.quote(
                     quote_smiles,
                     quote_amount,
                     quote_supplier,
@@ -1602,32 +1602,34 @@ class Database:
                     quote_date
                 )
                 VALUES(
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
+                    %s, 
                     {date_str}
                 )
                 ON CONFLICT
                 DO UPDATE
-                    quote_smiles = EXCLUDED.quote_smiles,
-                    quote_amount = EXCLUDED.quote_amount,
-                    quote_supplier = EXCLUDED.quote_supplier,
-                    quote_catalogue = EXCLUDED.quote_catalogue,
-                    quote_entry = EXCLUDED.quote_entry,
-                    quote_lead_time = EXCLUDED.quote_lead_time,
-                    quote_price = EXCLUDED.quote_price,
-                    quote_currency = EXCLUDED.quote_currency,
-                    quote_purity = EXCLUDED.quote_purity,
-                    quote_compound = EXCLUDED.quote_compound,
-                    quote_date = EXCLUDED.quote_date;
-                """
+                    hippo.quote.quote_smiles = EXCLUDED.quote_smiles,
+                    hippo.quote.quote_amount = EXCLUDED.quote_amount,
+                    hippo.quote.quote_supplier = EXCLUDED.quote_supplier,
+                    hippo.quote.quote_catalogue = EXCLUDED.quote_catalogue,
+                    hippo.quote.quote_entry = EXCLUDED.quote_entry,
+                    hippo.quote.quote_lead_time = EXCLUDED.quote_lead_time,
+                    hippo.quote.quote_price = EXCLUDED.quote_price,
+                    hippo.quote.quote_currency = EXCLUDED.quote_currency,
+                    hippo.quote.quote_purity = EXCLUDED.quote_purity,
+                    hippo.quote.quote_compound = EXCLUDED.quote_compound,
+                    hippo.quote.quote_date = EXCLUDED.quote_date;
+                """.format(
+                    date_str=date_str
+                )
 
         try:
             self.execute(
@@ -2258,6 +2260,50 @@ class Database:
             self.commit()
 
         return subsite_tag_id
+
+    def register_route(
+        self,
+        *,
+        recipe: "Recipe",
+        commit: bool = True,
+    ) -> int:
+        """
+        Insert a single-product :class:`.Recipe` into the :class:`.Database`.
+
+        :param recipe: The :class:`.Recipe` object to be registered
+        :param commit: Commit the changes to the :class:`.Database`, defaults to ``True``
+        :returns: The :class:`.Route` ID
+        """
+
+        assert recipe.num_products == 1
+
+        # register the route
+        route_id = self.insert_route(product_id=recipe.product.id, commit=False)
+
+        assert route_id
+
+        # reactions
+        for ref in recipe.reactions.ids:
+            self.insert_component(
+                component_type=1, ref=ref, route=route_id, commit=False
+            )
+
+        # reactants
+        for ref, amount in recipe.reactants.id_amount_pairs:
+            self.insert_component(
+                component_type=2, ref=ref, route=route_id, amount=amount, commit=False
+            )
+
+        # intermediates
+        for ref, amount in recipe.intermediates.id_amount_pairs:
+            self.insert_component(
+                component_type=3, ref=ref, route=route_id, amount=amount, commit=False
+            )
+
+        if commit:
+            self.commit()
+
+        return route_id
 
     ### SELECTION
 
@@ -4077,6 +4123,25 @@ class Database:
                 lookup[route_product] = set()
 
             lookup[route_product].add(route_id)
+
+        return lookup
+
+    def get_route_id_reactant_ids_dict(self) -> dict[int, set[int]]:
+        """Get a dictionary mapping :class:`.Route` ID's to their reactant :class:`.Compound` IDs"""
+
+        sql = """
+        SELECT route_id, component_ref FROM route
+        INNER JOIN component
+        ON component_route = route_id
+        WHERE component_type = 2
+        """
+
+        c = self.execute(sql)
+
+        lookup = {}
+        for route_id, route_reactant in c:
+            lookup.setdefault(route_id, set())
+            lookup[route_id].add(route_reactant)
 
         return lookup
 

@@ -21,19 +21,18 @@
 services:
 
   database:
-    # this is what I built for myself
     image: hippo-pg
-    # image: pgvectorimage
     container_name: hippo_pg_db
     volumes:
     - postgres_data:/var/lib/postgresql/data
     - type: bind
       source: ./pg_setup/docker-entrypoint-initdb.d
       target: /docker-entrypoint-initdb.d
-    
-    environment:
-      POSTGRES_PASSWORD: hippo
-      POSTGRES_DB: hippo
+    env_file:
+      - .env      
+    # environment:
+    #   POSTGRES_PASSWORD: hippo
+    #   POSTGRES_DB: hippo
     ports:
     - "5432:5432"
     healthcheck:
@@ -42,6 +41,7 @@ services:
       timeout: 2s
       retries: 5
       start_period: 10s
+
 
   backend:
     image: hippo-backend
@@ -53,8 +53,8 @@ services:
     - .:/home/code/HIPPO
     env_file:
       - .env
-    environment:
-      POSTGRESQL_USER: postgres
+    # environment:
+    #   POSTGRESQL_USER: postgres
 
     ports:
     - "8888:8888"
