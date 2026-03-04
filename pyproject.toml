@@ -3,7 +3,6 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 [project]
 name = "xchem-hippo"
-version = "0.3.38"
 authors = [
     { name = "Max Winokan", email = "max@winokan.com" },
 ]
