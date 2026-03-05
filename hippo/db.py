@@ -534,7 +534,7 @@ class Database:
         conn = None
 
         try:
-            conn = sqlite3.connect(self.path)
+            conn = sqlite3.connect(self.path, check_same_thread=False)
 
             if debug:
                 mrich.debug(f"{sqlite3.sqlite_version=}")

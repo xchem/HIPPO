@@ -392,9 +392,7 @@ class HIPPO:
 
                 observations = {}
 
-                for path in list(
-                    sorted(aligned_directory.glob(f"*"))
-                ):
+                for path in list(sorted(aligned_directory.glob(f"*"))):
 
                     name = path.name
 
@@ -414,7 +412,9 @@ class HIPPO:
 
                         sdf_name = sdf_path.name
 
-                        if "_ligand" in sdf_name:   # Quick fix, _ligand.sdf are exactly the same as .sdf in aligned_directory.
+                        if (
+                            "_ligand" in sdf_name
+                        ):  # Quick fix, _ligand.sdf are exactly the same as .sdf in aligned_directory.
                             continue
 
                         # fragalysis SDF
@@ -424,7 +424,10 @@ class HIPPO:
                         elif pdbid_pattern.match(sdf_name):
                             sdfs.append(sdf_path)
                         else:
-                            mrich.warning(sdf_name, "doesn't not follow neither Fragalysis nor PDB ID patterns")
+                            mrich.warning(
+                                sdf_name,
+                                "doesn't not follow neither Fragalysis nor PDB ID patterns",
+                            )
                             sdfs.append(sdf_path)
 
                     if not sdfs:
