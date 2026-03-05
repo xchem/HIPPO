@@ -30,9 +30,6 @@ services:
       target: /docker-entrypoint-initdb.d
     env_file:
       - .env      
-    # environment:
-    #   POSTGRES_PASSWORD: hippo
-    #   POSTGRES_DB: hippo
     ports:
     - "5432:5432"
     healthcheck:
@@ -53,8 +50,6 @@ services:
     - .:/home/code/HIPPO
     env_file:
       - .env
-    # environment:
-    #   POSTGRESQL_USER: postgres
 
     ports:
     - "8888:8888"
