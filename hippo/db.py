@@ -534,7 +534,10 @@ class Database:
         conn = None
 
         try:
-            conn = sqlite3.connect(self.path, check_same_thread=False)
+            if sqlite3.threadsafety == 3: # Serialized, safe to use multithreading
+                conn = sqlite3.connect(self.path, check_same_thread=False)
+            else:
+                conn = sqlite3.connect(self.path)
 
             if debug:
                 mrich.debug(f"{sqlite3.sqlite_version=}")
