@@ -3,8 +3,6 @@ LABEL authors="Max Winokan"
 
 # Ported from Max's Dockerfile to support local development
 
-RUN apt install sqlite3
-
 WORKDIR "/home/code/HIPPO"
 COPY . ./
 
@@ -15,7 +13,12 @@ RUN mamba install --yes \
     fix-permissions "/home/${NB_USER}"
 
 
-RUN python -m pip install syndirella typer neo4j gemmi mrich mpytools
+
+RUN python -m pip install syndirella typer neo4j gemmi \
+    mrich mpytools psycopg[binary] molparse rdkit
+
+# Too old rdkit in base container
+RUN pip install rdkit --upgrade
 
 
 # patch rich
@@ -27,4 +30,3 @@ RUN chown ${NB_USER} "/home/code" && sudo apt update && sudo apt install screen 
 USER ${NB_USER}
 
 WORKDIR "/home/code/HIPPO"
-

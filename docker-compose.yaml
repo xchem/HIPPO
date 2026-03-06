@@ -1,17 +1,44 @@
 ---
 # Dev environment for local HIPPO development.
+# Needs two containers, backend with HIPPO and dependencies installed, and database
 
-# Backend built from ./Dockerfile
+# database container is built from images/postgres/Dockerfile:
+# sudo docker build --no-cache  -t hippo-pg:latest .
+
+# Backend from ./Dockerfile
 # sudo docker build --no-cache . -t hippo-backend:latest
 
-# Bring the container up with:
+# Then bring the containers up with:
 # sudo docker-compose up
 
 # To clear the system run
 # sudo docker compose down
 
+# To also clear the datbase volume
+# sudo docker compose down -v
+
 
 services:
+
+  database:
+    image: hippo-pg
+    container_name: hippo_pg_db
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    - type: bind
+      source: ./pg_setup/docker-entrypoint-initdb.d
+      target: /docker-entrypoint-initdb.d
+    env_file:
+      - .env      
+    ports:
+    - "5432:5432"
+    healthcheck:
+      test: pg_isready -U postgres -d hippo
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 10s
+
 
   backend:
     image: hippo-backend
@@ -26,3 +53,10 @@ services:
 
     ports:
     - "8888:8888"
+    depends_on:
+      database:
+        condition: service_healthy
+
+
+volumes:
+  postgres_data:
