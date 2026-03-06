@@ -534,10 +534,13 @@ class Database:
         conn = None
 
         try:
-            conn = sqlite3.connect(self.path)
+            if sqlite3.threadsafety == 3:  # Serialized, safe to use multithreading
+                conn = sqlite3.connect(self.path, check_same_thread=False)
+            else:
+                conn = sqlite3.connect(self.path)
 
             if debug:
-                mrich.debug(f"{sqlite3.version=}")
+                mrich.debug(f"{sqlite3.sqlite_version=}")
 
             conn.enable_load_extension(True)
             conn.load_extension("chemicalite")
@@ -1627,9 +1630,7 @@ class Database:
                     hippo.quote.quote_purity = EXCLUDED.quote_purity,
                     hippo.quote.quote_compound = EXCLUDED.quote_compound,
                     hippo.quote.quote_date = EXCLUDED.quote_date;
-                """.format(
-                    date_str=date_str
-                )
+                """.format(date_str=date_str)
 
         try:
             self.execute(
@@ -2712,8 +2713,7 @@ class Database:
         :returns: ID of the last inserted :class:`.Interaction`
         """
 
-        cursor = self.execute(
-            f"""
+        cursor = self.execute(f"""
             INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}temp_interaction(
                 interaction_feature, 
                 interaction_pose, 
@@ -2738,8 +2738,7 @@ class Database:
                 interaction_energy 
             FROM {self.SQL_SCHEMA_PREFIX}interaction
             WHERE interaction_pose = {pose_id}
-        """
-        )
+        """)
 
         return cursor.lastrowid
 
@@ -2751,13 +2750,11 @@ class Database:
 
         mrich.debug("HIPPO.Database.migrate_legacy_scaffolds()")
 
-        cursor = self.execute(
-            f"""
+        cursor = self.execute(f"""
             INSERT INTO {self.SQL_SCHEMA_PREFIX}scaffold(scaffold_base, scaffold_superstructure)
             SELECT compound_base, compound_id FROM compound
             WHERE compound_base IS NOT NULL
-            """
-        )
+            """)
 
         self.commit()
 
@@ -2820,15 +2817,13 @@ class Database:
 
     def update_compound_pattern_bfp_table(self):
         """Update the compound pattern BFP table"""
-        self.execute(
-            f"""
+        self.execute(f"""
             INSERT INTO compound_pattern_bfp
             SELECT c.compound_id, c.compound_pattern_bfp FROM {self.SQL_SCHEMA_PREFIX}compound AS c
             LEFT JOIN compound_pattern_bfp as fp
             ON c.compound_id = fp.compound_id
             WHERE fp.compound_id IS NULL
-        """
-        )
+        """)
 
     ### BULK CLEANUP
 
@@ -3521,13 +3516,11 @@ class Database:
                 VALUES(?, ?)
                 """
             case "psycopg":
-                sql = strip_sql(
-                    """
+                sql = strip_sql("""
                 INSERT INTO hippo.subsite(subsite_target, subsite_name)
                 VALUES(%s, %s)
                 ON CONFLICT DO NOTHING;
-                """
-                )
+                """)
 
         self.executemany(sql, sorted(list(subsites)))
 
@@ -3546,13 +3539,11 @@ class Database:
                 VALUES(?, ?)
                 """
             case "psycopg":
-                sql = strip_sql(
-                    """
+                sql = strip_sql("""
                 INSERT INTO hippo.subsite_tag(subsite_tag_ref, subsite_tag_pose)
                 VALUES(%s, %s)
                 ON CONFLICT DO NOTHING;
-                """
-                )
+                """)
 
         subsite_tags = [
             (subsite_lookup[(t, name)], pose_id) for t, name, pose_id in subsite_tags
@@ -4457,18 +4448,14 @@ class Database:
         """Get a dictionary mapping :class:`.Pose` aliases to ID's"""
 
         if pset:
-            records = self.execute(
-                f"""
+            records = self.execute(f"""
             SELECT pose_id, pose_alias FROM {self.SQL_SCHEMA_PREFIX}pose 
             WHERE pose_alias IS NOT NULL
-            AND pose_id IN {pset.str_ids}"""
-            ).fetchall()
+            AND pose_id IN {pset.str_ids}""").fetchall()
 
         else:
-            records = self.execute(
-                """SELECT pose_id, pose_alias FROM pose 
-            WHERE pose_alias IS NOT NULL"""
-            ).fetchall()
+            records = self.execute("""SELECT pose_id, pose_alias FROM pose 
+            WHERE pose_alias IS NOT NULL""").fetchall()
 
         d = {}
         for pose_id, pose_alias in records:
@@ -4480,11 +4467,9 @@ class Database:
         """Get a dictionary mapping :class:`.Pose` aliases to paths"""
 
         if pset:
-            records = self.execute(
-                f"""
+            records = self.execute(f"""
             SELECT pose_alias, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose 
-            WHERE pose_id IN {pset.str_ids}"""
-            ).fetchall()
+            WHERE pose_id IN {pset.str_ids}""").fetchall()
 
         else:
             records = self.execute(
@@ -4501,18 +4486,14 @@ class Database:
         """Get a dictionary mapping :class:`.Pose` aliases to ID's"""
 
         if pset:
-            records = self.execute(
-                f"""
+            records = self.execute(f"""
             SELECT pose_id, pose_alias FROM {self.SQL_SCHEMA_PREFIX}pose 
             WHERE pose_alias IS NOT NULL
-            AND pose_id IN {pset.str_ids}"""
-            ).fetchall()
+            AND pose_id IN {pset.str_ids}""").fetchall()
 
         else:
-            records = self.execute(
-                """SELECT pose_id, pose_alias FROM pose 
-            WHERE pose_alias IS NOT NULL"""
-            ).fetchall()
+            records = self.execute("""SELECT pose_id, pose_alias FROM pose 
+            WHERE pose_alias IS NOT NULL""").fetchall()
 
         d = {}
         for pose_id, pose_alias in records:
@@ -4524,19 +4505,15 @@ class Database:
         """Get a dictionary mapping :class:`.Pose` aliases to ID's"""
 
         if pset:
-            records = self.execute(
-                f"""
+            records = self.execute(f"""
             SELECT pose_id, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose 
             WHERE pose_path IS NOT NULL
-            AND pose_id IN {pset.str_ids}"""
-            ).fetchall()
+            AND pose_id IN {pset.str_ids}""").fetchall()
 
         else:
-            records = self.execute(
-                f"""
+            records = self.execute(f"""
             SELECT pose_id, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose 
-            WHERE pose_path IS NOT NULL"""
-            ).fetchall()
+            WHERE pose_path IS NOT NULL""").fetchall()
 
         d = {}
         for pose_id, pose_path in records:
@@ -4754,14 +4731,12 @@ class Database:
 
         str_ids = str(tuple(product_ids)).replace(",)", ")")
 
-        records = self.execute(
-            f"""
+        records = self.execute(f"""
             SELECT reaction_type, reaction_product, reaction_id, reactant_compound
             FROM {self.SQL_SCHEMA_PREFIX}reaction INNER JOIN {self.SQL_SCHEMA_PREFIX}reactant
             ON reaction_id = reactant_reaction
             WHERE reaction_product IN {str_ids}
-        """
-        ).fetchall()
+        """).fetchall()
 
         mapping = {}
         for reaction_type, reaction_product, reaction_id, reactant_compound in records:
@@ -4792,8 +4767,7 @@ class Database:
 
         compound_ids_str = str(tuple(compound_ids)).replace(",)", ")")
 
-        result = self.execute(
-            f"""
+        result = self.execute(f"""
             WITH possible_reactants AS 
             (
                 SELECT reactant_reaction, CASE 
@@ -4813,8 +4787,7 @@ class Database:
             
             SELECT reactant_reaction FROM possible_reactions
             WHERE count_null = 0
-        """
-        ).fetchall()
+        """).fetchall()
 
         return [q for q, in result]
 
@@ -4895,14 +4868,12 @@ class Database:
             product_ids = reactant_ids
 
         # all intermediates
-        ids = self.execute(
-            f"""
+        ids = self.execute(f"""
             SELECT DISTINCT reaction_product 
             FROM {self.SQL_SCHEMA_PREFIX}reaction 
             INNER JOIN {self.SQL_SCHEMA_PREFIX}reactant 
             ON reaction_product = reactant_compound
-            """
-        ).fetchall()
+            """).fetchall()
         ids = [q for q, in ids]
         intermediates = CompoundSet(self, ids)
 
@@ -4942,8 +4913,7 @@ class Database:
 
         # sum lowest unit price for each reactant
 
-        (price,) = self.execute(
-            f"""
+        (price,) = self.execute(f"""
         WITH unit_prices AS 
         (
             SELECT quote_compound, MIN(quote_price/quote_amount) AS unit_price 
@@ -4952,8 +4922,7 @@ class Database:
             GROUP BY quote_compound
         )
         SELECT SUM(unit_price) FROM unit_prices
-        """
-        ).fetchone()
+        """).fetchone()
 
         return price
 
@@ -5408,13 +5377,11 @@ class Database:
 
         """
 
-        pairs = self.execute(
-            f"""
+        pairs = self.execute(f"""
             SELECT {table}_id, {table}_metadata 
             FROM {self.SQL_SCHEMA_PREFIX}{table} 
             WHERE {table}_metadata LIKE '%"{key}": "%'
-            """
-        ).fetchall()
+            """).fetchall()
         from json import loads
 
         return dict(
@@ -5699,13 +5666,11 @@ class Database:
     def index_names(self) -> list[str]:
         """Get the index names"""
 
-        cursor = self.execute(
-            """
+        cursor = self.execute("""
             SELECT name
             FROM sqlite_master
             WHERE type = 'index';
-        """
-        )
+        """)
 
         return [n for n, in cursor]
 
