@@ -20,44 +20,13 @@
 
 services:
 
-  # database:
-  #   image: hippo-pg
-  #   container_name: hippo_pg_db
-  #   volumes:
-  #   - postgres_data:/var/lib/postgresql/data
-  #   - type: bind
-  #     source: ./pg_setup/docker-entrypoint-initdb.d
-  #     target: /docker-entrypoint-initdb.d
-  #   env_file:
-  #     - .env      
-  #   ports:
-  #   - "5432:5432"
-  #   healthcheck:
-  #     test: pg_isready -U postgres -d hippo
-  #     interval: 10s
-  #     timeout: 2s
-  #     retries: 5
-  #     start_period: 10s
-
   database:
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     RDKIT_VERSION: ${RDKIT_VERSION:-Release_2025_09_5}
-    #     BOOST_VERSION: ${BOOST_VERSION:-1.90.0}
-    #     BOOST_VER_US: ${BOOST_VER_US:-1_90_0}
-    #     PG_MAJOR: ${PG_MAJOR:-18}
-    #     PG_BASE: ${PG_BASE:-postgres:18.3-bookworm}
-    # image: xchem_designdb:latest
-    # container_name: xchem_designdb
-    image: xchem-hippo-pg
-    container_name: hippo_pg_db    
+    image: xchem_designdb:latest
+    container_name: xchem_designdb
     restart: unless-stopped
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      # - ${POSTGRES_DATA_PATH}:/var/lib/postgresql/data
       - postgres_data:/var/lib/postgresql/data      
     env_file:
       - .env       
