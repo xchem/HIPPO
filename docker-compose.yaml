@@ -21,23 +21,31 @@
 services:
 
   database:
-    image: hippo-pg
-    container_name: hippo_pg_db
-    volumes:
-    - postgres_data:/var/lib/postgresql/data
-    - type: bind
-      source: ./pg_setup/docker-entrypoint-initdb.d
-      target: /docker-entrypoint-initdb.d
-    env_file:
-      - .env      
+    image: xchem_designdb:latest
+    container_name: xchem_designdb
+    restart: unless-stopped
     ports:
-    - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data      
+    env_file:
+      - .env       
+    environment:
+      POSTGRES_DB: ${DB_NAME:-designdb}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS:---auth-host=scram-sha-256 --auth-local=trust}
+      PGDATA: ${PGDATA:-/var/lib/postgresql/data}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
+    shm_size: 8g
     healthcheck:
-      test: pg_isready -U postgres -d hippo
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -h localhost"]
       interval: 10s
-      timeout: 2s
+      timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 90s
+    networks:
+      - app_network
 
 
   backend:
@@ -50,12 +58,19 @@ services:
     - .:/home/code/HIPPO
     env_file:
       - .env
-
     ports:
     - "8888:8888"
+    networks:
+      - app_network    
     depends_on:
       database:
         condition: service_healthy
+
+
+networks:
+  app_network:
+    name: xchem_designdb_network
+    driver: bridge
 
 
 volumes:
