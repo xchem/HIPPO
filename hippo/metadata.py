@@ -1,7 +1,7 @@
 """Class for working with database stored JSON metadata"""
 
-from typing import Mapping
 from collections import UserDict
+from collections.abc import Mapping
 
 
 class MetaData(UserDict):
@@ -41,7 +41,7 @@ class MetaData(UserDict):
         return self._id
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """associated :class:`.Database`"""
         return self._db
 

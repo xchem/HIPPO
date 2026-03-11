@@ -2,13 +2,11 @@
 
 import mcol
 import mrich
-
 from rdkit import Chem
 
 from .pose import Pose
-from .tags import TagSet
 from .quote import Quote
-from .target import Target
+from .tags import TagSet
 
 
 class Compound:
@@ -20,12 +18,12 @@ class Compound:
 
     """
 
-    _table = "compound"
+    _table = 'compound'
 
     def __init__(
         self,
-        animal: "HIPPO",
-        db: "Database",
+        animal: 'HIPPO',
+        db: 'Database',
         id: int,
         inchikey: str,
         alias: str,
@@ -109,7 +107,7 @@ class Compound:
         """Get the number of heavy atoms"""
         if self._num_heavy_atoms is None:
             self._num_heavy_atoms = self.db.get_compound_computed_property(
-                "num_heavy_atoms", self.id
+                'num_heavy_atoms', self.id
             )
         return self._num_heavy_atoms
 
@@ -118,7 +116,7 @@ class Compound:
         """Get the molecular weight"""
         if self._molecular_weight is None:
             self._molecular_weight = self.db.get_compound_computed_property(
-                "molecular_weight", self.id
+                'molecular_weight', self.id
             )
         return self._molecular_weight
 
@@ -127,7 +125,7 @@ class Compound:
         """Get the number of rings"""
         if self._num_rings is None:
             self._num_rings = self.db.get_compound_computed_property(
-                "num_rings", self.id
+                'num_rings', self.id
             )
         return self._num_rings
 
@@ -135,7 +133,7 @@ class Compound:
     def formula(self) -> str:
         """Get the chemical formula"""
         if self._formula is None:
-            self._formula = self.db.get_compound_computed_property("formula", self.id)
+            self._formula = self.db.get_compound_computed_property('formula', self.id)
         return self._formula
 
     @property
@@ -150,31 +148,31 @@ class Compound:
         """Calculate the number of atoms added relative to the scaffold compound"""
         match self.num_scaffolds:
             case 0:
-                mrich.error(f"{self} has no scaffold")
+                mrich.error(f'{self} has no scaffold')
                 return None
             case 1:
                 b_id = self.scaffolds.ids[0]
                 n_e = self.num_heavy_atoms
-                n_b = self.db.get_compound_computed_property("num_heavy_atoms", b_id)
+                n_b = self.db.get_compound_computed_property('num_heavy_atoms', b_id)
                 return n_e - n_b
             case _:
-                mrich.warning(f"{self} has multiple scaffolds")
+                mrich.warning(f'{self} has multiple scaffolds')
                 n_e = self.num_heavy_atoms
                 return [
                     n_e
-                    - self.db.get_compound_computed_property("num_heavy_atoms", b_id)
+                    - self.db.get_compound_computed_property('num_heavy_atoms', b_id)
                     for b_id in self.scaffolds.ids
                 ]
 
     @property
-    def metadata(self) -> "MetaData":
+    def metadata(self) -> 'MetaData':
         """Returns the compound's metadata dict"""
         if self._metadata is None:
-            self._metadata = self.db.get_metadata(table="compound", id=self.id)
+            self._metadata = self.db.get_metadata(table='compound', id=self.id)
         return self._metadata
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
@@ -186,7 +184,7 @@ class Compound:
         return self._tags
 
     @property
-    def poses(self) -> "PoseSet":
+    def poses(self) -> 'PoseSet':
         """Returns the compound's poses"""
         return self.get_poses()
 
@@ -198,20 +196,20 @@ class Compound:
     @property
     def num_poses(self) -> int:
         """Returns the number of associated poses"""
-        return self.db.count_where(table="pose", key="compound", value=self.id)
+        return self.db.count_where(table='pose', key='compound', value=self.id)
 
     @property
     def num_reactions(self) -> int:
         """Returns the number of associated reactions (product)"""
-        return self.db.count_where(table="reaction", key="product", value=self.id)
+        return self.db.count_where(table='reaction', key='product', value=self.id)
 
     @property
     def num_reactant(self) -> int:
         """Returns the number of associated reactions (reactant)"""
-        return self.db.count_where(table="reactant", key="compound", value=self.id)
+        return self.db.count_where(table='reactant', key='compound', value=self.id)
 
     @property
-    def scaffolds(self) -> "CompoundSet | None":
+    def scaffolds(self) -> 'CompoundSet | None':
         """Returns the scaffold compound for this elaboration"""
         if self._scaffolds is None or self._db_changed:
             ids = self.get_scaffold_ids()
@@ -220,7 +218,7 @@ class Compound:
             else:
                 from .cset import CompoundSet
 
-                self._scaffolds = CompoundSet(self.db, ids, name=f"scaffolds of {self}")
+                self._scaffolds = CompoundSet(self.db, ids, name=f'scaffolds of {self}')
                 self._total_changes = self.db.total_changes
         return self._scaffolds
 
@@ -242,25 +240,25 @@ class Compound:
             else:
                 from .cset import CompoundSet
 
-                self._elabs = CompoundSet(self.db, ids, name=f"elaborations of {self}")
+                self._elabs = CompoundSet(self.db, ids, name=f'elaborations of {self}')
                 self._total_changes = self.db.total_changes
         return self._elabs
 
     @property
-    def reactions(self) -> "ReactionSet":
+    def reactions(self) -> 'ReactionSet':
         """Returns the reactions resulting in this compound"""
         return self.get_reactions(none=False)
 
     @property
-    def reaction(self) -> "Reaction":
+    def reaction(self) -> 'Reaction':
         """Returns the reaction resulting in this compound (will return first if multiple, with a warning)"""
         reactions = self.reactions
         match len(reactions):
             case 0:
-                mrich.warning(f"{self} has no reactions")
+                mrich.warning(f'{self} has no reactions')
                 return None
             case 1:
-                mrich.warning(f"{self} has multiple reactions, returning first")
+                mrich.warning(f'{self} has multiple reactions, returning first')
             case _:
                 pass
 
@@ -276,12 +274,12 @@ class Compound:
         """Is this Compound the basis for any elaborations?"""
         return bool(
             self.db.select_where(
-                query="1",
-                table="scaffold",
-                key="base",
+                query='1',
+                table='scaffold',
+                key='base',
                 value=self.id,
                 multiple=False,
-                none="quiet",
+                none='quiet',
             )
         )
 
@@ -290,12 +288,12 @@ class Compound:
         """Is this Compound the based on any other compound?"""
         return bool(
             self.db.select_where(
-                query="1",
-                table="scaffold",
-                key="superstructure",
+                query='1',
+                table='scaffold',
+                key='superstructure',
                 value=self.id,
                 multiple=False,
-                none="quiet",
+                none='quiet',
             )
         )
 
@@ -340,14 +338,13 @@ class Compound:
         assert amount
 
         # search for existing in stock quotes
-        existing = self.get_quotes(supplier="Stock", df=False)
+        existing = self.get_quotes(supplier='Stock', df=False)
 
         # supersede old in stock records
         if existing:
             delete = set()
             not_deleted = 0
             for quote in existing:
-
                 if any(
                     [
                         quote.entry != entry,
@@ -360,16 +357,16 @@ class Compound:
 
                 delete.add(quote.id)
 
-            delete_str = str(tuple(delete)).replace(",)", ")")
+            delete_str = str(tuple(delete)).replace(',)', ')')
 
-            self.db.delete_where(table="quote", key=f"quote_id IN {delete_str}")
+            self.db.delete_where(table='quote', key=f'quote_id IN {delete_str}')
 
             if delete:
-                mrich.warning(f"Removed {len(delete)} existing In-Stock Quotes")
+                mrich.warning(f'Removed {len(delete)} existing In-Stock Quotes')
 
             if not_deleted:
                 mrich.warning(
-                    f"Did not remove {not_deleted} existing In-Stock Quotes with differing entry/purity/location"
+                    f'Did not remove {not_deleted} existing In-Stock Quotes with differing entry/purity/location'
                 )
 
         # insert the new quote
@@ -378,7 +375,7 @@ class Compound:
             price=0,
             lead_time=0,
             currency=None,
-            supplier="Stock",
+            supplier='Stock',
             catalogue=location,
             entry=entry,
             amount=amount,
@@ -390,15 +387,15 @@ class Compound:
         else:
             return quote_id
 
-    def get_tags(self) -> "TagSet":
+    def get_tags(self) -> 'TagSet':
         """Get the tags assigned to this compound"""
         tags = self.db.select_where(
-            query="tag_name",
-            table="tag",
-            key="compound",
+            query='tag_name',
+            table='tag',
+            key='compound',
             value=self.id,
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
         return TagSet(self, {t[0] for t in tags}, commit=False)
 
@@ -415,10 +412,10 @@ class Compound:
         min_amount: float | None = None,
         supplier: str | None = None,
         max_lead_time: float | None = None,
-        none: str = "quiet",
+        none: str = 'quiet',
         pick_cheapest: bool = False,
         df: bool = False,
-    ) -> list["Quote"]:
+    ) -> list['Quote']:
         """Get all quotes associated to this compound
 
         :param min_amount: Only return quotes with amounts greater than this, defaults to ``None``
@@ -433,26 +430,26 @@ class Compound:
 
         if not supplier:
             quote_ids = self.db.select_where(
-                query="quote_id",
-                table="quote",
-                key="compound",
+                query='quote_id',
+                table='quote',
+                key='compound',
                 value=self.id,
                 multiple=True,
                 none=none,
             )
         elif isinstance(supplier, str):
             quote_ids = self.db.select_where(
-                query="quote_id",
-                table="quote",
+                query='quote_id',
+                table='quote',
                 key=f'quote_compound = {self.id} AND quote_supplier = "{supplier}"',
                 multiple=True,
                 none=none,
             )
         else:
             quote_ids = self.db.select_where(
-                query="quote_id",
-                table="quote",
-                key=f'quote_compound = {self.id} AND quote_supplier IN {str(tuple(supplier)).replace(",)",")")}',
+                query='quote_id',
+                table='quote',
+                key=f'quote_compound = {self.id} AND quote_supplier IN {str(tuple(supplier)).replace(",)", ")")}',
                 multiple=True,
                 none=none,
             )
@@ -470,7 +467,7 @@ class Compound:
 
             if not suitable_quotes:
                 mrich.debug(
-                    f"No quote available for C{self.id} with amount >= {min_amount} mg. Estimating price..."
+                    f'No quote available for C{self.id} with amount >= {min_amount} mg. Estimating price...'
                 )
                 quotes = [Quote.combination(min_amount, quotes)]
 
@@ -483,16 +480,16 @@ class Compound:
         if df:
             from pandas import DataFrame
 
-            return DataFrame([q.dict for q in quotes]).drop(columns="compound")
+            return DataFrame([q.dict for q in quotes]).drop(columns='compound')
 
         return quotes
 
     def get_reactions(
         self,
         as_reactant: bool = False,
-        permitted_reactions: "ReactionSet" = None,
-        none: str = "error",
-    ) -> "ReactionSet":
+        permitted_reactions: 'ReactionSet' = None,
+        none: str = 'error',
+    ) -> 'ReactionSet':
         """Get the associated :class:`.Reaction` objects. By default this function returns all reaction resulting in this :class:`.Compound` as a product, unless ``as_reactant`` is set to ``True``.
 
         :param as_reactant: Search for :class:`.Reaction` objects using this :class:`.Compound` as a reactant instead of a product, defaults to ``False``
@@ -504,24 +501,24 @@ class Compound:
 
         if as_reactant:
             reaction_ids = self.db.select_where(
-                query="reactant_reaction",
-                table="reactant",
-                key="compound",
+                query='reactant_reaction',
+                table='reactant',
+                key='compound',
                 value=self.id,
                 multiple=True,
                 none=none,
             )
         else:
             reaction_ids = self.db.select_where(
-                query="reaction_id",
-                table="reaction",
-                key="product",
+                query='reaction_id',
+                table='reaction',
+                key='product',
                 value=self.id,
                 multiple=True,
                 none=none,
             )
 
-        reaction_ids = [q for q, in reaction_ids]
+        reaction_ids = [q for (q,) in reaction_ids]
 
         if permitted_reactions:
             reaction_ids = [i for i in reaction_ids if i in permitted_reactions]
@@ -529,17 +526,17 @@ class Compound:
         rset = ReactionSet(self.db, reaction_ids)
 
         if not permitted_reactions:
-            rset._name = f"reactions resulting in {str(self)}"
+            rset._name = f'reactions resulting in {str(self)}'
 
         return rset
 
-    def get_poses(self) -> "PoseSet":
+    def get_poses(self) -> 'PoseSet':
         """Get the associated :class:`.Pose` objects."""
 
         pose_ids = self.db.select_where(
-            query="pose_id",
-            table="pose",
-            key="compound",
+            query='pose_id',
+            table='pose',
+            key='compound',
             value=self.id,
             multiple=True,
             none=False,
@@ -563,7 +560,7 @@ class Compound:
         scaffolds: bool = True,
         elabs: bool = True,
         tags: bool = True,
-    ) -> "dict":
+    ) -> 'dict':
         """Returns a dictionary representing this :class:`.Compound`
 
         :param mol: Include a ``rdkit.Chem.Mol object``, defaults to ``True``
@@ -579,18 +576,18 @@ class Compound:
         """
 
         serialisable_fields = [
-            "id",
-            "smiles",
+            'id',
+            'smiles',
         ]
 
         if alias:
-            serialisable_fields.append("alias")
+            serialisable_fields.append('alias')
         if inchikey:
-            serialisable_fields.append("inchikey")
+            serialisable_fields.append('inchikey')
         if num_reactant:
-            serialisable_fields.append("num_reactant")
+            serialisable_fields.append('num_reactant')
         if num_reactions:
-            serialisable_fields.append("num_reactions")
+            serialisable_fields.append('num_reactions')
 
         data = {}
         for key in serialisable_fields:
@@ -598,40 +595,38 @@ class Compound:
 
         if mol:
             try:
-                data["mol"] = self.mol
+                data['mol'] = self.mol
             except InvalidMolError:
-                data["mol"] = None
+                data['mol'] = None
 
         if scaffolds:
             if self.scaffolds:
-                data["scaffolds"] = self.scaffolds.ids
+                data['scaffolds'] = self.scaffolds.ids
             else:
-                data["scaffolds"] = None
+                data['scaffolds'] = None
 
         if elabs:
             if self.elabs:
-                data["elabs"] = self.elabs.ids
+                data['elabs'] = self.elabs.ids
             else:
-                data["elabs"] = None
+                data['elabs'] = None
 
         if tags:
-            data["tags"] = self.tags
+            data['tags'] = self.tags
 
         if poses:
-
             poses = self.poses
 
             if poses:
-
-                data["poses"] = poses.ids
-                data["targets"] = poses.target_names
+                data['poses'] = poses.ids
+                data['targets'] = poses.target_names
 
                 if count_by_target:
                     target_ids = poses.target_ids
 
                     for target in self._animal.targets:
                         t_poses = poses(target=target.id) or []
-                        data[f"#poses {target.name}"] = len(t_poses)
+                        data[f'#poses {target.name}'] = len(t_poses)
 
         if metadata and (metadict := self.metadata):
             for key in metadict:
@@ -651,8 +646,8 @@ class Compound:
     ):
         """Get :class:`.Recipe` objects that result in this compound. See :meth:`.Recipe.from_compounds`"""
 
-        from .recipe import Recipe
         from .cset import CompoundSet
+        from .recipe import Recipe
 
         return Recipe.from_compounds(
             CompoundSet(self.db, [self.id]),
@@ -667,32 +662,32 @@ class Compound:
     def get_scaffold_ids(self) -> list[int]:
         """Get a list of :class:`.Compound` ID's that this object is a superstructure of"""
         ids = self.db.select_where(
-            table="scaffold",
-            query="scaffold_base",
-            key="superstructure",
+            table='scaffold',
+            query='scaffold_base',
+            key='superstructure',
             value=self.id,
-            none="quiet",
+            none='quiet',
             multiple=True,
         )
         if not ids:
             return None
-        return [i for i, in ids]
+        return [i for (i,) in ids]
 
     def get_superstructure_ids(self) -> list[int]:
         """Get a list of :class:`.Compound` ID's that this object is a substructure of"""
         ids = self.db.select_where(
-            table="scaffold",
-            query="scaffold_superstructure",
-            key="base",
+            table='scaffold',
+            query='scaffold_superstructure',
+            key='base',
             value=self.id,
-            none="quiet",
+            none='quiet',
             multiple=True,
         )
         if not ids:
             return None
-        return [i for i, in ids]
+        return [i for (i,) in ids]
 
-    def add_scaffold(self, scaffold: "Compound | int", commit: bool = True) -> None:
+    def add_scaffold(self, scaffold: 'Compound | int', commit: bool = True) -> None:
         """
         Add a scaffold :class:`.Compound` this molecule is derived from.
 
@@ -701,7 +696,7 @@ class Compound:
         """
 
         if not isinstance(scaffold, int):
-            assert scaffold._table == "compound"
+            assert scaffold._table == 'compound'
             scaffold = scaffold.id
         self.db.insert_scaffold(scaffold=scaffold, superstructure=self.id)
 
@@ -716,9 +711,9 @@ class Compound:
         assert isinstance(alias, str)
         self._alias = alias
         self.db.update(
-            table="compound",
+            table='compound',
             id=self.id,
-            key="compound_alias",
+            key='compound_alias',
             value=alias,
             commit=commit,
         )
@@ -729,8 +724,8 @@ class Compound:
         max_lead_time: float = None,
         supplier: str = None,
         get_quote: bool = True,
-        quote_none: str = "quiet",
-    ) -> "Ingredient":
+        quote_none: str = 'quiet',
+    ) -> 'Ingredient':
         """Convert this compound into an :class:`.Ingredient` object with an associated amount (in ``mg``) and :class:`.Quote` if available.
 
         :param amount: Amount in ``mg``
@@ -773,16 +768,14 @@ class Compound:
         """
 
         if scaffolds and (scaffolds := self.scaffolds):
-
             from molparse.rdkit import draw_mcs
 
             data = {}
             for scaffold in scaffolds:
-                data[scaffold.smiles] = f"{scaffold} (scaffold)"
+                data[scaffold.smiles] = f'{scaffold} (scaffold)'
             data[self.smiles] = str(self)
 
             if len(data) > 1:
-
                 drawing = draw_mcs(
                     data,
                     align_substructure=align_substructure,
@@ -793,7 +786,7 @@ class Compound:
 
             else:
                 mrich.error(
-                    f"Problem drawing {scaffold.id=} vs {self.id=}, self referential?"
+                    f'Problem drawing {scaffold.id=} vs {self.id=}, self referential?'
                 )
                 display(self.mol)
 
@@ -804,7 +797,7 @@ class Compound:
         """Draw elaborations"""
 
         from molparse.rdkit import draw_highlighted_mol
-        from rdkit.Chem import rdRGroupDecomposition, MolFromSmarts
+        from rdkit.Chem import MolFromSmarts, rdRGroupDecomposition
 
         elabs = self.elabs
 
@@ -812,7 +805,7 @@ class Compound:
         display(elabs)
 
         if not elabs:
-            mrich.error(self, "has no elaborations")
+            mrich.error(self, 'has no elaborations')
             return self.draw()
 
         # set RGD params
@@ -833,9 +826,9 @@ class Compound:
         rgroup_table = rgd.GetRGroupsAsColumns()
 
         # get the core and its attachment points
-        core = rgroup_table["Core"][0]
+        core = rgroup_table['Core'][0]
         attachment_points = set()
-        for rgroup in rgroup_table["Core"]:
+        for rgroup in rgroup_table['Core']:
             for atom in rgroup.GetAtoms():
                 if atom.GetAtomicNum() == 0:  # Dummy atom (R-group attachment point)
                     attachment_points.add(atom.GetIdx())
@@ -888,31 +881,31 @@ class Compound:
 
         mrich.header(self)
 
-        mrich.var("inchikey", self.inchikey)
-        mrich.var("alias", self.alias)
-        mrich.var("smiles", self.smiles)
-        mrich.var("scaffolds", self.scaffolds)
-        mrich.var("elabs", self.elabs)
+        mrich.var('inchikey', self.inchikey)
+        mrich.var('alias', self.alias)
+        mrich.var('smiles', self.smiles)
+        mrich.var('scaffolds', self.scaffolds)
+        mrich.var('elabs', self.elabs)
 
-        mrich.var("is_scaffold", self.is_scaffold)
-        mrich.var("is_elab", self.is_elab)
-        mrich.var("num_heavy_atoms", self.num_heavy_atoms)
-        mrich.var("num_rings", self.num_rings)
-        mrich.var("formula", self.formula)
+        mrich.var('is_scaffold', self.is_scaffold)
+        mrich.var('is_elab', self.is_elab)
+        mrich.var('num_heavy_atoms', self.num_heavy_atoms)
+        mrich.var('num_rings', self.num_rings)
+        mrich.var('formula', self.formula)
 
-        mrich.var("#reactions (product)", self.num_reactions)
-        mrich.var("#reactions (reactant)", self.num_reactant)
+        mrich.var('#reactions (product)', self.num_reactions)
+        mrich.var('#reactions (reactant)', self.num_reactant)
 
         if tags:
-            mrich.var("tags", self.tags)
+            mrich.var('tags', self.tags)
 
         poses = self.poses
-        mrich.var("#poses", len(poses))
+        mrich.var('#poses', len(poses))
         if poses:
-            mrich.var("targets", poses.targets)
+            mrich.var('targets', poses.targets)
 
         if metadata:
-            mrich.var("metadata", str(self.metadata))
+            mrich.var('metadata', str(self.metadata))
 
         if draw:
             self.draw()
@@ -924,7 +917,7 @@ class Compound:
         inspirations: list[Pose] | None = None,
         max_ddG: float = 0.0,
         max_RMSD: float = 2.0,
-        output_dir: str = "wictor_place",
+        output_dir: str = 'wictor_place',
         tags: list[str] = None,
         metadata: dict = None,
         overwrite: bool = False,
@@ -942,8 +935,9 @@ class Compound:
         :param overwrite: Delete old poses, defaults to ``False``
         """
 
-        from fragmenstein import Monster, Wictor
         from pathlib import Path
+
+        from fragmenstein import Wictor
 
         tags = tags or []
         metadata = metadata or {}
@@ -966,23 +960,23 @@ class Compound:
         victor.place(smiles, long_name=self.name)
 
         # metadata
-        metadata["ddG"] = (
-            victor.energy_score["bound"]["total_score"]
-            - victor.energy_score["unbound"]["total_score"]
+        metadata['ddG'] = (
+            victor.energy_score['bound']['total_score']
+            - victor.energy_score['unbound']['total_score']
         )
-        metadata["RMSD"] = victor.mrmsd.mrmsd
+        metadata['RMSD'] = victor.mrmsd.mrmsd
 
-        if metadata["ddG"] > max_ddG:
+        if metadata['ddG'] > max_ddG:
             return None
 
-        if metadata["RMSD"] > max_RMSD:
+        if metadata['RMSD'] > max_RMSD:
             return None
 
         # register the pose
         pose = self._animal.register_pose(
             compound=self,
             target=target,
-            path=Path(victor.work_path) / self.name / f"{self.name}.minimised.mol",
+            path=Path(victor.work_path) / self.name / f'{self.name}.minimised.mol',
             inspirations=inspirations,
             reference=reference,
             tags=tags,
@@ -992,14 +986,14 @@ class Compound:
         if overwrite:
             ids = [p.id for p in self.poses if p.id != pose.id]
             for i in ids:
-                self.db.delete_where(table="pose", key="id", value=i)
-            mrich.success(f"Successfully posed {self} (and deleted old poses)")
+                self.db.delete_where(table='pose', key='id', value=i)
+            mrich.success(f'Successfully posed {self} (and deleted old poses)')
         else:
-            mrich.success(f"Successfully posed {self}")
+            mrich.success(f'Successfully posed {self}')
 
         return pose
 
-    def get_inspirations(self, debug: bool = True, none: str = "warning") -> "PoseSet":
+    def get_inspirations(self, debug: bool = True, none: str = 'warning') -> 'PoseSet':
         """Since inspirations map :class:`.Pose` objects to each other rather than :class:`.Compound` objects, this only works if there are poses registerd for this compound or it's elaborations/superstructures.
 
         :returns: a :class:`.PoseSet` object
@@ -1008,7 +1002,7 @@ class Compound:
         from .pset import PoseSet
 
         match self.db.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
                 SELECT pose_id, inspiration_original FROM compound
                 INNER JOIN scaffold ON compound_id = scaffold_base
@@ -1016,7 +1010,7 @@ class Compound:
                 INNER JOIN inspiration ON pose_id = inspiration_derivative
                 WHERE compound_id = :compound_id
                 """
-            case "psycopg":
+            case 'psycopg':
                 sql = """
                 SELECT pose_id, inspiration_original FROM hippo.compound
                 INNER JOIN hippo.scaffold ON compound_id = scaffold_base
@@ -1025,20 +1019,20 @@ class Compound:
                 WHERE compound_id = %(compound_id)s
                 """
 
-        with mrich.spinner(f"Querying inspirations for {self}"):
+        with mrich.spinner(f'Querying inspirations for {self}'):
             records = self.db.execute(sql, dict(compound_id=self.id)).fetchall()
 
-        if not records and none in ("warning", "warn"):
-            mrich.warning("Could not determine inspirations for", self)
+        if not records and none in ('warning', 'warn'):
+            mrich.warning('Could not determine inspirations for', self)
             return None
 
         derivatives = PoseSet(self.db, set(a for a, b in records))
         inspirations = PoseSet(self.db, set(b for a, b in records))
 
         if debug:
-            mrich.debug(f"Inspirations derived from {derivatives.ids}")
+            mrich.debug(f'Inspirations derived from {derivatives.ids}')
 
-        inspirations._name = f"Inspirations for {self}"
+        inspirations._name = f'Inspirations for {self}'
 
         return inspirations
 
@@ -1046,7 +1040,7 @@ class Compound:
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return f"C{self.id}"
+        return f'C{self.id}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
@@ -1074,17 +1068,17 @@ class Ingredient:
             :class:`.Ingredient` objects should not be created directly. Instead use :meth:`.Compound.as_ingredient`.
     """
 
-    _table = "ingredient"
+    _table = 'ingredient'
 
     def __init__(
         self,
-        db: "Database",
-        compound: "Compound | int",
+        db: 'Database',
+        compound: 'Compound | int',
         amount: float,
-        quote: "Quote | None",
+        quote: 'Quote | None',
         max_lead_time: float | None = None,
         supplier: str | None = None,
-    ) -> "Ingredient":
+    ) -> 'Ingredient':
         """Ingredient initialisation"""
 
         assert compound
@@ -1101,7 +1095,6 @@ class Ingredient:
             self._compound_id = compound
 
         if isinstance(quote, Quote):
-
             if id := quote.id:
                 self._quote_id = quote.id
                 self._quote = None
@@ -1126,7 +1119,7 @@ class Ingredient:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns the parent :class:`.Database`"""
         return self._db
 
@@ -1168,7 +1161,7 @@ class Ingredient:
             min_amount=a,
             max_lead_time=self._max_lead_time,
             supplier=self._supplier,
-            none="quiet",
+            none='quiet',
         )
 
         self._quote_id = quote_id
@@ -1188,7 +1181,6 @@ class Ingredient:
         """Returns the associated :class:`.Quote`"""
 
         if self._quote is None:
-
             if q_id := self.quote_id:
                 self._quote = self.db.get_quote(id=self.quote_id)
 
@@ -1198,7 +1190,7 @@ class Ingredient:
                     min_amount=self.amount,
                     max_lead_time=self.max_lead_time,
                     supplier=self.supplier,
-                    none="quiet",
+                    none='quiet',
                 )
 
                 if not q:
@@ -1212,7 +1204,7 @@ class Ingredient:
     @property
     def compound_price_amount_str(self) -> str:
         """String representation including :class:`.Compound`, :class:`.Price`, and amount."""
-        return f"{self} ({self.amount})"
+        return f'{self} ({self.amount})'
 
     @property
     def smiles(self) -> str:
@@ -1220,7 +1212,7 @@ class Ingredient:
         return self.compound.smiles
 
     @property
-    def price(self) -> "Price | None":
+    def price(self) -> 'Price | None':
         """Returns the :class:`.Price` of the associated :class:`.Quote`"""
         if self.quote:
             return self.quote.price
@@ -1250,7 +1242,7 @@ class Ingredient:
         min_amount: float | None = None,
         supplier: str | None = None,
         max_lead_time: float | None = None,
-        none: str = "quiet",
+        none: str = 'quiet',
     ) -> int | None:
         """
         Query quotes associated to this ingredient, and return the cheapest
@@ -1261,14 +1253,14 @@ class Ingredient:
         :param none: Define the behaviour when no quotes are found. Choose `error` to raise print an error.
         """
 
-        supplier_str = f' AND quote_supplier IS "{supplier}"' if supplier else ""
+        supplier_str = f' AND quote_supplier IS "{supplier}"' if supplier else ''
         lead_time_str = (
-            f" AND quote_lead_time <= {max_lead_time}" if max_lead_time else ""
+            f' AND quote_lead_time <= {max_lead_time}' if max_lead_time else ''
         )
-        key_str = f"quote_compound IS {self.compound_id} AND quote_amount >= {min_amount}{supplier_str}{lead_time_str} ORDER BY quote_price"
+        key_str = f'quote_compound IS {self.compound_id} AND quote_amount >= {min_amount}{supplier_str}{lead_time_str} ORDER BY quote_price'
 
         result = self.db.select_where(
-            query="quote_id", table="quote", key=key_str, multiple=False, none=none
+            query='quote_id', table='quote', key=key_str, multiple=False, none=none
         )
 
         if result:
@@ -1278,7 +1270,7 @@ class Ingredient:
         else:
             return None
 
-    def get_quotes(self, **kwargs) -> list["Quote"]:
+    def get_quotes(self, **kwargs) -> list['Quote']:
         """Wrapper for :meth:`.Compound.get_quotes()`"""
         return self.compound.get_quotes(**kwargs)
 
@@ -1286,15 +1278,15 @@ class Ingredient:
 
     def __str__(self) -> str:
         """Plain string representation"""
-        return f"{self.amount:.2f}mg of C{self._compound_id}"
+        return f'{self.amount:.2f}mg of C{self._compound_id}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{str(self)}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{str(self)}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Representation for mrich"""
-        return f"[bold underline]{str(self)}"
+        return f'[bold underline]{str(self)}'
 
     def __eq__(self, other) -> bool:
         """Equality operator"""

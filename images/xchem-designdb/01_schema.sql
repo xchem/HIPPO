@@ -301,7 +301,7 @@ CREATE TABLE IF NOT EXISTS designdb.routes (
 CREATE TABLE IF NOT EXISTS designdb.components (
     id BIGSERIAL PRIMARY KEY,
     route_id BIGINT NOT NULL REFERENCES designdb.routes (id) ON DELETE RESTRICT, -- Insert by codebase/notebook, Synderilla
-    component_type INTEGER, -- Insert by codebase/notebook, Synderilla-- 
+    component_type INTEGER, -- Insert by codebase/notebook, Synderilla--
     component_ref INTEGER, -- Insert by codebase/notebook, Synderilla
     component_amount REAL, -- Insert by codebase/notebook, Synderilla
     created_on TIMESTAMPTZ DEFAULT now(),

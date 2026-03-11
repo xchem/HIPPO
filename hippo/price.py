@@ -1,12 +1,11 @@
 """Class for working with prices"""
 
 import mcol
-import mrich
 
 CURRENCIES = {
-    "USD": "$",
-    "EUR": "€",
-    "GBP": "£",
+    'USD': '$',
+    'EUR': '€',
+    'GBP': '£',
 }
 
 
@@ -27,7 +26,7 @@ class Price:
         """Price initialisation"""
 
         if currency not in CURRENCIES:
-            assert currency is None, f"Unrecognised {currency=}"
+            assert currency is None, f'Unrecognised {currency=}'
             assert not amount, f"Null Price can't have {amount=}"
             amount = None
 
@@ -40,7 +39,7 @@ class Price:
     ### FACTORIES
 
     @classmethod
-    def null(cls) -> "Price":
+    def null(cls) -> 'Price':
         """Zero in any currency"""
         self = cls.__new__(cls)
         self.__init__(None, None)
@@ -50,7 +49,7 @@ class Price:
     def from_dict(
         cls,
         d: dict,
-    ) -> "Price":
+    ) -> 'Price':
         """Create a :class:`.Price` object from a dictionary:
 
         ::
@@ -61,7 +60,7 @@ class Price:
 
         """
         self = cls.__new__(cls)
-        self.__init__(d["amount"], d["currency"])
+        self.__init__(d['amount'], d['currency'])
         return self
 
     ### PROPERTIES
@@ -98,7 +97,7 @@ class Price:
         """
         return dict(amount=self.amount, currency=self.currency)
 
-    def copy(self) -> "Price":
+    def copy(self) -> 'Price':
         """Return a copy of this :class:`.Price`"""
         return Price(amount=self.amount, currency=self.currency)
 
@@ -107,19 +106,19 @@ class Price:
     def __str__(self) -> str:
         """Unformatted string representation"""
         if self.currency is None:
-            return "Null Price"
+            return 'Null Price'
 
-        return f"{self.symbol}{self.amount:.2f} {self.currency}"
+        return f'{self.symbol}{self.amount:.2f} {self.currency}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
-    def __add__(self, other: "Price") -> "Price":
+    def __add__(self, other: 'Price') -> 'Price':
         """Add two :class:`.Price` objects
 
         :param other: :class:`.Price` object
@@ -138,11 +137,11 @@ class Price:
 
         if self.currency != other.currency:
             raise NotImplementedError(
-                f"Adding two different currencies: {self.currency} != {other.currency}"
+                f'Adding two different currencies: {self.currency} != {other.currency}'
             )
         return Price(self.amount + other.amount, self.currency)
 
-    def __truediv__(self, other: "Price | float | int") -> "Price | float":
+    def __truediv__(self, other: 'Price | float | int') -> 'Price | float':
         """Divide this :class:`.Price` by another object
 
         :param other: :class:`.Price` or float or int
@@ -160,9 +159,9 @@ class Price:
             assert not other.is_null
             return self.amount / other.amount
 
-        raise TypeError(f"Division not supported between Price and {type(other)}")
+        raise TypeError(f'Division not supported between Price and {type(other)}')
 
-    def __mul__(self, other: "Price | float | int") -> "Price | float":
+    def __mul__(self, other: 'Price | float | int') -> 'Price | float':
         """Multiply this :class:`.Price` by another object
 
         :param other: :class:`.Price` or float or int
@@ -175,9 +174,9 @@ class Price:
                 return self
             return Price(amount=self.amount * other, currency=self.currency)
 
-        raise TypeError(f"Multiplication not supported between Price and {type(other)}")
+        raise TypeError(f'Multiplication not supported between Price and {type(other)}')
 
-    def __eq__(self, other: "Price") -> bool:
+    def __eq__(self, other: 'Price') -> bool:
         """Compare two :class:`.Price` objects"""
 
         if isinstance(other, int) or isinstance(other, float):
@@ -194,12 +193,12 @@ class Price:
         if not self.is_null and other.is_null:
             return False
 
-        assert (
-            self.currency == other.currency
-        ), f"Comparing different currencies: {self.currency} != {other.currency}"
+        assert self.currency == other.currency, (
+            f'Comparing different currencies: {self.currency} != {other.currency}'
+        )
         return self.amount == other.amount
 
-    def __lt__(self, other: "Price") -> bool:
+    def __lt__(self, other: 'Price') -> bool:
         """Compare two :class:`.Price` objects"""
 
         if isinstance(other, int) or isinstance(other, float):
@@ -216,12 +215,12 @@ class Price:
         if not self.is_null and other.is_null:
             return False
 
-        assert (
-            self.currency == other.currency
-        ), f"Comparing different currencies: {self.currency} != {other.currency}"
+        assert self.currency == other.currency, (
+            f'Comparing different currencies: {self.currency} != {other.currency}'
+        )
         return self.amount < other.amount
 
-    def __gt__(self, other: "Price") -> bool:
+    def __gt__(self, other: 'Price') -> bool:
         """Compare two :class:`.Price` objects"""
 
         if isinstance(other, int) or isinstance(other, float):
@@ -238,13 +237,13 @@ class Price:
         if not self.is_null and other.is_null:
             return True
 
-        assert (
-            self.currency == other.currency
-        ), f"Comparing different currencies: {self.currency} != {other.currency}"
+        assert self.currency == other.currency, (
+            f'Comparing different currencies: {self.currency} != {other.currency}'
+        )
         return self.amount > other.amount
 
     def __hash__(self) -> int:
         """Allow for Prices to be hashed for comparison"""
         if self.is_null:
-            return hash("NULL")
-        return hash(f"{self.currency} {self.amount}")
+            return hash('NULL')
+        return hash(f'{self.currency} {self.amount}')

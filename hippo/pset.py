@@ -1,14 +1,12 @@
 """Classes to work with sets of Poses"""
 
+from collections.abc import Callable
+
 import mcol
 import mrich
 
-import os
-from typing import Callable
-
-from .pose import Pose
 from .db import Database
-from .cset import IngredientSet
+from .pose import Pose
 
 
 class PoseTable:
@@ -58,8 +56,8 @@ class PoseTable:
 
     """
 
-    _table = "pose"
-    _name = "all poses"
+    _table = 'pose'
+    _name = 'all poses'
 
     def __init__(
         self,
@@ -95,38 +93,38 @@ class PoseTable:
     @property
     def aliases(self) -> list[str]:
         """Returns the aliases of child poses"""
-        result = self.db.select(table=self.table, query="pose_alias", multiple=True)
-        return [q for q, in result]
+        result = self.db.select(table=self.table, query='pose_alias', multiple=True)
+        return [q for (q,) in result]
 
     @property
     def inchikeys(self) -> list[str]:
         """Returns the inchikeys of child poses"""
-        result = self.db.select(table=self.table, query="pose_inchikey", multiple=True)
-        return [q for q, in result]
+        result = self.db.select(table=self.table, query='pose_inchikey', multiple=True)
+        return [q for (q,) in result]
 
     @property
     def ids(self) -> list[int]:
         """Returns the IDs of child poses"""
-        result = self.db.select(table=self.table, query="pose_id", multiple=True)
-        return [q for q, in result]
+        result = self.db.select(table=self.table, query='pose_id', multiple=True)
+        return [q for (q,) in result]
 
     @property
     def tags(self) -> set[str]:
         """Returns the set of unique tags present in this pose set"""
         values = self.db.select_where(
-            table="tag",
-            query="DISTINCT tag_name",
-            key="tag_pose IS NOT NULL",
+            table='tag',
+            query='DISTINCT tag_name',
+            key='tag_pose IS NOT NULL',
             multiple=True,
         )
-        return set(v for v, in values)
+        return set(v for (v,) in values)
 
     @property
     def num_fingerprinted(self) -> int:
         """Count the number of fingerprinted poses"""
         return self.db.count_where(
-            table="pose",
-            key="fingerprint",
+            table='pose',
+            key='fingerprint',
             value=1,
         )
 
@@ -135,7 +133,7 @@ class PoseTable:
         """Return a dictionary mapping pose ID's to their name"""
 
         records = self.db.select(
-            table=self.table, query="pose_id, pose_inchikey, pose_alias", multiple=True
+            table=self.table, query='pose_id, pose_inchikey, pose_alias', multiple=True
         )
 
         lookup = {}
@@ -148,7 +146,7 @@ class PoseTable:
         return lookup
 
     @property
-    def interactions(self) -> "InteractionSet":
+    def interactions(self) -> 'InteractionSet':
         """Get a :class:`.InteractionSet`"""
         if self._interactions is None:
             from .iset import InteractionSet
@@ -163,7 +161,7 @@ class PoseTable:
         self,
         tag: str,
         inverse: bool = False,
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Get all child poses with a certain tag
 
         :param tag: tag to search for
@@ -173,33 +171,31 @@ class PoseTable:
         """
 
         if not inverse:
-
             values = self.db.select_where(
-                query="tag_pose", table="tag", key="name", value=tag, multiple=True
+                query='tag_pose', table='tag', key='name', value=tag, multiple=True
             )
 
         else:
-
             values = self.db.select_where(
-                query="tag_pose", table="tag", key="name", value=tag, multiple=True
+                query='tag_pose', table='tag', key='name', value=tag, multiple=True
             )
 
             if not values:
                 return self
 
-            ids = [v for v, in values if v]
+            ids = [v for (v,) in values if v]
 
             values = self.db.select_where(
-                query="pose_id",
-                table="pose",
-                key=f"pose_id NOT IN {self.str_ids}",
+                query='pose_id',
+                table='pose',
+                key=f'pose_id NOT IN {self.str_ids}',
                 multiple=True,
             )
 
         if not values:
             return None
 
-        ids = [v for v, in values if v]
+        ids = [v for (v,) in values if v]
 
         pset = self[ids]
 
@@ -213,7 +209,7 @@ class PoseTable:
         self,
         *,
         id: int,
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Get all child poses with a certain :class:`.Target` ID:
 
         :param id: :class:`.Target` ID
@@ -222,9 +218,9 @@ class PoseTable:
         """
         assert isinstance(id, int)
         values = self.db.select_where(
-            query="pose_id", table="pose", key="target", value=id, multiple=True
+            query='pose_id', table='pose', key='target', value=id, multiple=True
         )
-        ids = [v for v, in values if v]
+        ids = [v for (v,) in values if v]
 
         target = self.db.get_target(id=id)
 
@@ -232,19 +228,19 @@ class PoseTable:
         pset._name = f'poses for "{target}"'
         return pset
 
-    def get_by_smiles(self, smiles: str) -> "Pose | PoseSet | None":
+    def get_by_smiles(self, smiles: str) -> 'Pose | PoseSet | None':
         """Get a member pose by it's smiles"""
 
-        from .tools import inchikey_from_smiles, sanitise_smiles, SanitisationError
+        from .tools import SanitisationError, inchikey_from_smiles, sanitise_smiles
 
         try:
-            flat_smiles = sanitise_smiles(smiles, sanitisation_failed="error")
+            flat_smiles = sanitise_smiles(smiles, sanitisation_failed='error')
         except SanitisationError as e:
-            mrich.error(f"Could not sanitise {smiles=}")
+            mrich.error(f'Could not sanitise {smiles=}')
             mrich.error(str(e))
             return None
         except AssertionError:
-            mrich.error(f"Could not sanitise {smiles=}")
+            mrich.error(f'Could not sanitise {smiles=}')
             return None
             return c
 
@@ -253,7 +249,7 @@ class PoseTable:
         flat_inchikey = inchikey_from_smiles(flat_smiles)
 
         comp_id = self.db.select_id_where(
-            table="compound", key="inchikey", value=flat_inchikey
+            table='compound', key='inchikey', value=flat_inchikey
         )
 
         if not comp_id:
@@ -264,13 +260,13 @@ class PoseTable:
         # get the poses
 
         pose_ids = self.db.select_id_where(
-            table="pose", key="compound", value=comp_id, multiple=True
+            table='pose', key='compound', value=comp_id, multiple=True
         )
 
         if not pose_ids:
             return None
 
-        pose_ids = [i for i, in pose_ids]
+        pose_ids = [i for (i,) in pose_ids]
         pset = self[pose_ids]
 
         # identify the pose
@@ -284,7 +280,7 @@ class PoseTable:
         matches = list(matches)
 
         if not matches:
-            mrich.error(f"Did not find pose matching stereochemistry (C{comp_id})")
+            mrich.error(f'Did not find pose matching stereochemistry (C{comp_id})')
             return None
 
         if len(matches) == 1:
@@ -296,7 +292,7 @@ class PoseTable:
         self,
         *,
         id: int,
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Get all child poses with a certain :class:`.Subsite` ID:
 
         :param id: :class:`.Subsite` ID
@@ -305,13 +301,13 @@ class PoseTable:
         """
         assert isinstance(id, int)
         values = self.db.select_where(
-            query="subsite_tag_pose",
-            table="subsite_tag",
-            key="ref",
+            query='subsite_tag_pose',
+            table='subsite_tag',
+            key='ref',
             value=id,
             multiple=True,
         )
-        ids = [v for v, in values if v]
+        ids = [v for (v,) in values if v]
 
         subsite = self.db.get_subsite_name(id=id)
 
@@ -323,7 +319,7 @@ class PoseTable:
         self,
         key: str,
         value: str | None = None,
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Get all child poses by their metadata. If no value is passed, then simply containing the key in the metadata dictionary is sufficient
 
         :param key: metadata key to match
@@ -332,16 +328,16 @@ class PoseTable:
 
         """
         results = self.db.select(
-            query="pose_id, pose_metadata", table="pose", multiple=True
+            query='pose_id, pose_metadata', table='pose', multiple=True
         )
         if value is None:
             ids = [i for i, d in results if d and f'"{key}":' in d]
-            name = f"poses with {key} in metadata"
+            name = f'poses with {key} in metadata'
         else:
             if isinstance(value, str):
                 value = f'"{value}"'
             ids = [i for i, d in results if d and f'"{key}": {value}' in d]
-            name = f"poses with metadata[{key}] == {value}"
+            name = f'poses with metadata[{key}] == {value}'
 
         pset = self[ids]
         pset._name = name
@@ -350,24 +346,24 @@ class PoseTable:
     def get_by_metadata_substring_match(
         self,
         substring: str,
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Get :class:`.PoseSet` of poses with metadata JSON containing substring"""
 
         assert substring
         assert isinstance(substring, str)
 
         pose_ids = self.db.select_where(
-            table="pose",
-            query="pose_id",
+            table='pose',
+            query='pose_id',
             key=f"""pose_metadata LIKE '%{substring}%'""",
             multiple=True,
         )
 
         if not pose_ids:
-            mrich.error("No poses with export ")
+            mrich.error('No poses with export ')
             return None
 
-        pose_ids = [i for i, in pose_ids]
+        pose_ids = [i for (i,) in pose_ids]
 
         name = f"poses with '{substring}' in metadata"
 
@@ -389,14 +385,14 @@ class PoseTable:
             self[:].draw()
         else:
             mrich.warning(
-                f"Too many poses: {len(self)} > {max_draw=}. Increase max_draw or use animal.poses[:].draw()"
+                f'Too many poses: {len(self)} > {max_draw=}. Increase max_draw or use animal.poses[:].draw()'
             )
 
     def summary(self) -> None:
         """Print a summary of this pose set"""
-        mrich.header("PoseTable()")
-        mrich.var("#poses", len(self))
-        mrich.var("tags", self.tags)
+        mrich.header('PoseTable()')
+        mrich.var('#poses', len(self))
+        mrich.var('tags', self.tags)
 
     def interactive(self) -> None:
         """Interactive widget to navigate poses in the table
@@ -418,7 +414,7 @@ class PoseTable:
         target: int | None = None,
         subsite: int | None = None,
         smiles: str | None = None,
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Filter poses by a given tag, subsite ID, or target ID. See :meth:`.PoseTable.get_by_tag`, :meth:`.PoseTable.get_by_target`, amd :meth:`.PoseTable.get_by_subsite`"""
 
         if tag:
@@ -442,11 +438,10 @@ class PoseTable:
 
         """
 
+        from numpy import int64, ndarray
         from pandas import Series
-        from numpy import ndarray, int64
 
         match key:
-
             case int():
                 if key == 0:
                     return self.__getitem__(key=1)
@@ -471,7 +466,6 @@ class PoseTable:
                 or isinstance(key, Series)
                 or isinstance(key, ndarray)
             ):
-
                 indices = []
                 for i in key:
                     if isinstance(i, int):
@@ -504,7 +498,7 @@ class PoseTable:
 
             case _:
                 mrich.error(
-                    f"Unsupported type for PoseTable.__getitem__(): {type(key)}"
+                    f'Unsupported type for PoseTable.__getitem__(): {type(key)}'
                 )
 
         return None
@@ -512,21 +506,21 @@ class PoseTable:
     def __str__(self):
         """Unformatted string representation"""
         if self.name:
-            s = f"{self.name}: "
+            s = f'{self.name}: '
         else:
-            s = ""
+            s = ''
 
-        s += "{" f"P × {len(self)}" "}"
+        s += f'{{P × {len(self)}}}'
 
         return s
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __len__(self) -> int:
         """Total number of compounds"""
@@ -584,7 +578,7 @@ class PoseSet:
 
     """
 
-    _table = "pose"
+    _table = 'pose'
 
     def __init__(
         self,
@@ -608,7 +602,6 @@ class PoseSet:
         if sort:
             self._indices = sorted(list(set(indices)))
         else:
-
             # remove duplicates but keep order
             self._indices = dict()
             for i in indices:
@@ -624,7 +617,7 @@ class PoseSet:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns the associated :class:`.Database`"""
         return self._db
 
@@ -658,7 +651,7 @@ class PoseSet:
         """Returns the aliases of child poses"""
         return [
             self.db.select_where(
-                table=self.table, query="pose_alias", key="id", value=i, multiple=False
+                table=self.table, query='pose_alias', key='id', value=i, multiple=False
             )[0]
             for i in self.indices
         ]
@@ -669,8 +662,8 @@ class PoseSet:
         return [
             self.db.select_where(
                 table=self.table,
-                query="pose_inchikey",
-                key="id",
+                query='pose_inchikey',
+                key='id',
                 value=i,
                 multiple=False,
             )[0]
@@ -683,8 +676,8 @@ class PoseSet:
 
         records = self.db.select_where(
             table=self.table,
-            query="pose_id, pose_inchikey, pose_alias",
-            key=f"pose_id IN {self.str_ids}",
+            query='pose_id, pose_inchikey, pose_alias',
+            key=f'pose_id IN {self.str_ids}',
             multiple=True,
         )
 
@@ -702,8 +695,8 @@ class PoseSet:
         """Returns the smiles of poses in this set"""
         pairs = self.db.select_where(
             table=self.table,
-            query="pose_id, pose_smiles",
-            key=f"pose_id IN {self.str_ids}",
+            query='pose_id, pose_smiles',
+            key=f'pose_id IN {self.str_ids}',
             multiple=True,
         )
 
@@ -721,29 +714,29 @@ class PoseSet:
     def tags(self) -> set[str]:
         """Returns the set of unique tags present in this pose set"""
         values = self.db.select_where(
-            table="tag",
-            query="DISTINCT tag_name",
-            key=f"tag_pose in {self.str_ids}",
+            table='tag',
+            query='DISTINCT tag_name',
+            key=f'tag_pose in {self.str_ids}',
             multiple=True,
         )
-        return set(v for v, in values)
+        return set(v for (v,) in values)
 
     @property
-    def compounds(self) -> "CompoundSet":
+    def compounds(self) -> 'CompoundSet':
         """Get the compounds associated to this set of poses"""
         from .cset import CompoundSet
 
         ids = self.db.select_where(
-            table="pose",
-            query="DISTINCT pose_compound",
-            key=f"pose_id in {self.str_ids}",
+            table='pose',
+            query='DISTINCT pose_compound',
+            key=f'pose_id in {self.str_ids}',
             multiple=True,
         )
-        ids = [v for v, in ids]
+        ids = [v for (v,) in ids]
         return CompoundSet(self.db, ids)
 
     @property
-    def mols(self) -> "list[rdkit.Chem.mol]":
+    def mols(self) -> 'list[rdkit.Chem.mol]':
         """Get the rdkit Molecules contained in this set"""
         return [p.mol for p in self]
 
@@ -753,12 +746,12 @@ class PoseSet:
         return len(self.compounds)
 
     @property
-    def df(self) -> "pandas.DataFrame":
+    def df(self) -> 'pandas.DataFrame':
         """Get a DataFrame of the poses in this set"""
         return self.get_df(mol=True)
 
     @property
-    def references(self) -> "PoseSet":
+    def references(self) -> 'PoseSet':
         """Return a :class:`.PoseSet` of the all the distinct references in this :class:`.PoseSet`"""
         return PoseSet(self.db, self.reference_ids)
 
@@ -766,13 +759,13 @@ class PoseSet:
     def reference_ids(self) -> set[int]:
         """Return a set of :class:`.Pose` ID's of the all the distinct references in this :class:`.PoseSet`"""
         values = self.db.select_where(
-            table="pose",
-            query="DISTINCT pose_reference",
-            key=f"pose_reference IS NOT NULL and pose_id in {self.str_ids}",
+            table='pose',
+            query='DISTINCT pose_reference',
+            key=f'pose_reference IS NOT NULL and pose_id in {self.str_ids}',
             value=None,
             multiple=True,
         )
-        return set(v for v, in values)
+        return set(v for (v,) in values)
 
     @property
     def inspiration_sets(self) -> list[set[int]]:
@@ -806,9 +799,9 @@ class PoseSet:
     def num_inspirations(self) -> int:
         """Return the number of unique inspirations for poses in this set"""
         (count,) = self.db.select_where(
-            table="inspiration",
-            query="COUNT(DISTINCT inspiration_original)",
-            key=f"inspiration_derivative IN {self.str_ids}",
+            table='inspiration',
+            query='COUNT(DISTINCT inspiration_original)',
+            key=f'inspiration_derivative IN {self.str_ids}',
         )
 
         return count
@@ -817,24 +810,24 @@ class PoseSet:
     def inspirations(self) -> int:
         """Return the number of unique inspirations for poses in this set"""
         records = self.db.select_where(
-            table="inspiration",
-            query="DISTINCT inspiration_original",
-            key=f"inspiration_derivative IN {self.str_ids}",
+            table='inspiration',
+            query='DISTINCT inspiration_original',
+            key=f'inspiration_derivative IN {self.str_ids}',
             multiple=True,
         )
 
         if not records:
             return None
 
-        return PoseSet(self.db, [i for i, in records])
+        return PoseSet(self.db, [i for (i,) in records])
 
     @property
     def str_ids(self) -> str:
         """Return an SQL formatted tuple string of the :class:`.Pose` IDs"""
-        return str(tuple(self.ids)).replace(",)", ")")
+        return str(tuple(self.ids)).replace(',)', ')')
 
     @property
-    def targets(self) -> "list[Target]":
+    def targets(self) -> 'list[Target]':
         """Returns the :class:`.Target` objects of poses in this set"""
         return [self.db.get_target(id=q) for q in self.target_ids]
 
@@ -848,11 +841,11 @@ class PoseSet:
         """Returns the :class:`.Target` objects ID's of poses in this set"""
         result = self.db.select_where(
             table=self.table,
-            query="DISTINCT pose_target",
-            key=f"pose_id in {self.str_ids}",
+            query='DISTINCT pose_target',
+            key=f'pose_id in {self.str_ids}',
             multiple=True,
         )
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     @property
     def best_placed_pose(self) -> Pose:
@@ -866,14 +859,14 @@ class PoseSet:
         if len(self) == 1:
             return self.ids[0]
 
-        query = f"pose_id, MIN(pose_distance_score)"
+        query = 'pose_id, MIN(pose_distance_score)'
         query = self.db.select_where(
-            table="pose", query=query, key=f"pose_id in {self.str_ids}", multiple=False
+            table='pose', query=query, key=f'pose_id in {self.str_ids}', multiple=False
         )
         return query[0]
 
     @property
-    def interactions(self) -> "InteractionSet":
+    def interactions(self) -> 'InteractionSet':
         """Get a :class:`.InteractionSet` for this :class:`.Pose`"""
         if self._interactions is None:
             from .iset import InteractionSet
@@ -885,7 +878,7 @@ class PoseSet:
     def pose_id_metadata_dict(self) -> dict[int, dict]:
         """Get a dictionary mapping pose_ids to metadata dicts"""
         if self._metadata_dict is None:
-            metadata_lookup = self.db.get_id_metadata_dict(table="pose", ids=self.ids)
+            metadata_lookup = self.db.get_id_metadata_dict(table='pose', ids=self.ids)
             metadata = {}
             for pose_id in self.ids:
                 metadata[pose_id] = metadata_lookup[pose_id]
@@ -898,9 +891,9 @@ class PoseSet:
         from itertools import combinations
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_id, interaction_type 
-        FROM {self.db.SQL_SCHEMA_PREFIX}interaction 
-        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature 
+        SELECT DISTINCT interaction_pose, feature_id, interaction_type
+        FROM {self.db.SQL_SCHEMA_PREFIX}interaction
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON interaction_feature = feature_id
         WHERE interaction_pose IN {self.str_ids}
         """
@@ -922,7 +915,6 @@ class PoseSet:
         pairs = set()
 
         for pose_j, pose_k in combinations(ids, 2):
-
             iset_j = ISETS[pose_j]
             iset_k = ISETS[pose_k]
 
@@ -939,19 +931,20 @@ class PoseSet:
 
         return count
 
-    def get_interaction_clusters(self) -> "dict[int, PoseSet]":
+    def get_interaction_clusters(self) -> 'dict[int, PoseSet]':
         """Cluster poses based on shared interactions."""
 
-        import networkx as nx
-        import community as louvain
         from itertools import combinations
+
+        import community as louvain
+        import networkx as nx
 
         # get interaction records
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_residue_name, feature_residue_number, interaction_type 
-        FROM {self.db.SQL_SCHEMA_PREFIX}interaction 
-        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature 
+        SELECT DISTINCT interaction_pose, feature_residue_name, feature_residue_number, interaction_type
+        FROM {self.db.SQL_SCHEMA_PREFIX}interaction
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON interaction_feature = feature_id
         WHERE interaction_pose IN {self.str_ids}
         """
@@ -987,7 +980,7 @@ class PoseSet:
 
         # partition the graph
 
-        partition = louvain.best_partition(G, weight="weight")
+        partition = louvain.best_partition(G, weight='weight')
 
         # find the clusters
 
@@ -998,7 +991,7 @@ class PoseSet:
         # create the PoseSets
 
         psets = {
-            i: PoseSet(self.db, ids, name=f"Cluster {i}")
+            i: PoseSet(self.db, ids, name=f'Cluster {i}')
             for i, ids in enumerate(clusters.values())
         }
 
@@ -1007,13 +1000,12 @@ class PoseSet:
         # calculate modal interactions
 
         for i, cluster in psets.items():
-
-            mrich.var(cluster.name, len(cluster), unit="poses")
+            mrich.var(cluster.name, len(cluster), unit='poses')
 
             df = cluster.interactions.df
 
-            unique_counts = df.groupby(["type", "residue_name", "residue_number"])[
-                "pose_id"
+            unique_counts = df.groupby(['type', 'residue_name', 'residue_number'])[
+                'pose_id'
             ].nunique()
 
             max_count = unique_counts.max()
@@ -1024,11 +1016,11 @@ class PoseSet:
                 residue_name,
                 residue_number,
             ) in max_pairs.index.values:
-                mrich.print(interaction_type, "w/", residue_name, residue_number)
+                mrich.print(interaction_type, 'w/', residue_name, residue_number)
 
         # unclustered
-        unclustered = set((i for i in self.ids if i not in all_ids))
-        psets[None] = PoseSet(self.db, unclustered, name="Unclustered")
+        unclustered = set(i for i in self.ids if i not in all_ids)
+        psets[None] = PoseSet(self.db, unclustered, name='Unclustered')
 
         return psets
 
@@ -1036,7 +1028,7 @@ class PoseSet:
     def num_fingerprinted(self) -> int:
         """Count the number of fingerprinted poses in this set"""
         return self.db.count_where(
-            table="pose", key=f"pose_id IN {self.str_ids} AND pose_fingerprint = 1"
+            table='pose', key=f'pose_id IN {self.str_ids} AND pose_fingerprint = 1'
         )
 
     @property
@@ -1048,10 +1040,10 @@ class PoseSet:
     def num_subsites(self) -> int:
         """Count the number of subsites that poses in this set come into contact with"""
         (count,) = self.db.select_where(
-            query="COUNT(DISTINCT subsite_tag_ref)",
-            table="subsite_tag",
-            key=f"subsite_tag_pose IN {self.str_ids}",
-            none="quiet",
+            query='COUNT(DISTINCT subsite_tag_ref)',
+            table='subsite_tag',
+            key=f'subsite_tag_pose IN {self.str_ids}',
+            none='quiet',
         )
         if count is None:
             count = 0
@@ -1064,7 +1056,7 @@ class PoseSet:
         from numpy import std
 
         sql = f"""
-        SELECT COUNT(DISTINCT subsite_tag_ref) 
+        SELECT COUNT(DISTINCT subsite_tag_ref)
         FROM {self.db.SQL_SCHEMA_PREFIX}subsite_tag
         WHERE subsite_tag_pose IN {self.str_ids}
         GROUP BY subsite_tag_pose
@@ -1072,7 +1064,7 @@ class PoseSet:
 
         counts = self.db.execute(sql).fetchall()
 
-        counts = [c for c, in counts] + [0 for _ in range(len(self) - len(counts))]
+        counts = [c for (c,) in counts] + [0 for _ in range(len(self) - len(counts))]
 
         return -std(counts)
 
@@ -1081,7 +1073,7 @@ class PoseSet:
         """Return a list of subsite id's of member poses"""
 
         sql = f"""
-        SELECT DISTINCT subsite_tag_ref 
+        SELECT DISTINCT subsite_tag_ref
         FROM {self.db.SQL_SCHEMA_PREFIX}subsite_tag
         WHERE subsite_tag_pose IN {self.str_ids}
         """
@@ -1091,7 +1083,7 @@ class PoseSet:
         if not subsite_ids:
             return set()
 
-        subsite_ids = set([i for i, in subsite_ids])
+        subsite_ids = set([i for (i,) in subsite_ids])
 
         return subsite_ids
 
@@ -1102,13 +1094,13 @@ class PoseSet:
         from numpy import mean
 
         sql = f"""
-        SELECT pose_energy_score 
+        SELECT pose_energy_score
         FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         """
 
         scores = self.db.execute(sql).fetchall()
-        return mean([s for s, in scores if s is not None])
+        return mean([s for (s,) in scores if s is not None])
 
     @property
     def avg_distance_score(self) -> float:
@@ -1117,30 +1109,30 @@ class PoseSet:
         from numpy import mean
 
         sql = f"""
-        SELECT pose_distance_score 
+        SELECT pose_distance_score
         FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         """
 
         scores = self.db.execute(sql).fetchall()
 
-        return mean([s for s, in scores if s is not None])
+        return mean([s for (s,) in scores if s is not None])
 
     @property
-    def derivatives(self) -> "PoseSet":
+    def derivatives(self) -> 'PoseSet':
         """Get the :class:`.PoseSet` of derivatives"""
 
         ids = self.db.select_where(
-            table="inspiration",
-            query="inspiration_derivative",
-            key=f"inspiration_original IN {self.str_ids}",
+            table='inspiration',
+            query='inspiration_derivative',
+            key=f'inspiration_original IN {self.str_ids}',
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
         if not ids:
             return None
-        ids = [i for i, in ids]
-        pset = PoseSet(self.db, ids, name=f"derivatives of {self}")
+        ids = [i for (i,) in ids]
+        pset = PoseSet(self.db, ids, name=f'derivatives of {self}')
         return pset
 
     ### FILTERING
@@ -1149,7 +1141,7 @@ class PoseSet:
         self,
         tag: str,
         inverse: bool = False,
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Get all child poses with a certain tag
 
         :param tag: tag to filter by
@@ -1157,18 +1149,18 @@ class PoseSet:
 
         """
         values = self.db.select_where(
-            query="tag_pose", table="tag", key="name", value=tag, multiple=True
+            query='tag_pose', table='tag', key='name', value=tag, multiple=True
         )
         if inverse:
-            matches = [v for v, in values if v]
+            matches = [v for (v,) in values if v]
             ids = [i for i in self.ids if i not in matches]
         else:
-            ids = [v for v, in values if v and v in self.ids]
+            ids = [v for (v,) in values if v and v in self.ids]
         return PoseSet(self.db, ids)
 
     def get_by_metadata(
         self, key: str, value: str | None = None, debug: bool = False
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Get all child poses with by their metadata. If no value is passed, then simply containing the key in the metadata dictionary is sufficient
 
         :param key: metadata key to search for
@@ -1176,9 +1168,9 @@ class PoseSet:
 
         """
         results = self.db.select_where(
-            query="pose_id, pose_metadata",
-            key=f"pose_id IN {self.str_ids}",
-            table="pose",
+            query='pose_id, pose_metadata',
+            key=f'pose_id IN {self.str_ids}',
+            table='pose',
             multiple=True,
         )
 
@@ -1259,7 +1251,7 @@ class PoseSet:
         expand_tags: bool = False,
         subsites: bool = False,
         # skip_no_mol=True, reference: str = "name", mol: bool = False, **kwargs
-    ) -> "pandas.DataFrame":
+    ) -> 'pandas.DataFrame':
         """Get a DataFrame of the poses in this set.
 
         :param smiles: include SMILES column (Default value = True)
@@ -1284,53 +1276,54 @@ class PoseSet:
         """
 
         from json import loads
-        from rdkit.Chem import Mol
+
         from pandas import DataFrame
+        from rdkit.Chem import Mol
 
         get_alias = alias
 
         if name:
             alias = True
 
-        query = ["pose_id"]
+        query = ['pose_id']
 
         if smiles:
-            query.append("pose_smiles")
+            query.append('pose_smiles')
 
         if inchikey:
-            query.append("pose_inchikey")
+            query.append('pose_inchikey')
 
         if alias:
-            query.append("pose_alias")
+            query.append('pose_alias')
 
         if reference_id or reference_alias:
-            query.append("pose_reference")
+            query.append('pose_reference')
 
         if path:
-            query.append("pose_path")
+            query.append('pose_path')
 
         if compound_id:
-            query.append("pose_compound")
+            query.append('pose_compound')
 
         if target_id:
-            query.append("pose_target")
+            query.append('pose_target')
 
         if mol:
-            query.append("pose_mol")
+            query.append('pose_mol')
 
         if energy_score:
-            query.append("pose_energy_score")
+            query.append('pose_energy_score')
 
         if distance_score:
-            query.append("pose_distance_score")
+            query.append('pose_distance_score')
 
         if inspiration_score:
-            query.append("pose_inspiration_score")
+            query.append('pose_inspiration_score')
 
         if metadata:
-            query.append("pose_metadata")
+            query.append('pose_metadata')
 
-        query = ", ".join(query)
+        query = ', '.join(query)
 
         sql = f"""
         SELECT {query}
@@ -1340,7 +1333,7 @@ class PoseSet:
 
         if debug:
             # print(sql)
-            mrich.debug("querying...")
+            mrich.debug('querying...')
         records = self.db.execute(sql).fetchall()
 
         if debug:
@@ -1350,48 +1343,46 @@ class PoseSet:
 
         data = []
         for row in generator:
-
             row = list(row)
 
             d = dict(id=row.pop(0))
 
             if smiles:
-                d["smiles"] = row.pop(0)
+                d['smiles'] = row.pop(0)
 
             if inchikey:
-                d["inchikey"] = row.pop(0)
+                d['inchikey'] = row.pop(0)
 
             if alias:
-                d["alias"] = row.pop(0)
+                d['alias'] = row.pop(0)
 
             if reference_id or reference_alias:
-                d["reference_id"] = row.pop(0)
+                d['reference_id'] = row.pop(0)
 
             if path:
-                d["path"] = row.pop(0)
+                d['path'] = row.pop(0)
 
             if compound_id:
-                d["compound_id"] = row.pop(0)
+                d['compound_id'] = row.pop(0)
 
             if target_id:
-                d["target_id"] = row.pop(0)
+                d['target_id'] = row.pop(0)
 
             if mol:
                 mol_bytes = row.pop(0)
                 if mol_bytes:
-                    d["mol"] = Mol(mol_bytes)
+                    d['mol'] = Mol(mol_bytes)
 
             if energy_score:
-                d["energy_score"] = row.pop(0)
+                d['energy_score'] = row.pop(0)
 
             if distance_score:
-                d["distance_score"] = row.pop(0)
+                d['distance_score'] = row.pop(0)
 
             if inspiration_score:
-                d["inspiration_score"] = row.pop(0)
+                d['inspiration_score'] = row.pop(0)
 
             if metadata and (meta_str := row.pop(0)):
-
                 meta_dict = loads(meta_str) or {}
 
                 if expand_metadata:
@@ -1399,7 +1390,7 @@ class PoseSet:
                         d[k] = v
 
                 else:
-                    d["metadata"] = meta_dict
+                    d['metadata'] = meta_dict
 
             data.append(d)
 
@@ -1407,7 +1398,7 @@ class PoseSet:
 
         if inspiration_ids or derivative_ids or inspiration_aliases:
             if debug:
-                mrich.debug("adding inspiration column(s)")
+                mrich.debug('adding inspiration column(s)')
 
             tuples = self.db.get_inspiration_tuples()
 
@@ -1416,150 +1407,149 @@ class PoseSet:
                 for inspiration, derivative in tuples:
                     lookup.setdefault(derivative, set())
                     lookup[derivative].add(inspiration)
-                df["inspiration_ids"] = df["id"].apply(lambda x: lookup.get(x, set()))
+                df['inspiration_ids'] = df['id'].apply(lambda x: lookup.get(x, set()))
 
             if derivative_ids:
                 lookup = {}
                 for inspiration, derivative in tuples:
                     lookup.setdefault(inspiration, set())
                     lookup[inspiration].add(derivative)
-                df["derivative_ids"] = df["id"].apply(lambda x: lookup.get(x, set()))
+                df['derivative_ids'] = df['id'].apply(lambda x: lookup.get(x, set()))
 
         if inspiration_aliases:
             inspirations = PoseSet(
-                self.db, set.union(*list(df["inspiration_ids"].values))
+                self.db, set.union(*list(df['inspiration_ids'].values))
             )
             lookup = self.db.get_pose_id_alias_dict(pset=inspirations)
-            df["inspiration_aliases"] = df["inspiration_ids"].apply(
+            df['inspiration_aliases'] = df['inspiration_ids'].apply(
                 lambda x: {lookup[i] for i in x}
             )
             if not inspiration_ids:
-                df = df.drop(columns=["inspiration_ids"])
+                df = df.drop(columns=['inspiration_ids'])
 
         if reference_alias:
             references = PoseSet(
                 self.db,
-                set([int(x) for x in df["reference_id"].values if x is not None]),
+                set([int(x) for x in df['reference_id'].values if x is not None]),
             )
 
             if references:
                 lookup = self.db.get_pose_id_alias_dict(pset=references)
-                df["reference_alias"] = df["reference_id"].apply(lambda x: lookup[x])
+                df['reference_alias'] = df['reference_id'].apply(lambda x: lookup[x])
             else:
-                df["reference_alias"] = None
+                df['reference_alias'] = None
 
             if not reference_id:
-                df = df.drop(columns=["reference_id"])
+                df = df.drop(columns=['reference_id'])
 
         if tags:
             if debug:
-                mrich.debug("adding tag column")
+                mrich.debug('adding tag column')
             lookup = self.db.get_pose_tag_dict()
 
             if not expand_tags:
-                df["tags"] = df["id"].apply(lambda x: lookup.get(x, set()))
+                df['tags'] = df['id'].apply(lambda x: lookup.get(x, set()))
 
             else:
                 for i, row in df.iterrows():
-                    for tag in lookup.get(row["id"], set()):
+                    for tag in lookup.get(row['id'], set()):
                         df.loc[i, tag] = True
 
         if subsites:
             if debug:
-                mrich.debug("adding subsite column")
+                mrich.debug('adding subsite column')
             lookup = self.db.get_pose_subsite_names_dict()
-            df["subsites"] = df["id"].apply(lambda x: lookup.get(x, set()))
+            df['subsites'] = df['id'].apply(lambda x: lookup.get(x, set()))
 
         if name:
-            df["name"] = df.apply(lambda row: row["alias"] or f'P{row["id"]}', axis=1)
+            df['name'] = df.apply(lambda row: row['alias'] or f'P{row["id"]}', axis=1)
             if not get_alias:
-                df = df.drop(columns=["alias"])
+                df = df.drop(columns=['alias'])
 
-        df = df.set_index("id")
+        df = df.set_index('id')
 
         ### Fill missing smiles entries
 
-        smiles_missing = smiles and "smiles" in df.columns and df["smiles"].isna().any()
+        smiles_missing = smiles and 'smiles' in df.columns and df['smiles'].isna().any()
         inchikey_missing = (
-            inchikey and "inchikey" in df.columns and df["inchikey"].isna().any()
+            inchikey and 'inchikey' in df.columns and df['inchikey'].isna().any()
         )
 
         if smiles_missing or inchikey_missing:
+            mrich.error('None in smiles/inchikey column')
 
-            mrich.error("None in smiles/inchikey column")
-
-            empty = df[df["smiles"].isna()]
+            empty = df[df['smiles'].isna()]
             empty_poses = PoseSet(self.db, set(empty.index))
 
             for pose in mrich.track(
-                empty_poses, prefix=f"generating smiles/inchikeys ({len(empty)} poses)"
+                empty_poses, prefix=f'generating smiles/inchikeys ({len(empty)} poses)'
             ):
                 pose.smiles
 
             records = self.db.select_where(
-                table="pose",
-                query="pose_id, pose_smiles, pose_inchikey, pose_mol",
-                key=f"pose_id IN {empty_poses.str_ids}",
+                table='pose',
+                query='pose_id, pose_smiles, pose_inchikey, pose_mol',
+                key=f'pose_id IN {empty_poses.str_ids}',
                 multiple=True,
             )
 
             for pose_id, pose_smiles, pose_inchikey, pose_mol in records:
-                df.loc[pose_id, "smiles"] = pose_smiles
-                df.loc[pose_id, "inchikey"] = pose_inchikey
-                df.loc[pose_id, "mol"] = Mol(pose_mol)
+                df.loc[pose_id, 'smiles'] = pose_smiles
+                df.loc[pose_id, 'inchikey'] = pose_inchikey
+                df.loc[pose_id, 'mol'] = Mol(pose_mol)
 
-            assert not df["smiles"].isna().any()
-            assert not df["inchikey"].isna().any()
+            assert not df['smiles'].isna().any()
+            assert not df['inchikey'].isna().any()
 
         ### Fill missing molecule entries
 
-        if mol and df["mol"].isna().any():
-            empty = df[df["mol"].isna()]
+        if mol and df['mol'].isna().any():
+            empty = df[df['mol'].isna()]
 
             mrich.warning(len(empty), "rows have empty 'mol'")
             empty_poses = PoseSet(self.db, set(empty.index))
 
-            for pose in mrich.track(empty_poses, prefix="generating Mols"):
+            for pose in mrich.track(empty_poses, prefix='generating Mols'):
                 pose.mol
 
             records = self.db.select_where(
-                table="pose",
-                query="pose_id, pose_mol",
-                key=f"pose_id IN {empty_poses.str_ids}",
+                table='pose',
+                query='pose_id, pose_mol',
+                key=f'pose_id IN {empty_poses.str_ids}',
                 multiple=True,
             )
 
             for pose_id, pose_mol in records:
-                df.loc[pose_id, "mol"] = Mol(pose_mol)
+                df.loc[pose_id, 'mol'] = Mol(pose_mol)
 
-            assert not len(df[df["mol"].isna()])
+            assert not len(df[df['mol'].isna()])
 
         return df
 
     def get_by_reference(
         self,
         ref_id: int,
-    ) -> "PoseSet | None":
+    ) -> 'PoseSet | None':
         """Get poses with a certain reference id
 
         :param ref_id: reference :class:`.Pose` ID
 
         """
         values = self.db.select_where(
-            table="pose",
-            query="pose_id",
-            key=f"pose_reference={ref_id} AND pose_id in {self.str_ids}",
+            table='pose',
+            query='pose_id',
+            key=f'pose_reference={ref_id} AND pose_id in {self.str_ids}',
             multiple=True,
         )
         if not values:
             return None
-        return PoseSet(self.db, [v for v, in values])
+        return PoseSet(self.db, [v for (v,) in values])
 
     def get_by_compound(
         self,
         *,
-        compound: "int | Compound | CompoundSet",
-    ) -> "PoseSet | None":
+        compound: 'int | Compound | CompoundSet',
+    ) -> 'PoseSet | None':
         """Select a subset of this :class:`.PoseSet` by the associated :class:`.Compound`.
 
         :param compound: :class:`.Compound` object or ID
@@ -1571,36 +1561,35 @@ class PoseSet:
 
         if isinstance(compound, CompoundSet):
             values = self.db.select_where(
-                query="pose_id",
-                table="pose",
-                key=f"pose_compound IN {compound.str_ids} AND pose_id in {self.str_ids}",
+                query='pose_id',
+                table='pose',
+                key=f'pose_compound IN {compound.str_ids} AND pose_id in {self.str_ids}',
                 multiple=True,
-                none="quiet",
+                none='quiet',
             )
 
         else:
-
             if isinstance(compound, Compound):
                 compound = compound.id
 
             values = self.db.select_where(
-                query="pose_id",
-                table="pose",
-                key=f"pose_compound={compound} AND pose_id in {self.str_ids}",
+                query='pose_id',
+                table='pose',
+                key=f'pose_compound={compound} AND pose_id in {self.str_ids}',
                 multiple=True,
-                none="quiet",
+                none='quiet',
             )
 
         if not values:
             return None
-        ids = [v for v, in values if v]
-        return PoseSet(self.db, [v for v, in values])
+        ids = [v for (v,) in values if v]
+        return PoseSet(self.db, [v for (v,) in values])
 
     def get_by_target(
         self,
         *,
         id: int,
-    ) -> "PoseSet | None":
+    ) -> 'PoseSet | None':
         """Select a subset of this :class:`.PoseSet` by the associated :class:`.Target`.
 
         :param id: :class:`.Target` ID
@@ -1609,13 +1598,13 @@ class PoseSet:
         """
         assert isinstance(id, int)
         values = self.db.select_where(
-            query="pose_id",
-            table="pose",
-            key=f"pose_target is {id} AND pose_id in {self.str_ids}",
+            query='pose_id',
+            table='pose',
+            key=f'pose_target is {id} AND pose_id in {self.str_ids}',
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
-        ids = [v for v, in values if v]
+        ids = [v for (v,) in values if v]
         if not ids:
             return None
         return PoseSet(self.db, ids)
@@ -1624,7 +1613,7 @@ class PoseSet:
         self,
         *,
         id: int,
-    ) -> "PoseSet | None":
+    ) -> 'PoseSet | None':
         """Select a subset of this :class:`.PoseSet` by the associated :class:`.Subsite`.
 
         :param id: :class:`.Subsite` ID
@@ -1633,18 +1622,18 @@ class PoseSet:
         """
         assert isinstance(id, int)
         values = self.db.select_where(
-            query="subsite_tag_pose",
-            table="subsite_tag",
-            key=f"subsite_tag_ref is {id} AND subsite_tag_pose in {self.str_ids}",
+            query='subsite_tag_pose',
+            table='subsite_tag',
+            key=f'subsite_tag_ref is {id} AND subsite_tag_pose in {self.str_ids}',
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
-        ids = [v for v, in values if v]
+        ids = [v for (v,) in values if v]
         if not ids:
             return None
 
         if self.name:
-            name = f"{self.name} & subsite={id}"
+            name = f'{self.name} & subsite={id}'
         else:
             name = None
 
@@ -1654,7 +1643,7 @@ class PoseSet:
         """Choose the best placed pose (best distance_score) grouped by compound"""
 
         sql = f"""
-        SELECT pose_id, MIN(pose_distance_score) 
+        SELECT pose_id, MIN(pose_distance_score)
         FROM {self.db.SQL_SCHEMA_PREFIX}pose
         WHERE pose_id IN {self.str_ids}
         GROUP BY pose_compound
@@ -1672,7 +1661,7 @@ class PoseSet:
         *,
         key: str = None,
         value: str = None,
-        operator="=",
+        operator='=',
         inverse: bool = False,
     ):
         """Filter this :class:`.PoseSet` by selecting members where ``function(pose)`` is truthy or pass a key, value, and optional operator to search by database values
@@ -1686,7 +1675,6 @@ class PoseSet:
         """
 
         if function:
-
             ids = set()
             for pose in self:
                 value = function(pose)
@@ -1706,7 +1694,7 @@ class PoseSet:
 
         cursor = self.db.execute(sql)
 
-        ids = [i for i, in cursor]
+        ids = [i for (i,) in cursor]
 
         return PoseSet(self.db, ids)
 
@@ -1716,19 +1704,19 @@ class PoseSet:
     def reference(self):
         """Bulk set the references for poses in this set"""
         raise NotImplementedError(
-            "This attribute only allows setting, ``PoseSet.reference = ...``"
+            'This attribute only allows setting, ``PoseSet.reference = ...``'
         )
 
     @reference.setter
     def reference(self, r) -> None:
         """Bulk set the references for poses in this set"""
         if not isinstance(r, int):
-            assert r._table == "pose"
+            assert r._table == 'pose'
             r = r.id
 
         for i in self.indices:
             self.db.update(
-                table="pose", id=i, key="pose_reference", value=r, commit=False
+                table='pose', id=i, key='pose_reference', value=r, commit=False
             )
 
         self.db.commit()
@@ -1760,13 +1748,13 @@ class PoseSet:
 
         """
         for id in self.indices:
-            metadata = self.db.get_metadata(table="pose", id=id)
+            metadata = self.db.get_metadata(table='pose', id=id)
             try:
                 metadata.append(key, value)
             except AttributeError:
-                mrich.error(f"Could not append to metadata {key=}. Not a list?")
+                mrich.error(f'Could not append to metadata {key=}. Not a list?')
 
-    def set_subsites_from_metadata_field(self, field="CanonSites alias") -> None:
+    def set_subsites_from_metadata_field(self, field='CanonSites alias') -> None:
         """Create and assign subsite entries from a metadata field
 
         :param field: the metadata field to use
@@ -1779,8 +1767,8 @@ class PoseSet:
         self,
         alpha: float = 0.95,
         beta: float = 0.05,
-        score_type: str = "combo",
-    ) -> "pd.DataFrame":
+        score_type: str = 'combo',
+    ) -> 'pd.DataFrame':
         """Set inspiration_score values using MoCASSIn.calculate_mocassin_tversky
 
         :param alpha: Tversky alpha parameter
@@ -1801,37 +1789,36 @@ class PoseSet:
 
         inspirations = {p.id: p for p in self.inspirations}
 
-        df["inspiration_mols"] = df["inspiration_ids"].apply(
+        df['inspiration_mols'] = df['inspiration_ids'].apply(
             lambda x: [inspirations[i].mol for i in x]
         )
 
         n = len(df)
 
         for j, (i, row) in mrich.track(
-            enumerate(df.iterrows()), prefix="MoCASSIn", total=n
+            enumerate(df.iterrows()), prefix='MoCASSIn', total=n
         ):
-
-            mrich.set_progress_field("j", j)
-            mrich.set_progress_field("n", n)
+            mrich.set_progress_field('j', j)
+            mrich.set_progress_field('n', n)
 
             try:
                 combo, shape, colour = calculate_mocassin_tversky(
-                    row["inspiration_mols"],
-                    row["mol"],
+                    row['inspiration_mols'],
+                    row['mol'],
                     alpha=0.95,
                     beta=0.05,
                 )
-                df.loc[i, f"mocassin_combo({alpha},{beta})"] = combo
-                df.loc[i, f"mocassin_shape({alpha},{beta})"] = shape
-                df.loc[i, f"mocassin_colour({alpha},{beta})"] = colour
+                df.loc[i, f'mocassin_combo({alpha},{beta})'] = combo
+                df.loc[i, f'mocassin_shape({alpha},{beta})'] = shape
+                df.loc[i, f'mocassin_colour({alpha},{beta})'] = colour
             except Exception as e:
                 mrich.error(e)
 
-        tuples = df[f"mocassin_{score_type}({alpha},{beta})"].items()
+        tuples = df[f'mocassin_{score_type}({alpha},{beta})'].items()
 
         sql = f"""UPDATE {self.db.SQL_SCHEMA_PREFIX}pose SET pose_inspiration_score = {self.db.SQL_STRING_PLACEHOLDER} WHERE pose_id = {self.db.SQL_STRING_PLACEHOLDER}"""
 
-        mrich.debug("Updating pose_inspiration_score values")
+        mrich.debug('Updating pose_inspiration_score values')
         self.db.executemany(sql, [(b, a) for a, b in tuples])
         self.db.commit()
 
@@ -1839,7 +1826,7 @@ class PoseSet:
 
     ### SPLITTING
 
-    def split_by_reference(self) -> "dict[int,PoseSet]":
+    def split_by_reference(self) -> 'dict[int,PoseSet]':
         """Split this :class:`.PoseSet` into subsets grouped by reference ID
 
         :returns: a dictionary with reference :class:`.Pose` IDs as keys and :class:`.PoseSet` subsets as values
@@ -1853,7 +1840,7 @@ class PoseSet:
     def split_by_inspirations(
         self,
         single_set: bool = False,
-    ) -> "dict[PoseSet,PoseSet] | PoseSet":
+    ) -> 'dict[PoseSet,PoseSet] | PoseSet':
         """Split this :class:`.PoseSet` into subsets grouped by inspirations
 
         :param single_set: Return a single :class:`.PoseSet` with members sorted by inspirations (Default value = False)
@@ -1870,7 +1857,7 @@ class PoseSet:
             sets.setdefault(key, set())
             sets[key].add(pose_id)
 
-        mrich.var("#unique inspiration combinations", len(sets))
+        mrich.var('#unique inspiration combinations', len(sets))
 
         if single_set:
             return PoseSet(self.db, sum([s.ids for s in sets.values()], []), sort=False)
@@ -1885,7 +1872,7 @@ class PoseSet:
     def write_sdf(
         self,
         out_path: str,
-        name_col: str = "alias",
+        name_col: str = 'alias',
         inspiration_ids: bool = False,
         inspiration_aliases: bool = False,
         **kwargs,
@@ -1899,23 +1886,23 @@ class PoseSet:
         :param fragalysis_inspirations: create inspirations column "ref_mols"
         """
 
-        from pathlib import Path
         import json
+        from pathlib import Path
 
         df = self.get_df(
             mol=True,
             inspiration_ids=inspiration_ids,
             inspiration_aliases=inspiration_aliases,
-            name=name_col == "name",
+            name=name_col == 'name',
             **kwargs,
         )
 
-        if name_col not in ["name", "alias", "inchikey", "id"]:
+        if name_col not in ['name', 'alias', 'inchikey', 'id']:
             # try getting name from metadata
             records = self.db.select_where(
-                table="pose",
-                query="pose_id, pose_metadata",
-                key=f"pose_id IN {self.str_ids}",
+                table='pose',
+                query='pose_id, pose_metadata',
+                key=f'pose_id IN {self.str_ids}',
                 multiple=True,
             )
 
@@ -1930,29 +1917,29 @@ class PoseSet:
 
             values = []
             for i, row in df.iterrows():
-                values.append(longcode_lookup[row["id"]])
+                values.append(longcode_lookup[row['id']])
 
             df[name_col] = values
 
-        df.rename(inplace=True, columns={name_col: "_Name", "mol": "ROMol"})
+        df.rename(inplace=True, columns={name_col: '_Name', 'mol': 'ROMol'})
 
         mrich.writing(out_path)
 
         from rdkit.Chem import PandasTools
 
-        PandasTools.WriteSDF(df, out_path, "ROMol", "_Name", list(df.columns))
+        PandasTools.WriteSDF(df, out_path, 'ROMol', '_Name', list(df.columns))
 
         # keep record of export
         value = str(Path(out_path).resolve())
-        self.db.remove_metadata_list_item(table="pose", key="exports", value=value)
-        self.append_to_metadata(key="exports", value=value)
+        self.db.remove_metadata_list_item(table='pose', key='exports', value=value)
+        self.append_to_metadata(key='exports', value=value)
 
     def to_fragalysis(
         self,
         out_path: str,
         *,
         method: str,
-        ref_url: str = "https://hippo.winokan.com",
+        ref_url: str = 'https://hippo.winokan.com',
         submitter_name: str,
         submitter_email: str,
         submitter_institution: str,
@@ -1992,61 +1979,61 @@ class PoseSet:
 
         """
 
-        from .fragalysis import generate_header
         from pathlib import Path
-        from rdkit.Chem import SDWriter, PandasTools
 
-        assert out_path.endswith(".sdf")
+        from rdkit.Chem import PandasTools, SDWriter
 
-        _name_col = "_Name"
-        mol_col = "ROMol"
+        from .fragalysis import generate_header
+
+        assert out_path.endswith('.sdf')
+
+        _name_col = '_Name'
+        mol_col = 'ROMol'
 
         # make sure references are defined:
 
-        mrich.debug(len(self), "poses in set")
+        mrich.debug(len(self), 'poses in set')
         poses = None
 
         if skip_no_reference:
-
             values = self.db.select_where(
-                table="pose",
-                query="DISTINCT pose_id",
-                key=f"pose_reference IS NOT NULL and pose_id in {self.str_ids}",
+                table='pose',
+                query='DISTINCT pose_id',
+                key=f'pose_reference IS NOT NULL and pose_id in {self.str_ids}',
                 multiple=True,
-                none="error",
+                none='error',
             )
 
             if not values:
                 return
 
-            poses = PoseSet(self.db, [i for i, in values])
+            poses = PoseSet(self.db, [i for (i,) in values])
 
-            mrich.debug(len(poses), "remaining after skipping null reference")
+            mrich.debug(len(poses), 'remaining after skipping null reference')
 
         if skip_no_inspirations:
-
             if not poses:
                 poses = self
 
             values = self.db.select_where(
-                table="inspiration",
-                query="DISTINCT inspiration_derivative",
-                key=f"inspiration_derivative IN {poses.str_ids}",
+                table='inspiration',
+                query='DISTINCT inspiration_derivative',
+                key=f'inspiration_derivative IN {poses.str_ids}',
                 multiple=True,
-                none="error",
+                none='error',
             )
 
             if not values:
                 return
 
-            poses = PoseSet(self.db, [i for i, in values])
+            poses = PoseSet(self.db, [i for (i,) in values])
 
-            mrich.debug(len(poses), "remaining after skipping null inspirations")
+            mrich.debug(len(poses), 'remaining after skipping null inspirations')
 
         if not poses:
             poses = PoseSet(self.db, self.ids)
 
-        mrich.var("#poses", len(poses))
+        mrich.var('#poses', len(poses))
 
         # get the dataframe of poses
 
@@ -2080,12 +2067,12 @@ class PoseSet:
         inspiration_strs = []
         for i, row in pose_df.iterrows():
             strs = []
-            for i in row["inspiration_ids"]:
+            for i in row['inspiration_ids']:
                 alias = lookup.get(i)
                 if not alias:
                     continue
                 strs.append(alias)
-            inspiration_strs.append(",".join(strs))
+            inspiration_strs.append(','.join(strs))
 
         # comma separate subsites
         if subsites:
@@ -2093,63 +2080,63 @@ class PoseSet:
             def fix_subsites(subsite_list: list[str]):
                 """Fix subsites"""
                 if not subsite_list:
-                    return "None"
-                return ",".join(subsite_list)
+                    return 'None'
+                return ','.join(subsite_list)
 
-            pose_df["subsites"] = pose_df["subsites"].apply(fix_subsites)
+            pose_df['subsites'] = pose_df['subsites'].apply(fix_subsites)
 
         if tags:
-            pose_df["tags"] = pose_df["tags"].apply(lambda x: ",".join(x))
+            pose_df['tags'] = pose_df['tags'].apply(lambda x: ','.join(x))
 
-        pose_df["ref_mols"] = inspiration_strs
-        pose_df["ref_pdb"] = pose_df["reference_id"].apply(lambda x: lookup[x])
+        pose_df['ref_mols'] = inspiration_strs
+        pose_df['ref_pdb'] = pose_df['reference_id'].apply(lambda x: lookup[x])
 
         # add compound identifier column (inchikey?)
 
-        drops = ["inspiration_ids", "reference_id"]
+        drops = ['inspiration_ids', 'reference_id']
 
         # if ingredients:
         #     drops.pop(drops.index("compound"))
 
         if skip_no_reference:
             prev = len(pose_df)
-            pose_df = pose_df[pose_df["reference_id"].notna()]
+            pose_df = pose_df[pose_df['reference_id'].notna()]
             if len(pose_df) < prev:
-                mrich.warning(f"Skipping {prev - len(pose_df)} Poses with no reference")
+                mrich.warning(f'Skipping {prev - len(pose_df)} Poses with no reference')
 
-        pose_df = pose_df.drop(columns=drops, errors="ignore")
+        pose_df = pose_df.drop(columns=drops, errors='ignore')
 
-        pose_df[_name_col] = pose_df["name"]
+        pose_df[_name_col] = pose_df['name']
 
         pose_df.rename(
             inplace=True,
             columns={
-                "id": "HIPPO Pose ID",
-                "compound_id": "HIPPO Compound ID",
-                "mol": mol_col,
+                'id': 'HIPPO Pose ID',
+                'compound_id': 'HIPPO Compound ID',
+                'mol': mol_col,
                 # "smiles": "original SMILES",
                 # "compound_id": "compound inchikey",
             },
         )
 
         extras = {
-            "HIPPO Pose ID": "HIPPO Pose ID",
-            "HIPPO Compound ID": "HIPPO Compound ID",
-            "smiles": "smiles",
-            "ref_pdb": "protein reference",
-            "ref_mols": "fragment inspirations",
-            "alias": "alias",
+            'HIPPO Pose ID': 'HIPPO Pose ID',
+            'HIPPO Compound ID': 'HIPPO Compound ID',
+            'smiles': 'smiles',
+            'ref_pdb': 'protein reference',
+            'ref_mols': 'fragment inspirations',
+            'alias': 'alias',
             # "compound inchikey": "compound inchikey",
-            "distance_score": "distance_score",
-            "energy_score": "energy_score",
-            "inspiration_score": "inspiration_score",
+            'distance_score': 'distance_score',
+            'energy_score': 'energy_score',
+            'inspiration_score': 'inspiration_score',
         }
 
         if subsites:
-            extras["subsites"] = "subsites"
+            extras['subsites'] = 'subsites'
 
         if tags:
-            extras["tags"] = "tags"
+            extras['tags'] = 'tags'
 
         if extra_cols:
             for key, value in extra_cols.items():
@@ -2198,28 +2185,25 @@ class PoseSet:
         #     extras["Amount (mg)"] = "Quoted amount"
 
         out_path = Path(out_path).resolve()
-        mrich.var("out_path", out_path)
+        mrich.var('out_path', out_path)
 
         if generate_pdbs:
-
             from zipfile import ZipFile
 
             # output subdirectory
-            out_key = Path(out_path).name.removesuffix(".sdf")
+            out_key = Path(out_path).name.removesuffix('.sdf')
             pdb_dir = Path(out_path).parent / Path(out_key)
             pdb_dir.mkdir(exist_ok=True)
-            zip_path = Path(out_path).parent / f"{out_key}_pdbs.zip"
+            zip_path = Path(out_path).parent / f'{out_key}_pdbs.zip'
 
             # create the zip archive
-            with ZipFile(str(zip_path.resolve()), "w") as z:
-
+            with ZipFile(str(zip_path.resolve()), 'w') as z:
                 # loop over poses
-                for (i, row), pose in zip(pose_df.iterrows(), poses):
-
+                for (i, row), pose in zip(pose_df.iterrows(), poses, strict=False):
                     # filenames
-                    pdb_name = f"{out_key}_{row._Name}.pdb"
+                    pdb_name = f'{out_key}_{row._Name}.pdb'
                     pdb_path = pdb_dir / pdb_name
-                    pose_df.loc[i, "ref_pdb"] = pdb_name
+                    pose_df.loc[i, 'ref_pdb'] = pdb_name
 
                     # generate the PL-complex
                     sys = pose.complex_system
@@ -2229,35 +2213,34 @@ class PoseSet:
                     sys.write(pdb_path, verbosity=0)
                     z.write(pdb_path)
 
-            mrich.writing(f"{out_key}_pdbs.zip")
+            mrich.writing(f'{out_key}_pdbs.zip')
 
         if copy_reference_pdbs:
-
-            from zipfile import ZipFile
             import shutil
+            from zipfile import ZipFile
 
             # output subdirectory
-            out_key = Path(out_path).name.removesuffix(".sdf")
+            out_key = Path(out_path).name.removesuffix('.sdf')
             pdb_dir = Path(out_path).parent / Path(out_key)
             pdb_dir.mkdir(exist_ok=True)
-            zip_path = Path(out_path).parent / f"{out_key}_refs.zip"
+            zip_path = Path(out_path).parent / f'{out_key}_refs.zip'
 
             references = self.references
             lookup = self.db.get_pose_alias_path_dict(references)
 
             zips = set()
-            for ref_alias in pose_df["ref_pdb"].values:
+            for ref_alias in pose_df['ref_pdb'].values:
                 source_path = Path(lookup[ref_alias])
 
                 apo_path = source_path.parent / source_path.name.replace(
-                    "_hippo.pdb", ".pdb"
-                ).replace(".pdb", "_apo-desolv.pdb")
+                    '_hippo.pdb', '.pdb'
+                ).replace('.pdb', '_apo-desolv.pdb')
 
                 if not apo_path.exists():
                     sys = mp.parse(source_path).protein_system
                     sys.write(apo_path, verbosity=0)
 
-                target_path = pdb_dir / f"{ref_alias}.pdb"
+                target_path = pdb_dir / f'{ref_alias}.pdb'
 
                 if not target_path.exists():
                     mrich.writing(target_path)
@@ -2266,11 +2249,11 @@ class PoseSet:
                 zips.add(target_path)
 
             # create the zip archive
-            with ZipFile(str(zip_path.resolve()), "w") as z:
+            with ZipFile(str(zip_path.resolve()), 'w') as z:
                 for path in zips:
                     z.write(path, arcname=path.name)
 
-            mrich.writing(f"{out_key}_refs.zip")
+            mrich.writing(f'{out_key}_refs.zip')
 
         # create the header molecule
 
@@ -2314,7 +2297,7 @@ class PoseSet:
 
         mrich.writing(out_path)
 
-        with open(out_path, "w") as sdfh:
+        with open(out_path, 'w') as sdfh:
             with SDWriter(sdfh) as w:
                 w.write(header)
             PandasTools.WriteSDF(
@@ -2323,8 +2306,8 @@ class PoseSet:
 
         # keep record of export
         value = str(Path(out_path).resolve())
-        self.db.remove_metadata_list_item(table="pose", key="exports", value=value)
-        self.append_to_metadata(key="exports", value=value)
+        self.db.remove_metadata_list_item(table='pose', key='exports', value=value)
+        self.append_to_metadata(key='exports', value=value)
 
         return pose_df
 
@@ -2337,73 +2320,69 @@ class PoseSet:
 
         commands = []
 
-        prefix = prefix or ""
+        prefix = prefix or ''
         if prefix:
-            prefix = f"{prefix}_"
+            prefix = f'{prefix}_'
 
         from pathlib import Path
 
         for i, (ref_id, poses) in enumerate(self.split_by_reference().items()):
-
             ref_pose = self.db.get_pose(id=ref_id)
             ref_name = ref_pose.name or ref_id
 
             # create the subdirectory
-            ref_dir = Path(f"{prefix}ref_{ref_name}")
+            ref_dir = Path(f'{prefix}ref_{ref_name}')
             mrich.writing(ref_dir)
             ref_dir.mkdir(parents=True, exist_ok=True)
 
             # write the reference protein
-            ref_pdb = ref_dir / f"ref_{ref_name}.pdb"
+            ref_pdb = ref_dir / f'ref_{ref_name}.pdb'
             ref_pose.protein_system.write(ref_pdb, verbosity=0)
 
             # color the reference:
-            commands.append(f"load {ref_pdb.resolve()}")
-            commands.append("hide")
-            commands.append("show lines")
-            commands.append("show surface")
-            commands.append("util.cbaw")
-            commands.append("set surface_color, white")
-            commands.append("set transparency,  0.4")
+            commands.append(f'load {ref_pdb.resolve()}')
+            commands.append('hide')
+            commands.append('show lines')
+            commands.append('show surface')
+            commands.append('util.cbaw')
+            commands.append('set surface_color, white')
+            commands.append('set transparency,  0.4')
 
             for j, (insp_ids, poses) in enumerate(
                 poses.split_by_inspirations().items()
             ):
-
                 inspirations = PoseSet(self.db, insp_ids)
-                insp_names = "-".join(inspirations.names)
+                insp_names = '-'.join(inspirations.names)
 
                 # create the subdirectory
                 insp_dir = ref_dir / insp_names
                 insp_dir.mkdir(parents=True, exist_ok=True)
 
                 # write the inspirations
-                insp_sdf = insp_dir / f"{insp_names}_frags.sdf"
+                insp_sdf = insp_dir / f'{insp_names}_frags.sdf'
                 inspirations.write_sdf(insp_sdf)
 
-                commands.append(f"load {insp_sdf.resolve()}")
+                commands.append(f'load {insp_sdf.resolve()}')
                 commands.append(
-                    f"set all_states, on, {insp_sdf.name.removesuffix('.sdf')}"
+                    f'set all_states, on, {insp_sdf.name.removesuffix(".sdf")}'
                 )
-                commands.append(
-                    f"util.rainbow \"{insp_sdf.name.removesuffix('.sdf')}\""
-                )
+                commands.append(f'util.rainbow "{insp_sdf.name.removesuffix(".sdf")}"')
 
                 # write the poses
-                pose_sdf = insp_dir / f"{insp_names}_derivatives.sdf"
+                pose_sdf = insp_dir / f'{insp_names}_derivatives.sdf'
                 poses.write_sdf(pose_sdf)
 
-                commands.append(f"load {pose_sdf.resolve()}")
+                commands.append(f'load {pose_sdf.resolve()}')
                 commands.append(f'util.cbaw "{pose_sdf.name.removesuffix(".sdf")}"')
 
                 if j > 0:
-                    commands.append(f"disable \"{insp_sdf.name.removesuffix('.sdf')}\"")
+                    commands.append(f'disable "{insp_sdf.name.removesuffix(".sdf")}"')
                     commands.append(f'disable "{pose_sdf.name.removesuffix(".sdf")}"')
 
-        return "; ".join(commands)
+        return '; '.join(commands)
 
     def to_knitwork(
-        self, out_path: str, path_root: str = ".", aligned_files_dir: str | None = None
+        self, out_path: str, path_root: str = '.', aligned_files_dir: str | None = None
     ) -> None:
         """Knitwork takes a CSV input with:
 
@@ -2422,31 +2401,28 @@ class PoseSet:
 
         out_path = Path(out_path).resolve()
         path_root = Path(path_root).resolve()
-        mrich.var("out_path", out_path)
-        mrich.var("path_root", path_root)
-        mrich.var("aligned_files_dir", aligned_files_dir)
+        mrich.var('out_path', out_path)
+        mrich.var('path_root', path_root)
+        mrich.var('aligned_files_dir', aligned_files_dir)
 
-        assert out_path.name.endswith(".csv")
+        assert out_path.name.endswith('.csv')
 
-        with open(out_path, "wt") as f:
-
+        with open(out_path, 'w') as f:
             mrich.writing(out_path)
 
             for pose in self:
-
                 assert pose.alias
-                assert "hits" in pose.tags
+                assert 'hits' in pose.tags
 
                 if aligned_files_dir:
-
                     mol = str(pose.mol_path)
                     pdb = str(pose.apo_path)
 
-                    assert "aligned_files" in mol
-                    assert "aligned_files" in pdb
+                    assert 'aligned_files' in mol
+                    assert 'aligned_files' in pdb
 
-                    mol = mol.split("aligned_files/")[-1]
-                    pdb = pdb.split("aligned_files/")[-1]
+                    mol = mol.split('aligned_files/')[-1]
+                    pdb = pdb.split('aligned_files/')[-1]
 
                     aligned_files_dir = Path(aligned_files_dir)
 
@@ -2459,92 +2435,91 @@ class PoseSet:
 
                 data = [pose.alias, pose.compound.smiles, mol, pdb]
 
-                f.write(",".join(data))
-                f.write("\n")
+                f.write(','.join(data))
+                f.write('\n')
 
     def to_syndirella(
-        self, out_key: "str | Path", separate: bool = False
-    ) -> "DataFrame":
+        self, out_key: 'str | Path', separate: bool = False
+    ) -> 'DataFrame':
         """Create syndirella inputs"""
 
         from pathlib import Path
 
-        out_key = Path(".") / out_key
+        out_key = Path('.') / out_key
 
         out_dir = out_key.parent
         out_key = out_key.name
 
-        mrich.var("out_key", out_key)
-        mrich.var("#poses", len(self))
+        mrich.var('out_key', out_key)
+        mrich.var('#poses', len(self))
 
         out_dir.mkdir(parents=True, exist_ok=True)
 
         import shutil
-        from pandas import DataFrame
 
         ### Prepare Syndirella CSV data
 
         df = self.get_df(
             inchikey=False, alias=False, reference_alias=True, inspiration_aliases=True
         )
-        df = df.rename(columns={"reference_alias": "template"})
+        df = df.rename(columns={'reference_alias': 'template'})
 
         # compound_set
 
         if separate:
-            df["compound_set"] = df.apply(
-                lambda row: f"{out_key}_{row['name']}", axis=1
+            df['compound_set'] = df.apply(
+                lambda row: f'{out_key}_{row["name"]}', axis=1
             )
 
         else:
-            df["compound_set"] = out_key
+            df['compound_set'] = out_key
 
         # template
 
-        null_template = df["template"].isnull()
+        null_template = df['template'].isnull()
         if null_template.any():
             mrich.warning(
-                len(null_template), "poses have no reference. Setting to self"
+                len(null_template), 'poses have no reference. Setting to self'
             )
-            mrich.print(df.loc[null_template, "name"].values)
-            df["template"] = df["template"].fillna(df["name"])
+            mrich.print(df.loc[null_template, 'name'].values)
+            df['template'] = df['template'].fillna(df['name'])
 
         # inspirations
 
-        null_inspirations = df["inspiration_aliases"].apply(lambda x: not x)
+        null_inspirations = df['inspiration_aliases'].apply(lambda x: not x)
 
         if null_inspirations.any():
             mrich.warning(
-                len(null_inspirations), "poses have no inspirations. Setting to self"
+                len(null_inspirations), 'poses have no inspirations. Setting to self'
             )
-            mrich.print(df.loc[null_inspirations, "name"].values)
-            df.loc[null_inspirations, "inspiration_aliases"] = df.loc[
+            mrich.print(df.loc[null_inspirations, 'name'].values)
+            df.loc[null_inspirations, 'inspiration_aliases'] = df.loc[
                 null_inspirations
-            ].apply(lambda row: set([row["name"]]), axis=1)
+            ].apply(lambda row: set([row['name']]), axis=1)
 
         for i, row in df.iterrows():
-            for j, inspiration in enumerate(row["inspiration_aliases"]):
-                df.loc[i, f"hit{j+1}"] = inspiration
+            for j, inspiration in enumerate(row['inspiration_aliases']):
+                df.loc[i, f'hit{j + 1}'] = inspiration
 
-        all_inspirations = set.union(*list(df["inspiration_aliases"].values))
+        all_inspirations = set.union(*list(df['inspiration_aliases'].values))
 
-        df = df.drop(columns=["name", "inspiration_aliases"])
+        df = df.drop(columns=['name', 'inspiration_aliases'])
 
         ### Copy Templates
 
-        template_dir = out_dir / "templates"
+        template_dir = out_dir / 'templates'
         mrich.writing(template_dir)
         template_dir.mkdir(parents=True, exist_ok=True)
 
-        templates = df["template"].unique()
+        templates = df['template'].unique()
 
         records = self.db.select_id_where(
-            table="pose",
-            key=f"pose_alias IN {str(tuple(templates)).replace(',)', ')')}",
+            table='pose',
+            key=f'pose_alias IN {str(tuple(templates)).replace(",)", ")")}',
             multiple=True,
         )
 
-        templates = PoseSet(self.db, [i for i, in records])
+        templates = PoseSet(self.db, [i for (i,) in records])
 
         for ref in templates:
             template = template_dir / ref.apo_path.name
@@ -2555,34 +2530,34 @@ class PoseSet:
         ### Inspirations
 
         records = self.db.select_id_where(
-            table="pose",
-            key=f"pose_alias IN {str(tuple(all_inspirations)).replace(',)', ')')}",
+            table='pose',
+            key=f'pose_alias IN {str(tuple(all_inspirations)).replace(",)", ")")}',
             multiple=True,
         )
 
-        all_inspirations = PoseSet(self.db, [i for i, in records])
+        all_inspirations = PoseSet(self.db, [i for (i,) in records])
 
         ### Write CSV
 
         if separate:
             for i, row in df.iterrows():
-                csv_name = out_dir / f"{row['compound_set']}_syndirella_input.csv"
+                csv_name = out_dir / f'{row["compound_set"]}_syndirella_input.csv'
                 mrich.writing(csv_name)
                 row.to_frame().T.to_csv(csv_name, index=False)
 
         else:
-            csv_name = out_dir / f"{out_key}_syndirella_input.csv"
+            csv_name = out_dir / f'{out_key}_syndirella_input.csv'
             mrich.writing(csv_name)
             df.to_csv(csv_name, index=False)
 
         ### Write Inspirations
 
-        sdf_name = out_dir / f"{out_key}_syndirella_inspiration_hits.sdf"
+        sdf_name = out_dir / f'{out_key}_syndirella_inspiration_hits.sdf'
         all_inspirations.write_sdf(
             sdf_name,
             tags=False,
             metadata=False,
-            name_col="name",
+            name_col='name',
         )
 
         return df
@@ -2604,18 +2579,18 @@ class PoseSet:
 
         """
 
+        from pprint import pprint
+
+        from IPython.display import display
         from ipywidgets import (
-            interactive,
             BoundedIntText,
             Checkbox,
-            interactive_output,
-            HBox,
             GridBox,
             Layout,
             VBox,
+            interactive,
+            interactive_output,
         )
-        from IPython.display import display
-        from pprint import pprint
 
         if method:
 
@@ -2635,7 +2610,7 @@ class PoseSet:
                     min=0,
                     max=len(self) - 1,
                     step=1,
-                    description="Pose:",
+                    description='Pose:',
                     disabled=False,
                 ),
             )
@@ -2656,38 +2631,37 @@ class PoseSet:
                     min=0,
                     max=len(self) - 1,
                     step=1,
-                    description="Pose:",
+                    description='Pose:',
                     disabled=False,
                 ),
             )
 
         else:
-
             a = BoundedIntText(
                 value=0,
                 min=0,
                 max=len(self) - 1,
                 step=1,
-                description=f"Pose (/{len(self)}):",
+                description=f'Pose (/{len(self)}):',
                 disabled=False,
             )
 
-            b = Checkbox(description="Name", value=True)
-            c = Checkbox(description="Summary", value=False)
-            h = Checkbox(description="Tags", value=False)
-            i = Checkbox(description="Subsites", value=False)
-            d = Checkbox(description="2D (Comp.)", value=False)
-            e = Checkbox(description="2D (Pose)", value=False)
-            f = Checkbox(description="3D", value=True)
-            g = Checkbox(description="Metadata", value=False)
+            b = Checkbox(description='Name', value=True)
+            c = Checkbox(description='Summary', value=False)
+            h = Checkbox(description='Tags', value=False)
+            i = Checkbox(description='Subsites', value=False)
+            d = Checkbox(description='2D (Comp.)', value=False)
+            e = Checkbox(description='2D (Pose)', value=False)
+            f = Checkbox(description='3D', value=True)
+            g = Checkbox(description='Metadata', value=False)
 
             ui1 = GridBox(
                 [b, c, d, h],
-                layout=Layout(grid_template_columns="repeat(4, 100px)"),
+                layout=Layout(grid_template_columns='repeat(4, 100px)'),
             )
             ui2 = GridBox(
                 [e, f, g, i],
-                layout=Layout(grid_template_columns="repeat(4, 100px)"),
+                layout=Layout(grid_template_columns='repeat(4, 100px)'),
             )
             ui = VBox([a, ui1, ui2])
 
@@ -2720,21 +2694,21 @@ class PoseSet:
                 if draw:
                     pose.draw()
                 if metadata:
-                    mrich.title("Metadata:")
+                    mrich.title('Metadata:')
                     pprint(pose.metadata)
 
             out = interactive_output(
                 widget,
                 {
-                    "i": a,
-                    "name": b,
-                    "summary": c,
-                    "grid": d,
-                    "draw2d": e,
-                    "draw": f,
-                    "metadata": g,
-                    "tags": h,
-                    "subsites": i,
+                    'i': a,
+                    'name': b,
+                    'summary': c,
+                    'grid': d,
+                    'draw2d': e,
+                    'draw': f,
+                    'metadata': g,
+                    'tags': h,
+                    'subsites': i,
                 },
             )
 
@@ -2742,10 +2716,10 @@ class PoseSet:
 
     def summary(self) -> None:
         """Print a summary of this pose set"""
-        mrich.header("PoseSet()")
-        mrich.var("#poses", len(self))
-        mrich.var("#compounds", self.num_compounds)
-        mrich.var("tags", self.tags)
+        mrich.header('PoseSet()')
+        mrich.var('#poses', len(self))
+        mrich.var('#compounds', self.num_compounds)
+        mrich.var('tags', self.tags)
 
     def draw(self) -> None:
         """Render this pose set with Py3Dmol"""
@@ -2769,7 +2743,7 @@ class PoseSet:
         drawing = draw_grid(mols, labels=labels)
         display(drawing)
 
-    def subsite_summary(self) -> "pd.DataFrame":
+    def subsite_summary(self) -> 'pd.DataFrame':
         """Print a table counting poses by subsite"""
 
         from pandas import DataFrame
@@ -2788,9 +2762,9 @@ class PoseSet:
             [dict(id=i, subsite=name, num_poses=count) for i, name, count in cursor]
         )
 
-        df = df.set_index("id")
+        df = df.set_index('id')
 
-        df = df.sort_values(by="num_poses", ascending=False)
+        df = df.sort_values(by='num_poses', ascending=False)
 
         mrich.print(df)
 
@@ -2802,36 +2776,36 @@ class PoseSet:
         """Delete poses in this set"""
 
         if not force:
-            mrich.warning("Deleting Poses is risky! Set force=True to continue")
+            mrich.warning('Deleting Poses is risky! Set force=True to continue')
             return
 
         str_ids = self.str_ids
 
         # delete the poses in this set
         self.db.delete_where(
-            table=self.table, key=f"pose_id IN {str_ids}", commit=False
+            table=self.table, key=f'pose_id IN {str_ids}', commit=False
         )
 
         # check for other references to this pose
-        self.db.delete_where(table="tag", key=f"tag_pose IN {str_ids}", commit=False)
+        self.db.delete_where(table='tag', key=f'tag_pose IN {str_ids}', commit=False)
         self.db.delete_where(
-            table="inspiration",
-            key=f"inspiration_original IN {str_ids}",
+            table='inspiration',
+            key=f'inspiration_original IN {str_ids}',
             commit=False,
         )
         self.db.delete_where(
-            table="inspiration",
-            key=f"inspiration_derivative IN {str_ids}",
+            table='inspiration',
+            key=f'inspiration_derivative IN {str_ids}',
             commit=False,
         )
         self.db.delete_where(
-            table="subsite_tag",
-            key=f"subsite_tag_pose IN {str_ids}",
+            table='subsite_tag',
+            key=f'subsite_tag_pose IN {str_ids}',
             commit=False,
         )
         self.db.delete_where(
-            table="interaction",
-            key=f"interaction_pose IN {str_ids}",
+            table='interaction',
+            key=f'interaction_pose IN {str_ids}',
             commit=False,
         )
 
@@ -2850,21 +2824,21 @@ class PoseSet:
     def __str__(self):
         """Unformatted string representation"""
         if self.name:
-            s = f"{self.name}: "
+            s = f'{self.name}: '
         else:
-            s = ""
+            s = ''
 
-        s += "{" f"P × {len(self)}" "}"
+        s += f'{{P × {len(self)}}}'
 
         return s
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __len__(self) -> int:
         """The number of poses in this set"""
@@ -2877,19 +2851,18 @@ class PoseSet:
     def __getitem__(
         self,
         key: int | slice,
-    ) -> "Pose | PoseSet":
+    ) -> 'Pose | PoseSet':
         """Get poses or subsets thereof from this set
 
         :param key: integer index or slice of indices
 
         """
         match key:
-
             case int():
                 try:
                     index = self.indices[key]
                 except IndexError:
-                    mrich.error(f"list index out of range: {key=} for {self}")
+                    mrich.error(f'list index out of range: {key=} for {self}')
                     raise
                 return self.db.get_pose(id=index)
 
@@ -2902,8 +2875,8 @@ class PoseSet:
 
     def __add__(
         self,
-        other: "PoseSet",
-    ) -> "PoseSet":
+        other: 'PoseSet',
+    ) -> 'PoseSet':
         """Add a :class:`.PoseSet` to this set"""
         if isinstance(other, PoseSet):
             return PoseSet(self.db, self.ids + other.ids, sort=False)
@@ -2914,8 +2887,8 @@ class PoseSet:
 
     def __sub__(
         self,
-        other: "PoseSet",
-    ) -> "PoseSet":
+        other: 'PoseSet',
+    ) -> 'PoseSet':
         """Substract a :class:`.PoseSet` from this set"""
         match other:
             case PoseSet():
@@ -2925,11 +2898,10 @@ class PoseSet:
                 # assert other in set(self.ids)
                 return PoseSet(self.db, [i for i in self.ids if i != other], sort=False)
 
-    def __and__(self, other: "PoseSet"):
+    def __and__(self, other: 'PoseSet'):
         """AND set operation, returns only poses in both sets"""
 
         match other:
-
             case PoseSet():
                 ids = set(self.ids) & set(other.ids)
                 return PoseSet(self.db, ids)
@@ -2937,11 +2909,10 @@ class PoseSet:
             case _:
                 raise NotImplementedError
 
-    def __or__(self, other: "PoseSet"):
+    def __or__(self, other: 'PoseSet'):
         """OR set operation, returns union of both sets"""
 
         match other:
-
             case PoseSet():
                 ids = set(self.ids) | set(other.ids)
                 return PoseSet(self.db, ids)
@@ -2949,11 +2920,10 @@ class PoseSet:
             case _:
                 raise NotImplementedError
 
-    def __xor__(self, other: "PoseSet"):
+    def __xor__(self, other: 'PoseSet'):
         """Exclusive OR set operation, returns all poses in either set but not both"""
 
         match other:
-
             case PoseSet():
                 ids = set(self.ids) ^ set(other.ids)
                 return PoseSet(self.db, ids)
@@ -2967,7 +2937,7 @@ class PoseSet:
         tag: str = None,
         target: int = None,
         subsite: int = None,
-    ) -> "PoseSet":
+    ) -> 'PoseSet':
         """Filter poses by a given tag, Subsite ID, or target ID. See :meth:`.PoseSet.get_by_tag`, :meth:`.PoseSet.get_by_target`, amd :meth:`.PoseSet.get_by_subsite`"""
 
         if tag:

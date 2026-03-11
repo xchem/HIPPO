@@ -7,9 +7,10 @@ def test_setup_animal():
         return
 
     from pathlib import Path
+
     import hippo
 
-    animal = hippo.HIPPO("test", DB)
+    animal = hippo.HIPPO('test', DB)
     animal.summary()
 
     if isinstance(DB, str):
@@ -18,5 +19,5 @@ def test_setup_animal():
     animal.db.close()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     test_setup_animal()

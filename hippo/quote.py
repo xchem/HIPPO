@@ -19,7 +19,7 @@ class Quote:
 
     def __init__(
         self,
-        db: "Database",
+        db: 'Database',
         id: int,
         compound: int,
         smiles: str,
@@ -54,7 +54,7 @@ class Quote:
 
         from datetime import datetime
 
-        quote_age = (datetime.today() - datetime.strptime(self.date, "%Y-%m-%d")).days
+        quote_age = (datetime.today() - datetime.strptime(self.date, '%Y-%m-%d')).days
         # if quote_age > 30:
         # mrich.warning(f'Quote is {quote_age} days old')
         # mrich.warning(self)
@@ -65,9 +65,9 @@ class Quote:
     def combination(
         cls,
         required_amount: float,
-        quotes: list["Quote"],
+        quotes: list['Quote'],
         debug: bool = False,
-    ) -> "Quote":
+    ) -> 'Quote':
         """Combine a list of quotes into one :class:`.Quote` object.
 
         * Start with biggest pack
@@ -96,17 +96,17 @@ class Quote:
             purity=biggest_pack.purity,
             lead_time=biggest_pack.lead_time,
             date=biggest_pack.date,
-            type=f"estimate from quote={biggest_pack.id}",
+            type=f'estimate from quote={biggest_pack.id}',
         )
 
         if debug:
-            mrich.debug(f"Quote.combination()")
-            mrich.debug(f"{required_amount=}")
+            mrich.debug('Quote.combination()')
+            mrich.debug(f'{required_amount=}')
             for quote in quotes:
                 mrich.debug(quote)
-            mrich.debug(f"{biggest_pack=}")
-            mrich.debug(f"{unit_price=}")
-            mrich.debug(f"{estimated_price=}")
+            mrich.debug(f'{biggest_pack=}')
+            mrich.debug(f'{unit_price=}')
+            mrich.debug(f'{estimated_price=}')
             mrich.print(quote_data)
 
         self = cls.__new__(cls)
@@ -120,12 +120,12 @@ class Quote:
     def entry_str(self) -> str:
         """Unformatted string including the supplier, catalogue (if available), and entry name of the quote"""
         if self.catalogue:
-            return f"{self.supplier}:{self.catalogue}:{self.entry}"
+            return f'{self.supplier}:{self.catalogue}:{self.entry}'
         else:
-            return f"{self.supplier}:{self.entry}"
+            return f'{self.supplier}:{self.entry}'
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
@@ -165,7 +165,7 @@ class Quote:
         return self._amount
 
     @property
-    def price(self) -> "Price":
+    def price(self) -> 'Price':
         """Price"""
         return self._price
 
@@ -222,21 +222,21 @@ class Quote:
     def __str__(self):
         """Unformatted string representation"""
         if self.purity:
-            purity = f" @ {self.purity:.0%}"
+            purity = f' @ {self.purity:.0%}'
         else:
-            purity = ""
+            purity = ''
 
-        if self.supplier == "Stock":
-            return f"C{self.compound} In Stock: {self.amount:}mg{purity}"
+        if self.supplier == 'Stock':
+            return f'C{self.compound} In Stock: {self.amount:}mg{purity}'
         elif self.type:
-            return f"C{self.compound} {self.entry_str} {self.amount:}mg{purity} = {self.price:} ({self.lead_time} days) {self.smiles} [{self.type}]"
+            return f'C{self.compound} {self.entry_str} {self.amount:}mg{purity} = {self.price:} ({self.lead_time} days) {self.smiles} [{self.type}]'
         else:
-            return f"C{self.compound} {self.entry_str} {self.amount:}mg{purity} = {self.price:} ({self.lead_time} days) {self.smiles}"
+            return f'C{self.compound} {self.entry_str} {self.amount:}mg{purity} = {self.price:} ({self.lead_time} days) {self.smiles}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'

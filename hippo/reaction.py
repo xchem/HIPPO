@@ -3,8 +3,8 @@
 import mcol
 import mrich
 
-from .recipe import Recipe
 from .compound import Compound
+from .recipe import Recipe
 
 
 class Reaction:
@@ -17,11 +17,11 @@ class Reaction:
 
     """
 
-    _table = "reaction"
+    _table = 'reaction'
 
     def __init__(
         self,
-        db: "Database",
+        db: 'Database',
         id: int,
         type: str,
         product: int,
@@ -50,7 +50,7 @@ class Reaction:
         return self._type
 
     @property
-    def product(self) -> "Compound":
+    def product(self) -> 'Compound':
         """Returns the reaction's product :class:`.Compound`"""
         if self._product is None:
             self._product = self.db.get_compound(id=self.product_id)
@@ -62,12 +62,12 @@ class Reaction:
         return self._product_yield
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
     @property
-    def reactants(self) -> "CompoundSet":
+    def reactants(self) -> 'CompoundSet':
         """Returns a :class:`.CompoundSet` of the reactants"""
         from .cset import CompoundSet
 
@@ -76,8 +76,8 @@ class Reaction:
     @property
     def reaction_str(self) -> str:
         """Returns a string representing the reaction"""
-        s = " + ".join([str(r) for r in self.reactants])
-        s = f"{s} -> {str(self.product)}"
+        s = ' + '.join([str(r) for r in self.reactants])
+        s = f'{s} -> {str(self.product)}'
         return s
 
     @property
@@ -88,7 +88,7 @@ class Reaction:
     @property
     def reactant_str_ids(self) -> str:
         """Return an SQL formatted tuple string of the reactant :class:`.Compound` IDs"""
-        return str(tuple(self.reactant_ids)).replace(",)", ")")
+        return str(tuple(self.reactant_ids)).replace(',)', ')')
 
     @property
     def product_id(self) -> int:
@@ -123,13 +123,13 @@ class Reaction:
     @property
     def plain_repr(self) -> str:
         """Unformatted long string representation"""
-        return f"{self}: {self.reaction_str} via {self.type}"
+        return f'{self}: {self.reaction_str} via {self.type}'
 
     @property
-    def metadata(self) -> "MetaData":
+    def metadata(self) -> 'MetaData':
         """Returns the compound's metadata dict"""
         if self._metadata is None:
-            self._metadata = self.db.get_metadata(table="reaction", id=self.id)
+            self._metadata = self.db.get_metadata(table='reaction', id=self.id)
         return self._metadata
 
     ### METHODS
@@ -142,9 +142,9 @@ class Reaction:
         """
 
         compound_ids = self.db.select_where(
-            query="reactant_compound, reactant_amount",
-            table="reactant",
-            key="reaction",
+            query='reactant_compound, reactant_amount',
+            table='reactant',
+            key='reaction',
             value=self.id,
             multiple=True,
         )
@@ -168,15 +168,15 @@ class Reaction:
         """
 
         compound_ids = self.db.select_where(
-            query="reactant_compound",
-            table="reactant",
-            key="reaction",
+            query='reactant_compound',
+            table='reactant',
+            key='reaction',
             value=self.id,
             multiple=True,
         )
 
         if compound_ids:
-            return [id for id, in compound_ids]
+            return [id for (id,) in compound_ids]
         else:
             return []
 
@@ -185,9 +185,9 @@ class Reaction:
         amount: float = 1,  # in mg
         debug: bool = False,
         pick_cheapest: bool = False,
-        permitted_reactions: "None | ReactionSet" = None,
+        permitted_reactions: 'None | ReactionSet' = None,
         supplier: str | None = None,
-    ) -> "Recipe | list[Recipe]":
+    ) -> 'Recipe | list[Recipe]':
         """Get a :class:`.Recipe` describing how to make the product
 
         :param amount: Amount in ``mg``, defaults to ``1``
@@ -220,15 +220,15 @@ class Reaction:
 
         """
 
-        print(f"id={self.id}")
-        print(f"type={self.type}")
-        print(f"product={self.product}")
-        print(f"product_yield={self.product_yield}")
+        print(f'id={self.id}')
+        print(f'type={self.type}')
+        print(f'product={self.product}')
+        print(f'product_yield={self.product_yield}')
 
         reactants = self.get_reactant_amount_pairs()
-        print(f"reactants={reactants}")
+        print(f'reactants={reactants}')
 
-        print(f"price_estimate={self.price_estimate}")
+        print(f'price_estimate={self.price_estimate}')
 
         if draw:
             self.draw()
@@ -245,8 +245,8 @@ class Reaction:
         mols = [r.mol for r in reactants]
         mols.append(product.mol)
 
-        labels = [f"+ {r}" if i > 0 else f"{r}" for i, r in enumerate(reactants)]
-        labels.append(f"-> {product}")
+        labels = [f'+ {r}' if i > 0 else f'{r}' for i, r in enumerate(reactants)]
+        labels.append(f'-> {product}')
 
         drawing = draw_grid(mols, labels=labels, highlightAtomLists=None)
         display(drawing)
@@ -276,24 +276,22 @@ class Reaction:
         """
 
         if debug:
-            mrich.var("reaction", self.id)
-            mrich.var("reactants", self.reactant_ids)
-            mrich.var("supplier", supplier)
+            mrich.var('reaction', self.id)
+            mrich.var('reactants', self.reactant_ids)
+            mrich.var('supplier', supplier)
 
         if supplier is None:
-
             triples = self.db.execute(
                 f"""
-                SELECT reactant_compound, SUM(quote_id), SUM(reaction_id) FROM {self.db.SQL_SCHEMA_PREFIX}reactant 
+                SELECT reactant_compound, SUM(quote_id), SUM(reaction_id) FROM {self.db.SQL_SCHEMA_PREFIX}reactant
                 LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}quote ON quote_compound = reactant_compound
-                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON reaction_product = reactant_compound 
+                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON reaction_product = reactant_compound
                 WHERE reactant_reaction = {self.id}
                 GROUP BY reactant_compound
             """
             ).fetchall()
 
         else:
-
             triples = self.db.execute(
                 f"""
                 WITH filtered_quotes AS
@@ -301,33 +299,32 @@ class Reaction:
                     SELECT * FROM {self.db.SQL_SCHEMA_PREFIX}quote
                     WHERE quote_supplier = "{supplier}"
                 )
-                SELECT reactant_compound, SUM(quote_id), SUM(reaction_id) FROM {self.db.SQL_SCHEMA_PREFIX}reactant 
+                SELECT reactant_compound, SUM(quote_id), SUM(reaction_id) FROM {self.db.SQL_SCHEMA_PREFIX}reactant
                 LEFT JOIN filtered_quotes ON quote_compound = reactant_compound
-                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON reaction_product = reactant_compound 
+                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON reaction_product = reactant_compound
                 WHERE reactant_reaction = {self.id}
                 GROUP BY reactant_compound
             """
             ).fetchall()
 
         for reactant_compound, has_quote, has_reaction in triples:
-
             if debug:
                 mrich.debug(
-                    f"{reactant_compound=}, {bool(has_quote)=}, {bool(has_reaction)=}"
+                    f'{reactant_compound=}, {bool(has_quote)=}, {bool(has_reaction)=}'
                 )
 
             if has_quote:
                 if debug:
-                    mrich.debug(f"reactant={reactant_compound} has quote")
+                    mrich.debug(f'reactant={reactant_compound} has quote')
                 continue
 
             if has_reaction:
                 if debug:
-                    mrich.debug(f"reactant={reactant_compound} has reaction")
+                    mrich.debug(f'reactant={reactant_compound} has reaction')
                 continue
 
             if debug:
-                mrich.warning(f"No quote or reaction for reactant={reactant_compound}")
+                mrich.warning(f'No quote or reaction for reactant={reactant_compound}')
 
             return False
 
@@ -345,19 +342,19 @@ class Reaction:
 
         """
 
-        serialisable_fields = ["id", "type", "product_id", "reactant_ids"]
+        serialisable_fields = ['id', 'type', 'product_id', 'reactant_ids']
 
         data = {}
         for key in serialisable_fields:
             data[key] = getattr(self, key)
 
         if smiles:
-            data["product_smiles"] = self.product_smiles
-            data["reactant_smiles"] = self.reactant_smiles
+            data['product_smiles'] = self.product_smiles
+            data['reactant_smiles'] = self.reactant_smiles
 
         if mols:
-            data["product_mol"] = self.product_mol
-            data["reactant_mols"] = self.reactant_mols
+            data['product_mol'] = self.product_mol
+            data['reactant_mols'] = self.reactant_mols
 
         return data
 
@@ -365,42 +362,42 @@ class Reaction:
         """Delete this reaction and any related reactants, routes, and components"""
 
         route_ids = self.db.select_where(
-            query="component_route",
-            table="component",
-            key=f"component_ref = {self.id} AND component_type = 1",
+            query='component_route',
+            table='component',
+            key=f'component_ref = {self.id} AND component_type = 1',
             multiple=True,
         )
 
-        route_ids = [r for r, in route_ids]
-        route_str_ids = str(tuple(route_ids)).replace(",)", ")")
+        route_ids = [r for (r,) in route_ids]
+        route_str_ids = str(tuple(route_ids)).replace(',)', ')')
 
         self.db.delete_where(
-            table="component", key=f"component_route IN {route_str_ids}"
+            table='component', key=f'component_route IN {route_str_ids}'
         )
 
-        self.db.delete_where(table="route", key=f"route_id IN {route_str_ids}")
+        self.db.delete_where(table='route', key=f'route_id IN {route_str_ids}')
 
-        self.db.delete_where(table="reactant", key="reaction", value=self.id)
+        self.db.delete_where(table='reactant', key='reaction', value=self.id)
 
-        self.db.delete_where(table="reaction", key="id", value=self.id)
+        self.db.delete_where(table='reaction', key='id', value=self.id)
 
     ### DUNDERS
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return f"R{self.id}"
+        return f'R{self.id}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self.plain_repr}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self.plain_repr}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self.plain_repr}"
+        return f'[bold underline]{self.plain_repr}'
 
     def __eq__(
         self,
-        other: "int | Reaction",
+        other: 'int | Reaction',
     ) -> bool:
         """compare this reaction to a :class:`.Reaction` object or ID"""
 
@@ -409,7 +406,6 @@ class Reaction:
                 return self.id == other
 
             case Reaction():
-
                 if self.type != other.type:
                     return False
 

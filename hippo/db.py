@@ -1,24 +1,23 @@
 """SQLite database wrapper class"""
 
+import json
+import sqlite3
+import time
+from pathlib import Path
+from sqlite3 import Error
+
 import mcol
 import mrich
 
-import json
-import time
-import sqlite3
-from pathlib import Path
-from pprint import pprint
-from sqlite3 import Error
-
+from .compound import Compound
+from .feature import Feature
+from .metadata import MetaData
 from .pose import Pose
 from .quote import Quote
-from .target import Target
-from .feature import Feature
-from .compound import Compound
 from .reaction import Reaction
-from .metadata import MetaData
 from .recipe import Recipe, Route
-from .tools import inchikey_from_smiles, sanitise_smiles, SanitisationError, strip_sql
+from .target import Target
+from .tools import SanitisationError, inchikey_from_smiles, sanitise_smiles, strip_sql
 
 
 class Database:
@@ -31,27 +30,27 @@ class Database:
     """
 
     TABLES = [
-        "compound"
-        "inspiration"
-        "scaffold"
-        "reaction"
-        "reactant"
-        "pose"
-        "tag"
-        "quote"
-        "target"
-        "feature"
-        "route"
-        "component"
-        "compound_pattern_bfp"
-        "interaction"
-        "subsite"
-        "subsite_tag"
+        'compound'
+        'inspiration'
+        'scaffold'
+        'reaction'
+        'reactant'
+        'pose'
+        'tag'
+        'quote'
+        'target'
+        'feature'
+        'route'
+        'component'
+        'compound_pattern_bfp'
+        'interaction'
+        'subsite'
+        'subsite_tag'
     ]
 
-    SQL_STRING_PLACEHOLDER = "?"
-    SQL_PK_DATATYPE = "INTEGER"
-    SQL_SCHEMA_PREFIX = ""
+    SQL_STRING_PLACEHOLDER = '?'
+    SQL_PK_DATATYPE = 'INTEGER'
+    SQL_SCHEMA_PREFIX = ''
 
     ERROR_UNIQUE_VIOLATION = sqlite3.IntegrityError
 
@@ -97,66 +96,66 @@ class Database:
 
     SQL_INSERT_COMPOUND = """
     INSERT INTO compound(
-        compound_inchikey, 
-        compound_smiles, 
-        compound_mol, 
-        compound_pattern_bfp, 
-        compound_morgan_bfp, 
+        compound_inchikey,
+        compound_smiles,
+        compound_mol,
+        compound_pattern_bfp,
+        compound_morgan_bfp,
         compound_alias
     )
     VALUES(
-        :inchikey, 
-        :smiles, 
-        mol_from_smiles(:smiles), 
-        mol_pattern_bfp(mol_from_smiles(:smiles), 2048), 
-        mol_morgan_bfp(mol_from_smiles(:smiles), 2, 2048), 
+        :inchikey,
+        :smiles,
+        mol_from_smiles(:smiles),
+        mol_pattern_bfp(mol_from_smiles(:smiles), 2048),
+        mol_morgan_bfp(mol_from_smiles(:smiles), 2, 2048),
         :alias
     )
     """
 
     SQL_BULK_INSERT_INTERACTIONS = """
     INSERT OR IGNORE INTO interaction(
-        interaction_feature, 
-        interaction_pose, 
-        interaction_type, 
-        interaction_family, 
-        interaction_atom_ids, 
-        interaction_prot_coord, 
-        interaction_lig_coord, 
-        interaction_distance, 
-        interaction_angle, 
+        interaction_feature,
+        interaction_pose,
+        interaction_type,
+        interaction_family,
+        interaction_atom_ids,
+        interaction_prot_coord,
+        interaction_lig_coord,
+        interaction_distance,
+        interaction_angle,
         interaction_energy
     )
     VALUES(?,?,?,?,?,?,?,?,?,?)
     """
 
     POSE_FIELDS = [
-        "pose_id",
-        "pose_inchikey",
-        "pose_alias",
-        "pose_smiles",
-        "pose_reference",
-        "pose_path",
-        "pose_compound",
-        "pose_target",
-        "pose_mol",
-        "pose_fingerprint",
-        "pose_energy_score",
-        "pose_distance_score",
-        "pose_inspiration_score",
+        'pose_id',
+        'pose_inchikey',
+        'pose_alias',
+        'pose_smiles',
+        'pose_reference',
+        'pose_path',
+        'pose_compound',
+        'pose_target',
+        'pose_mol',
+        'pose_fingerprint',
+        'pose_energy_score',
+        'pose_distance_score',
+        'pose_inspiration_score',
     ]
 
     COMPOUND_PROPERTY_FUNCTIONS = {
-        "num_heavy_atoms": "mol_num_hvyatms",
-        "formula": "mol_formula",
-        "num_rings": "mol_num_rings",
-        "molecular_weight": "mol_amw",
+        'num_heavy_atoms': 'mol_num_hvyatms',
+        'formula': 'mol_formula',
+        'num_rings': 'mol_num_rings',
+        'molecular_weight': 'mol_amw',
     }
 
     def __init__(
         self,
         path: Path,
-        animal: "HIPPO",
+        animal: 'HIPPO',
         update_legacy: bool = False,
         auto_compute_bfps: bool = True,
         create_blank: bool = True,
@@ -167,21 +166,21 @@ class Database:
     ) -> None:
         """Database initialisation"""
 
-        self._in_memory = path == ":memory:"
+        self._in_memory = path == ':memory:'
         assert isinstance(path, Path) or self.in_memory
 
         if debug:
-            mrich.debug("hippo.Database.__init__()")
+            mrich.debug('hippo.Database.__init__()')
 
         self._path = path
         self._connection = None
         self._cursor = None
         self._animal = animal
         self._auto_compute_bfps = auto_compute_bfps
-        self._engine = "sqlite3"
+        self._engine = 'sqlite3'
 
         if debug:
-            mrich.debug(f"Database.path = {self.path}")
+            mrich.debug(f'Database.path = {self.path}')
 
         if not self.in_memory:
             try:
@@ -216,69 +215,69 @@ class Database:
         :param update: update the legacy database?
         """
 
-        if "interaction" not in self.table_names:
+        if 'interaction' not in self.table_names:
             if not update:
-                mrich.error("This is a legacy format database (hippo-db < 0.3.23)")
-                mrich.error("Existing fingerprints will not be compatible")
-                mrich.error("Re-initialise HIPPO object with update_legacy=True to fix")
-                raise LegacyDatabaseError("hippo-db < 0.3.23")
+                mrich.error('This is a legacy format database (hippo-db < 0.3.23)')
+                mrich.error('Existing fingerprints will not be compatible')
+                mrich.error('Re-initialise HIPPO object with update_legacy=True to fix')
+                raise LegacyDatabaseError('hippo-db < 0.3.23')
             else:
-                mrich.warning("This is a legacy format database (hippo-db < 0.3.23)")
-                mrich.warning("Clearing legacy fingerprints...")
+                mrich.warning('This is a legacy format database (hippo-db < 0.3.23)')
+                mrich.warning('Clearing legacy fingerprints...')
                 self.create_table_interaction()
                 self.delete_interactions()
 
-        if "subsite" not in self.table_names or "subsite_tag" not in self.table_names:
-            mrich.warning("This is a legacy format database (hippo-db < 0.3.24)")
+        if 'subsite' not in self.table_names or 'subsite_tag' not in self.table_names:
+            mrich.warning('This is a legacy format database (hippo-db < 0.3.24)')
             self.create_table_subsite()
             self.create_table_subsite_tag()
 
-        if "scaffold" not in self.table_names:
+        if 'scaffold' not in self.table_names:
             if not update:
-                mrich.error("This is a legacy format database (hippo-db < 0.3.25)")
-                mrich.error("Existing base-elab relationships will not be compatible")
-                mrich.error("Re-initialise HIPPO object with update_legacy=True to fix")
-                raise LegacyDatabaseError("hippo-db < 0.3.25")
+                mrich.error('This is a legacy format database (hippo-db < 0.3.25)')
+                mrich.error('Existing base-elab relationships will not be compatible')
+                mrich.error('Re-initialise HIPPO object with update_legacy=True to fix')
+                raise LegacyDatabaseError('hippo-db < 0.3.25')
             else:
-                mrich.warning("This is a legacy format database (hippo-db < 0.3.25)")
-                mrich.warning("Migrating compound_base values to scaffold table...")
+                mrich.warning('This is a legacy format database (hippo-db < 0.3.25)')
+                mrich.warning('Migrating compound_base values to scaffold table...')
                 self.create_table_scaffold()
                 self.migrate_legacy_scaffolds()
 
-        if "route" not in self.table_names:
+        if 'route' not in self.table_names:
             self.create_table_route()
             self.create_table_component()
 
-        elif "component_amount" not in self.column_names("component"):
+        elif 'component_amount' not in self.column_names('component'):
             if not update:
-                mrich.error("This is a legacy format database (hippo-db < 0.3.29)")
-                mrich.error("Re-initialise HIPPO object with update_legacy=True to fix")
-                raise LegacyDatabaseError("hippo-db < 0.3.29")
+                mrich.error('This is a legacy format database (hippo-db < 0.3.29)')
+                mrich.error('Re-initialise HIPPO object with update_legacy=True to fix')
+                raise LegacyDatabaseError('hippo-db < 0.3.29')
             else:
-                mrich.warning("This is a legacy format database (hippo-db < 0.3.29)")
-                mrich.warning("Updating legacy routes...")
+                mrich.warning('This is a legacy format database (hippo-db < 0.3.29)')
+                mrich.warning('Updating legacy routes...')
 
             self.update_legacy_routes()
 
-        if "reaction_metadata" not in self.column_names("reaction"):
+        if 'reaction_metadata' not in self.column_names('reaction'):
             if not update:
-                mrich.error("This is a legacy format database (hippo-db < 0.3.32)")
-                mrich.error("Re-initialise HIPPO object with update_legacy=True to fix")
-                raise LegacyDatabaseError("hippo-db < 0.3.32")
+                mrich.error('This is a legacy format database (hippo-db < 0.3.32)')
+                mrich.error('Re-initialise HIPPO object with update_legacy=True to fix')
+                raise LegacyDatabaseError('hippo-db < 0.3.32')
             else:
-                mrich.warning("This is a legacy format database (hippo-db < 0.3.32)")
-                mrich.warning("Updating legacy reaction table...")
+                mrich.warning('This is a legacy format database (hippo-db < 0.3.32)')
+                mrich.warning('Updating legacy reaction table...')
 
             self.update_legacy_reaction_metadata()
 
-        if "pose_inspiration_score" not in self.column_names("pose"):
+        if 'pose_inspiration_score' not in self.column_names('pose'):
             if not update:
-                mrich.error("This is a legacy format database (hippo-db < 0.3.36)")
-                mrich.error("Re-initialise HIPPO object with update_legacy=True to fix")
-                raise LegacyDatabaseError("hippo-db < 0.3.36")
+                mrich.error('This is a legacy format database (hippo-db < 0.3.36)')
+                mrich.error('Re-initialise HIPPO object with update_legacy=True to fix')
+                raise LegacyDatabaseError('hippo-db < 0.3.36')
             else:
-                mrich.warning("This is a legacy format database (hippo-db < 0.3.36)")
-                mrich.warning("Updating legacy pose table...")
+                mrich.warning('This is a legacy format database (hippo-db < 0.3.36)')
+                mrich.warning('Updating legacy pose table...')
 
             self.update_legacy_pose_inspiration_score()
 
@@ -288,123 +287,122 @@ class Database:
         """Create and optionally update indexes"""
 
         INDEXES = [
-            ("pose", "pose_inchikey"),
+            ('pose', 'pose_inchikey'),
             (
-                "pose",
-                "pose_smiles",
+                'pose',
+                'pose_smiles',
             ),
             (
-                "pose",
-                "pose_reference",
+                'pose',
+                'pose_reference',
             ),
             (
-                "pose",
-                "pose_target",
+                'pose',
+                'pose_target',
             ),
             (
-                "inspiration",
-                "inspiration_original",
+                'inspiration',
+                'inspiration_original',
             ),
             (
-                "inspiration",
-                "inspiration_derivative",
+                'inspiration',
+                'inspiration_derivative',
             ),
             (
-                "scaffold",
-                "scaffold_superstructure",
+                'scaffold',
+                'scaffold_superstructure',
             ),
             (
-                "reaction",
-                "reaction_type",
+                'reaction',
+                'reaction_type',
             ),
             (
-                "reaction",
-                "reaction_product",
+                'reaction',
+                'reaction_product',
             ),
             (
-                "reactant",
-                "reactant_compound",
+                'reactant',
+                'reactant_compound',
             ),
             (
-                "tag",
-                "tag_compound",
+                'tag',
+                'tag_compound',
             ),
             (
-                "tag",
-                "tag_pose",
+                'tag',
+                'tag_pose',
             ),
             (
-                "quote",
-                "quote_supplier",
+                'quote',
+                'quote_supplier',
             ),
             (
-                "quote",
-                "quote_catalogue",
+                'quote',
+                'quote_catalogue',
             ),
             (
-                "quote",
-                "quote_entry",
+                'quote',
+                'quote_entry',
             ),
             (
-                "quote",
-                "quote_compound",
+                'quote',
+                'quote_compound',
             ),
             (
-                "route",
-                "route_product",
+                'route',
+                'route_product',
             ),
             # ("subsite", "subsite_name",), # not enough rows to matter?
             (
-                "subsite_tag",
-                "subsite_tag_pose",
+                'subsite_tag',
+                'subsite_tag_pose',
             ),
             (
-                "interaction",
-                "interaction_pose",
+                'interaction',
+                'interaction_pose',
             ),
             # ("interaction", "interaction_type",), # mainly done on interaction_temp
             (
-                "component",
-                "component_route",
+                'component',
+                'component_route',
             ),
             (
-                "component",
-                "component_ref",
+                'component',
+                'component_ref',
             ),
             (
-                "component",
-                ("component_type", "component_ref", "component_route"),
+                'component',
+                ('component_type', 'component_ref', 'component_route'),
             ),
         ]
 
         existing = set(self.index_names())
 
         for table, column in INDEXES:
-
             if isinstance(column, tuple):
-                name = ["index_", table, *(c.removeprefix(table) for c in column)]
-                name = "".join(name)
-                col_str = f"({', '.join(column)})"
+                name = ['index_', table, *(c.removeprefix(table) for c in column)]
+                name = ''.join(name)
+                col_str = f'({", ".join(column)})'
 
             else:
                 assert column.startswith(table)
-                name = f"index_{column}"
-                col_str = f"({column})"
+                name = f'index_{column}'
+                col_str = f'({column})'
 
             if name in existing:
                 continue
 
             if debug:
-                mrich.debug(f"Creating {name}")
+                mrich.debug(f'Creating {name}')
 
             self.execute(
-                f"CREATE INDEX IF NOT EXISTS {name} ON {self.SQL_SCHEMA_PREFIX}{table} {col_str}"
+                f'CREATE INDEX IF NOT EXISTS {name} ON {self.SQL_SCHEMA_PREFIX}{table} {col_str}'
             )
 
         if update:
             if debug:
-                mrich.debug("Updating indexes")
-            self.execute("ANALYZE")
+                mrich.debug('Updating indexes')
+            self.execute('ANALYZE')
             self.commit()
 
     @classmethod
@@ -412,7 +410,7 @@ class Database:
         cls,
         source: Path,
         destination: Path,
-        animal: "HIPPO",
+        animal: 'HIPPO',
         update_legacy: bool = False,
         overwrite_existing: bool = False,
         pages: int = 10000,
@@ -425,17 +423,17 @@ class Database:
 
         if destination.exists():
             if overwrite_existing:
-                mrich.warning(f"Overwriting {destination}")
+                mrich.warning(f'Overwriting {destination}')
             else:
-                mrich.error(f"Will not overwrite {destination}")
-                mrich.error(f"Set overwrite_existing=True to override")
-                raise Exception("Set overwrite_existing=True to override")
+                mrich.error(f'Will not overwrite {destination}')
+                mrich.error('Set overwrite_existing=True to override')
+                raise Exception('Set overwrite_existing=True to override')
 
-        mrich.print(f"Copying {source} --> {destination}")
+        mrich.print(f'Copying {source} --> {destination}')
 
         def progress(status, remaining, total):
             """print progress"""
-            mrich.debug(f"Copied {total-remaining} of {total} pages...")
+            mrich.debug(f'Copied {total - remaining} of {total} pages...')
 
         src = sqlite3.connect(source)
         dst = sqlite3.connect(destination)
@@ -468,14 +466,14 @@ class Database:
         return self._in_memory
 
     @property
-    def connection(self) -> "sqlite3.connection":
+    def connection(self) -> 'sqlite3.connection':
         """Returns a ``sqlite3.connection`` to the database"""
         if not self._connection:
             self.connect()
         return self._connection
 
     @property
-    def cursor(self) -> "sqlite3.cursor":
+    def cursor(self) -> 'sqlite3.cursor':
         """Returns a ``sqlite3.cursor``"""
         if not self._cursor:
             self._cursor = self.connection.cursor()
@@ -492,7 +490,7 @@ class Database:
         results = self.execute(
             "SELECT name FROM sqlite_master WHERE type='table';"
         ).fetchall()
-        return [n for n, in results]
+        return [n for (n,) in results]
 
     @property
     def auto_compute_bfps(self) -> bool:
@@ -509,11 +507,11 @@ class Database:
     def close(self, debug: bool = False) -> None:
         """Close the connection"""
         if debug:
-            mrich.debug("hippo.Database.close()")
+            mrich.debug('hippo.Database.close()')
         if self.connection:
             self.connection.close()
         if debug:
-            mrich.success(f"Closed connection to {self.path}")
+            mrich.success(f'Closed connection to {self.path}')
 
     def backup(
         self,
@@ -529,7 +527,7 @@ class Database:
         """Connect to the database"""
 
         if debug:
-            mrich.debug("hippo.Database.connect()")
+            mrich.debug('hippo.Database.connect()')
 
         conn = None
 
@@ -540,19 +538,18 @@ class Database:
                 conn = sqlite3.connect(self.path)
 
             if debug:
-                mrich.debug(f"{sqlite3.sqlite_version=}")
+                mrich.debug(f'{sqlite3.sqlite_version=}')
 
             conn.enable_load_extension(True)
-            conn.load_extension("chemicalite")
+            conn.load_extension('chemicalite')
             conn.enable_load_extension(False)
 
             if debug:
-                mrich.success("Database connected @", f"[file]{self.path}")
+                mrich.success('Database connected @', f'[file]{self.path}')
 
         except sqlite3.OperationalError as e:
-
-            if "cannot open shared object file" in str(e):
-                mrich.error("chemicalite package not installed correctly")
+            if 'cannot open shared object file' in str(e):
+                mrich.error('chemicalite package not installed correctly')
             else:
                 mrich.error(e)
             raise
@@ -574,8 +571,6 @@ class Database:
     ):
         """Execute arbitrary SQL with retry if database is locked."""
         if debug:
-            from .tools import strip_sql
-
             mrich.debug(sql)
 
         while True:
@@ -585,20 +580,20 @@ class Database:
                 else:
                     return self.cursor.execute(sql)
             except sqlite3.OperationalError as e:
-                if "database is locked" in str(e) and retry:
+                if 'database is locked' in str(e) and retry:
                     with mrich.clock(
-                        f"SQLite Database is locked, waiting {retry} second(s)..."
+                        f'SQLite Database is locked, waiting {retry} second(s)...'
                     ):
                         time.sleep(retry)
-                    mrich.print("[debug]SQLite Database was locked, retrying...")
+                    mrich.print('[debug]SQLite Database was locked, retrying...')
                     continue  # retry without recursion
-                elif "syntax error" in str(e):
+                elif 'syntax error' in str(e):
                     mrich.error(sql)
                     mrich.error(payload)
                     raise
                 else:
                     raise
-            except Exception as e:
+            except Exception:
                 # from .tools import strip_sql
                 # mrich.error(strip_sql(sql))
                 raise
@@ -614,22 +609,21 @@ class Database:
 
         """
 
-        if "RETURNING" in sql:
+        if 'RETURNING' in sql:
             from .apsw import executemany
 
             return executemany(self.path, sql, payload)
 
         if batch_size and batch_size < len(payload):
-
             from itertools import batched
 
             batches = list(batched(payload, batch_size))
 
             n = len(batches)
 
-            for i, batch in enumerate(mrich.track(batches, prefix="batch execution")):
-                mrich.set_progress_field("i", i)
-                mrich.set_progress_field("n", n)
+            for i, batch in enumerate(mrich.track(batches, prefix='batch execution')):
+                mrich.set_progress_field('i', i)
+                mrich.set_progress_field('n', n)
 
                 self.executemany(sql, batch, batch_size=None, retry=retry)
 
@@ -638,13 +632,13 @@ class Database:
         try:
             return self.cursor.executemany(sql, payload)
         except sqlite3.OperationalError as e:
-            if "database is locked" in str(e) and retry:
-                mrich.print("[debug]SQLite Database was locked, waiting...")
+            if 'database is locked' in str(e) and retry:
+                mrich.print('[debug]SQLite Database was locked, waiting...')
                 time.sleep(retry)
                 return self.executemany(sql=sql, payload=payload, retry=retry)
             else:
                 raise
-        except Exception as e:
+        except Exception:
             mrich.print(sql)
             mrich.print(payload[0])
             raise
@@ -657,12 +651,12 @@ class Database:
         try:
             self.connection.commit()
         except sqlite3.OperationalError as e:
-            if "database is locked" in str(e) and retry:
+            if 'database is locked' in str(e) and retry:
                 with mrich.clock(
-                    f"SQLite Database is locked, waiting {retry} second(s)..."
+                    f'SQLite Database is locked, waiting {retry} second(s)...'
                 ):
                     time.sleep(retry)
-                mrich.print("[debug]SQLite Database was locked, retrying...")
+                mrich.print('[debug]SQLite Database was locked, retrying...')
                 return self.commit()
             else:
                 raise
@@ -681,7 +675,7 @@ class Database:
     def create_blank_db(self) -> None:
         """Create a blank database"""
 
-        with mrich.loading("Creating blank database..."):
+        with mrich.loading('Creating blank database...'):
             self.create_table_compound()
             self.create_table_pose()
             self.create_table_inspiration()
@@ -702,7 +696,7 @@ class Database:
 
     def create_table_compound(self) -> None:
         """Create the compound table"""
-        mrich.debug("HIPPO.Database.create_table_compound()")
+        mrich.debug('HIPPO.Database.create_table_compound()')
 
         sql = self.SQL_CREATE_TABLE_COMPOUND
 
@@ -710,7 +704,7 @@ class Database:
 
     def create_table_inspiration(self) -> None:
         """Create the inspiration table"""
-        mrich.debug("HIPPO.Database.create_table_inspiration()")
+        mrich.debug('HIPPO.Database.create_table_inspiration()')
 
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}inspiration(
             inspiration_original INTEGER,
@@ -725,7 +719,7 @@ class Database:
 
     def create_table_scaffold(self) -> None:
         """Create the scaffold table"""
-        mrich.debug("HIPPO.Database.create_table_scaffold()")
+        mrich.debug('HIPPO.Database.create_table_scaffold()')
 
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}scaffold(
             scaffold_base INTEGER,
@@ -740,7 +734,7 @@ class Database:
 
     def create_table_reaction(self) -> None:
         """Create the reaction table"""
-        mrich.debug("HIPPO.Database.create_table_reaction()")
+        mrich.debug('HIPPO.Database.create_table_reaction()')
 
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}reaction(
             reaction_id {self.SQL_PK_DATATYPE} PRIMARY KEY,
@@ -756,7 +750,7 @@ class Database:
 
     def create_table_reactant(self) -> None:
         """Create the reactant table"""
-        mrich.debug("HIPPO.Database.create_table_reactant()")
+        mrich.debug('HIPPO.Database.create_table_reactant()')
 
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}reactant(
             reactant_amount REAL,
@@ -772,7 +766,7 @@ class Database:
 
     def create_table_pose(self) -> None:
         """Create the pose table"""
-        mrich.debug("HIPPO.Database.create_table_pose()")
+        mrich.debug('HIPPO.Database.create_table_pose()')
 
         sql = self.SQL_CREATE_TABLE_POSE
 
@@ -780,7 +774,7 @@ class Database:
 
     def create_table_tag(self) -> None:
         """Create the tag table"""
-        mrich.debug("HIPPO.Database.create_table_tag()")
+        mrich.debug('HIPPO.Database.create_table_tag()')
 
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}tag(
             tag_name TEXT,
@@ -797,7 +791,7 @@ class Database:
 
     def create_table_quote(self) -> None:
         """Create the quote table"""
-        mrich.debug("HIPPO.Database.create_table_quote()")
+        mrich.debug('HIPPO.Database.create_table_quote()')
 
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}quote(
             quote_id {self.SQL_PK_DATATYPE} PRIMARY KEY,
@@ -821,7 +815,7 @@ class Database:
 
     def create_table_target(self) -> None:
         """Create the target table"""
-        mrich.debug("HIPPO.Database.create_table_target()")
+        mrich.debug('HIPPO.Database.create_table_target()')
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}target(
             target_id {self.SQL_PK_DATATYPE} PRIMARY KEY,
             target_name TEXT,
@@ -834,7 +828,7 @@ class Database:
 
     def create_table_feature(self) -> None:
         """Create the feature table"""
-        mrich.debug("HIPPO.Database.create_table_feature()")
+        mrich.debug('HIPPO.Database.create_table_feature()')
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}feature(
             feature_id {self.SQL_PK_DATATYPE} PRIMARY KEY,
             feature_family TEXT,
@@ -844,11 +838,11 @@ class Database:
             feature_residue_number INTEGER,
             feature_atom_names TEXT,
             CONSTRAINT UC_feature UNIQUE (
-                feature_family, 
-                feature_target, 
-                feature_chain_name, 
-                feature_residue_number, 
-                feature_residue_name, 
+                feature_family,
+                feature_target,
+                feature_chain_name,
+                feature_residue_number,
+                feature_residue_name,
                 feature_atom_names
             )
         );
@@ -858,7 +852,7 @@ class Database:
 
     def create_table_route(self) -> None:
         """Create the route table"""
-        mrich.debug("HIPPO.Database.create_table_route()")
+        mrich.debug('HIPPO.Database.create_table_route()')
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}route(
             route_id {self.SQL_PK_DATATYPE} PRIMARY KEY,
             route_product INTEGER,
@@ -870,7 +864,7 @@ class Database:
 
     def create_table_component(self) -> None:
         """Create the component table"""
-        mrich.debug("HIPPO.Database.create_table_component()")
+        mrich.debug('HIPPO.Database.create_table_component()')
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}component(
             component_id {self.SQL_PK_DATATYPE} PRIMARY KEY,
             component_route INTEGER,
@@ -886,22 +880,22 @@ class Database:
 
     def create_table_pattern_bfp(self) -> None:
         """Create the pattern_bfp table"""
-        mrich.debug("HIPPO.Database.create_table_pattern_bfp()")
+        mrich.debug('HIPPO.Database.create_table_pattern_bfp()')
 
         sql = """
-        CREATE VIRTUAL TABLE compound_pattern_bfp 
+        CREATE VIRTUAL TABLE compound_pattern_bfp
         USING rdtree(compound_id, fp bits(2048))
         """
 
         self.execute(sql)
 
     def create_table_interaction(
-        self, table: str = "interaction", debug: bool = True
+        self, table: str = 'interaction', debug: bool = True
     ) -> None:
         """Create an interaction table"""
 
         if debug:
-            mrich.debug(f"HIPPO.Database.create_table_interaction({table=})")
+            mrich.debug(f'HIPPO.Database.create_table_interaction({table=})')
 
         sql = f"""
         CREATE TABLE {self.SQL_SCHEMA_PREFIX}{table}(
@@ -919,10 +913,10 @@ class Database:
             FOREIGN KEY (interaction_feature) REFERENCES {self.SQL_SCHEMA_PREFIX}feature(feature_id),
             FOREIGN KEY (interaction_pose) REFERENCES {self.SQL_SCHEMA_PREFIX}pose(pose_id),
             CONSTRAINT UC_interaction UNIQUE (
-                interaction_feature, 
-                interaction_pose, 
-                interaction_type, 
-                interaction_family, 
+                interaction_feature,
+                interaction_pose,
+                interaction_type,
+                interaction_family,
                 interaction_atom_ids
             )
         );
@@ -933,7 +927,7 @@ class Database:
     def create_table_subsite(self) -> None:
         """Create the subsite table"""
 
-        mrich.debug("HIPPO.Database.create_table_subsite()")
+        mrich.debug('HIPPO.Database.create_table_subsite()')
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}subsite(
             subsite_id {self.SQL_PK_DATATYPE} PRIMARY KEY,
             subsite_target INTEGER NOT NULL,
@@ -949,7 +943,7 @@ class Database:
     def create_table_subsite_tag(self) -> None:
         """Create the subsite_tag table"""
 
-        mrich.debug("HIPPO.Database.create_table_subsite_tag()")
+        mrich.debug('HIPPO.Database.create_table_subsite_tag()')
         sql = f"""CREATE TABLE {self.SQL_SCHEMA_PREFIX}subsite_tag(
             subsite_tag_id {self.SQL_PK_DATATYPE} PRIMARY KEY,
             subsite_tag_ref INTEGER NOT NULL,
@@ -965,7 +959,7 @@ class Database:
 
     def sql_return_id_str(self, key: str) -> str:
         """SQL suffix to return the lastrowid (for sqlite returns an empty string)"""
-        return ""
+        return ''
 
     ### INSERTION
 
@@ -1003,22 +997,20 @@ class Database:
             )
 
         except self.ERROR_UNIQUE_VIOLATION as e:
-
             constraints = [
-                "compound_inchikey",
-                "compound_smiles",
-                "compound_pattern_bfp",
-                "compound_morgan_bfp",
+                'compound_inchikey',
+                'compound_smiles',
+                'compound_pattern_bfp',
+                'compound_morgan_bfp',
             ]
 
             message = str(e)
 
             for constraint in constraints:
-
                 match self.engine:
-                    case "sqlite3":
-                        test_str = f"UNIQUE constraint failed: compound.{constraint}"
-                    case "psycopg":
+                    case 'sqlite3':
+                        test_str = f'UNIQUE constraint failed: compound.{constraint}'
+                    case 'psycopg':
                         test_str = f'duplicate key value violates unique constraint "uc_{constraint}"'
                     case _:
                         raise NotImplementedError
@@ -1026,7 +1018,7 @@ class Database:
                 if test_str in message:
                     if warn_duplicate:
                         mrich.warning(
-                            f"Skipping compound with duplicate {constraint}, {smiles=}"
+                            f'Skipping compound with duplicate {constraint}, {smiles=}'
                         )
                     self.rollback()
                     return None
@@ -1056,13 +1048,13 @@ class Database:
             result = self.insert_compound_pattern_bfp(compound_id, commit=commit)
 
             if not result:
-                mrich.error("Could not insert compound pattern bfp")
+                mrich.error('Could not insert compound pattern bfp')
 
         ### insert metadata
 
         if metadata:
             self.insert_metadata(
-                table="compound", id=compound_id, payload=metadata, commit=commit
+                table='compound', id=compound_id, payload=metadata, commit=commit
             )
 
         return compound_id
@@ -1082,7 +1074,7 @@ class Database:
         """
 
         (bfp,) = self.select_where(
-            "compound_pattern_bfp", "compound", "id", compound_id
+            'compound_pattern_bfp', 'compound', 'id', compound_id
         )
 
         try:
@@ -1145,7 +1137,7 @@ class Database:
         if isinstance(target, str):
             target = self.get_target_id(name=target)
             if not target:
-                raise ValueError(f"No such {target=}")
+                raise ValueError(f'No such {target=}')
         target_name = self.get_target_name(id=target)
 
         if resolve_path:
@@ -1154,31 +1146,31 @@ class Database:
                 path = path.resolve(strict=True)
                 path = str(path)
 
-            except FileNotFoundError as e:
-                mrich.error(f"Path cannot be resolved: {mcol.file}{path}")
+            except FileNotFoundError:
+                mrich.error(f'Path cannot be resolved: {mcol.file}{path}')
                 raise
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}pose(
-            pose_inchikey, 
-            pose_alias, 
-            pose_smiles, 
-            pose_compound, 
-            pose_target, 
-            pose_path, 
-            pose_reference, 
-            pose_energy_score, 
+            pose_inchikey,
+            pose_alias,
+            pose_smiles,
+            pose_compound,
+            pose_target,
+            pose_path,
+            pose_reference,
+            pose_energy_score,
             pose_distance_score
         )
         VALUES(
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
             {self.SQL_STRING_PLACEHOLDER}
         )
         {self.sql_return_id_str('pose')}
@@ -1201,20 +1193,18 @@ class Database:
             )
 
         except self.ERROR_UNIQUE_VIOLATION as e:
-
             constraints = [
-                "pose_path",
-                "pose_alias",
+                'pose_path',
+                'pose_alias',
             ]
 
             message = str(e)
 
             for constraint in constraints:
-
                 match self.engine:
-                    case "sqlite3":
-                        test_str = f"UNIQUE constraint failed: pose.{constraint}"
-                    case "psycopg":
+                    case 'sqlite3':
+                        test_str = f'UNIQUE constraint failed: pose.{constraint}'
+                    case 'psycopg':
                         test_str = f'duplicate key value violates unique constraint "uc_{constraint}"'
                     case _:
                         raise NotImplementedError
@@ -1222,7 +1212,7 @@ class Database:
                 if test_str in message:
                     if warn_duplicate:
                         mrich.warning(
-                            f"Skipping pose with duplicate {constraint}, {alias=}, {path=}"
+                            f'Skipping pose with duplicate {constraint}, {alias=}, {path=}'
                         )
                     self.rollback()
                     return None
@@ -1247,7 +1237,7 @@ class Database:
 
         if metadata:
             self.insert_metadata(
-                table="pose", id=pose_id, payload=metadata, commit=commit
+                table='pose', id=pose_id, payload=metadata, commit=commit
             )
 
         return pose_id
@@ -1271,9 +1261,9 @@ class Database:
         :param commit: commit the changes to the database (Default value = True)
         """
 
-        assert bool(compound) ^ bool(
-            pose
-        ), "Exactly one of compound or pose arguments must have a value"
+        assert bool(compound) ^ bool(pose), (
+            'Exactly one of compound or pose arguments must have a value'
+        )
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}tag(tag_name, tag_compound, tag_pose)
@@ -1283,7 +1273,7 @@ class Database:
         try:
             self.execute(sql, (name, compound, pose))
 
-        except self.ERROR_UNIQUE_VIOLATION as e:
+        except self.ERROR_UNIQUE_VIOLATION:
             return None
 
         except Exception as e:
@@ -1315,12 +1305,12 @@ class Database:
         if isinstance(derivative, Pose):
             derivative = derivative.id
 
-        assert isinstance(
-            original, int
-        ), "Must pass an integer ID or Pose object (original)"
-        assert isinstance(
-            derivative, int
-        ), "Must pass an integer ID or Pose object (derivative)"
+        assert isinstance(original, int), (
+            'Must pass an integer ID or Pose object (original)'
+        )
+        assert isinstance(derivative, int), (
+            'Must pass an integer ID or Pose object (derivative)'
+        )
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}inspiration(inspiration_original, inspiration_derivative)
@@ -1330,10 +1320,10 @@ class Database:
         try:
             self.execute(sql, (original, derivative))
 
-        except self.ERROR_UNIQUE_VIOLATION as e:
+        except self.ERROR_UNIQUE_VIOLATION:
             if warn_duplicate:
                 mrich.warning(
-                    f"Skipping existing inspiration: {original=} {derivative=}"
+                    f'Skipping existing inspiration: {original=} {derivative=}'
                 )
             return None
 
@@ -1369,12 +1359,12 @@ class Database:
         if isinstance(superstructure, Compound):
             superstructure = superstructure.id
 
-        assert isinstance(
-            scaffold, int
-        ), f"Must pass an integer ID or Compound object (scaffold) {scaffold=} {type(scaffold)}"
-        assert isinstance(
-            superstructure, int
-        ), f"Must pass an integer ID or Compound object (superstructure) {superstructure=} {type(superstructure)}"
+        assert isinstance(scaffold, int), (
+            f'Must pass an integer ID or Compound object (scaffold) {scaffold=} {type(scaffold)}'
+        )
+        assert isinstance(superstructure, int), (
+            f'Must pass an integer ID or Compound object (superstructure) {superstructure=} {type(superstructure)}'
+        )
 
         if scaffold == superstructure:
             # mrich.warning(f"Skipped self-referential scaffold assignment (C{scaffold})")
@@ -1388,10 +1378,10 @@ class Database:
         try:
             self.execute(sql, (scaffold, superstructure))
 
-        except self.ERROR_UNIQUE_VIOLATION as e:
+        except self.ERROR_UNIQUE_VIOLATION:
             if warn_duplicate:
                 mrich.warning(
-                    f"Skipping existing scaffold: {scaffold=} {superstructure=}"
+                    f'Skipping existing scaffold: {scaffold=} {superstructure=}'
                 )
             return None
 
@@ -1426,7 +1416,7 @@ class Database:
             product = product.id
 
         # assert isinstance(product, Compound), f'incompatible {product=}'
-        assert isinstance(type, str), f"incompatible {type=}"
+        assert isinstance(type, str), f'incompatible {type=}'
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}reaction(reaction_type, reaction_product, reaction_product_yield)
@@ -1468,8 +1458,8 @@ class Database:
         if isinstance(compound, int):
             compound = self.get_compound(id=compound)
 
-        assert isinstance(compound, Compound), f"incompatible {compound=}"
-        assert isinstance(reaction, Reaction), f"incompatible {reaction=}"
+        assert isinstance(compound, Compound), f'incompatible {compound=}'
+        assert isinstance(reaction, Reaction), f'incompatible {reaction=}'
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}reactant(reactant_amount, reactant_reaction, reactant_compound)
@@ -1479,8 +1469,8 @@ class Database:
         try:
             self.execute(sql, (amount, reaction.id, compound.id))
 
-        except self.ERROR_UNIQUE_VIOLATION as e:
-            mrich.warning(f"Skipping existing reactant: {reaction=} {compound=}")
+        except self.ERROR_UNIQUE_VIOLATION:
+            mrich.warning(f'Skipping existing reactant: {reaction=} {compound=}')
 
         except Exception as e:
             mrich.error(e)
@@ -1526,19 +1516,19 @@ class Database:
         """
 
         if not isinstance(compound, int):
-            assert isinstance(compound, Compound), f"incompatible {compound=}"
+            assert isinstance(compound, Compound), f'incompatible {compound=}'
             compound = compound.id
 
-        assert currency in ["GBP", "EUR", "USD", None], f"incompatible {currency=}"
+        assert currency in ['GBP', 'EUR', 'USD', None], f'incompatible {currency=}'
 
         assert supplier in [
-            "MCule",
-            "Enamine",
-            "Stock",
-            "Molport",
-        ], f"incompatible {supplier=}"
+            'MCule',
+            'Enamine',
+            'Stock',
+            'Molport',
+        ], f'incompatible {supplier=}'
 
-        smiles = smiles or ""
+        smiles = smiles or ''
 
         payload = [
             smiles,
@@ -1554,13 +1544,13 @@ class Database:
         ]
 
         if date:
-            date_str = "?11"
+            date_str = '?11'
             payload.append(date)
         else:
-            date_str = "date()"
+            date_str = 'date()'
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = f"""
                 INSERT OR REPLACE INTO quote(
                     quote_smiles,
@@ -1576,21 +1566,21 @@ class Database:
                     quote_date
                 )
                 VALUES(
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
-                    ?, 
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
                     {date_str}
                 );
                 """
-            case "psycopg":
-                sql = """
+            case 'psycopg':
+                sql = f"""
                 INSERT OR REPLACE INTO hippo.quote(
                     quote_smiles,
                     quote_amount,
@@ -1605,16 +1595,16 @@ class Database:
                     quote_date
                 )
                 VALUES(
-                    %s, 
-                    %s, 
-                    %s, 
-                    %s, 
-                    %s, 
-                    %s, 
-                    %s, 
-                    %s, 
-                    %s, 
-                    %s, 
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
                     {date_str}
                 )
                 ON CONFLICT
@@ -1630,9 +1620,7 @@ class Database:
                     hippo.quote.quote_purity = EXCLUDED.quote_purity,
                     hippo.quote.quote_compound = EXCLUDED.quote_compound,
                     hippo.quote.quote_date = EXCLUDED.quote_date;
-                """.format(
-                    date_str=date_str
-                )
+                """
 
         try:
             self.execute(
@@ -1670,15 +1658,15 @@ class Database:
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}target(target_name)
         VALUES({self.SQL_STRING_PLACEHOLDER})
-        {self.sql_return_id_str("target")}
+        {self.sql_return_id_str('target')}
         """
 
         try:
             self.execute(sql, (name,))
 
-        except self.ERROR_UNIQUE_VIOLATION as e:
+        except self.ERROR_UNIQUE_VIOLATION:
             if warn_duplicate:
-                mrich.warning(f"Skipping existing target with {name=}")
+                mrich.warning(f'Skipping existing target with {name=}')
             self.rollback()
             return None
 
@@ -1728,31 +1716,31 @@ class Database:
         from .prolif import FEATURE_FAMILIES
 
         if family:
-            assert family in FEATURE_FAMILIES, f"Unsupported {family=}"
+            assert family in FEATURE_FAMILIES, f'Unsupported {family=}'
         else:
-            family = "Unknown"
+            family = 'Unknown'
 
         sql = f"""
         INSERT INTO {self.SQL_SCHEMA_PREFIX}feature(
-            feature_family, 
-            feature_target, 
-            feature_chain_name, 
-            feature_residue_name, 
-            feature_residue_number, 
+            feature_family,
+            feature_target,
+            feature_chain_name,
+            feature_residue_name,
+            feature_residue_number,
             feature_atom_names
         )
         VALUES(
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
-            {self.SQL_STRING_PLACEHOLDER}, 
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
+            {self.SQL_STRING_PLACEHOLDER},
             {self.SQL_STRING_PLACEHOLDER}
         )
         {self.sql_return_id_str('feature')}
         """
 
-        atom_names = " ".join(sorted(atom_names))
+        atom_names = ' '.join(sorted(atom_names))
 
         try:
             self.execute(
@@ -1761,15 +1749,14 @@ class Database:
             )
 
         except self.ERROR_UNIQUE_VIOLATION as e:
-
             if warn_duplicate:
                 mrich.warning(str(e))
-                mrich.var("family", family)
-                mrich.var("target", target)
-                mrich.var("chain_name", chain_name)
-                mrich.var("residue_name", residue_name)
-                mrich.var("residue_number", residue_number)
-                mrich.var("atom_names", atom_names)
+                mrich.var('family', family)
+                mrich.var('target', target)
+                mrich.var('chain_name', chain_name)
+                mrich.var('residue_name', residue_name)
+                mrich.var('residue_number', residue_number)
+                mrich.var('atom_names', atom_names)
 
             self.rollback()
 
@@ -1798,13 +1785,12 @@ class Database:
         payload = []
 
         for d in dicts:
-
-            chain_name = d["chain_name"]
-            family = d["family"]
-            target = d["target"]
-            atom_names = d["atom_names"]
-            residue_name = d["residue_name"]
-            residue_number = d["residue_number"]
+            chain_name = d['chain_name']
+            family = d['family']
+            target = d['target']
+            atom_names = d['atom_names']
+            residue_name = d['residue_name']
+            residue_number = d['residue_number']
 
             assert len(chain_name) == 1
             assert len(residue_name) <= 4
@@ -1812,41 +1798,39 @@ class Database:
                 assert len(a) <= 4
             assert isinstance(target, int)
 
-            atom_names = " ".join(sorted(atom_names))
+            atom_names = ' '.join(sorted(atom_names))
 
             if family:
-                assert family in FEATURE_FAMILIES, f"Unsupported {family=}"
+                assert family in FEATURE_FAMILIES, f'Unsupported {family=}'
             else:
-                family = "Unknown"
+                family = 'Unknown'
 
             payload.append(
                 (family, target, chain_name, residue_name, residue_number, atom_names)
             )
 
         match self.engine:
-            case "sqlite3":
-
+            case 'sqlite3':
                 sql = """
                 INSERT OR IGNORE INTO feature(
-                    feature_family, 
-                    feature_target, 
-                    feature_chain_name, 
-                    feature_residue_name, 
-                    feature_residue_number, 
+                    feature_family,
+                    feature_target,
+                    feature_chain_name,
+                    feature_residue_name,
+                    feature_residue_number,
                     feature_atom_names
                 )
                 VALUES(?,?,?,?,?,?)
                 """
 
-            case "psycopg":
-
+            case 'psycopg':
                 sql = """
                 INSERT INTO hippo.feature(
-                    feature_family, 
-                    feature_target, 
-                    feature_chain_name, 
-                    feature_residue_name, 
-                    feature_residue_number, 
+                    feature_family,
+                    feature_target,
+                    feature_chain_name,
+                    feature_residue_name,
+                    feature_residue_number,
                     feature_atom_names
                 )
                 VALUES(%s,%s,%s,%s,%s,%s)
@@ -1901,7 +1885,7 @@ class Database:
         payload = json.dumps(payload)
 
         self.update(
-            table=table, id=id, key=f"{table}_metadata", value=payload, commit=commit
+            table=table, id=id, key=f'{table}_metadata', value=payload, commit=commit
         )
 
     def insert_route(
@@ -1965,15 +1949,13 @@ class Database:
         """
 
         match self.engine:
-            case "sqlite3":
-
+            case 'sqlite3':
                 sql = """
                 INSERT INTO component(component_route, component_type, component_ref, component_amount)
                 VALUES(:component_route, :component_type, :component_ref, :component_amount)
                 """
 
-            case "psycopg":
-
+            case 'psycopg':
                 sql = """
                 INSERT INTO hippo.component(component_route, component_type, component_ref, component_amount)
                 VALUES(%(component_route)s, %(component_type)s, %(component_ref)s, %(component_amount)s)
@@ -2000,10 +1982,9 @@ class Database:
                 ),
             )
 
-        except self.ERROR_UNIQUE_VIOLATION as e:
-
+        except self.ERROR_UNIQUE_VIOLATION:
             mrich.warning(
-                f"Did not add existing component={ref} (type={component_type}) to {route=}"
+                f'Did not add existing component={ref} (type={component_type}) to {route=}'
             )
 
             self.rollback()
@@ -2031,7 +2012,7 @@ class Database:
         energy: float | None = None,
         warn_duplicate: bool = True,
         commit: bool = True,
-        table: str = "interaction",
+        table: str = 'interaction',
     ) -> int:
         """Insert an entry into the interaction table
 
@@ -2059,51 +2040,51 @@ class Database:
         if isinstance(pose, Pose):
             pose = pose.id
 
-        from .prolif import FEATURE_FAMILIES, INTERACTION_TYPES
+        from .prolif import FEATURE_FAMILIES
 
         if family:
-            assert family in FEATURE_FAMILIES, f"Unsupported {family=}"
+            assert family in FEATURE_FAMILIES, f'Unsupported {family=}'
         else:
-            family = "Unknown"
+            family = 'Unknown'
 
         # assert type in INTERACTION_TYPES.values(), f"Unsupported {type=}"
 
-        assert isinstance(atom_ids, list), f"Unsupported {atom_ids=}"
-        assert not any(
-            [not isinstance(i, int) for i in atom_ids]
-        ), f"Unsupported {atom_ids=}"
+        assert isinstance(atom_ids, list), f'Unsupported {atom_ids=}'
+        assert not any([not isinstance(i, int) for i in atom_ids]), (
+            f'Unsupported {atom_ids=}'
+        )
         atom_ids = json.dumps(atom_ids)
 
         prot_coord = list(prot_coord) if prot_coord is not None else []
-        assert len(prot_coord) == 3 or not prot_coord, f"Unsupported {prot_coord=}"
-        assert not any(
-            [not isinstance(i, float) for i in prot_coord]
-        ), f"Unsupported {prot_coord=}"
+        assert len(prot_coord) == 3 or not prot_coord, f'Unsupported {prot_coord=}'
+        assert not any([not isinstance(i, float) for i in prot_coord]), (
+            f'Unsupported {prot_coord=}'
+        )
         prot_coord = json.dumps(prot_coord)
 
         lig_coord = list(lig_coord) if lig_coord is not None else []
-        assert len(lig_coord) == 3 or not lig_coord, f"Unsupported {lig_coord=}"
-        assert not any(
-            [not isinstance(i, float) for i in lig_coord]
-        ), f"Unsupported {lig_coord=}"
+        assert len(lig_coord) == 3 or not lig_coord, f'Unsupported {lig_coord=}'
+        assert not any([not isinstance(i, float) for i in lig_coord]), (
+            f'Unsupported {lig_coord=}'
+        )
         lig_coord = json.dumps(lig_coord)
 
         try:
             distance = float(distance)
         except ValueError:
-            raise ValueError(f"Unsupported {distance=}")
+            raise ValueError(f'Unsupported {distance=}')
 
         try:
             if angle is not None:
                 angle = float(angle)
         except ValueError:
-            raise ValueError(f"Unsupported {angle=}")
+            raise ValueError(f'Unsupported {angle=}')
 
         if energy is not None:
             try:
                 energy = float(energy)
             except ValueError:
-                raise ValueError(f"Unsupported {energy=}")
+                raise ValueError(f'Unsupported {energy=}')
 
         # insertion
 
@@ -2155,7 +2136,7 @@ class Database:
             mrich.error(e)
             if warn_duplicate:
                 mrich.warning(
-                    f"Skipping existing interaction: {feature=} {pose=} {family=} {atom_ids=}"
+                    f'Skipping existing interaction: {feature=} {pose=} {family=} {atom_ids=}'
                 )
             return None
 
@@ -2189,8 +2170,8 @@ class Database:
         try:
             self.execute(sql, (target, name))
 
-        except self.ERROR_UNIQUE_VIOLATION as e:
-            mrich.warning(f"Skipping existing subsite for {target=} with {name=}")
+        except self.ERROR_UNIQUE_VIOLATION:
+            mrich.warning(f'Skipping existing subsite for {target=} with {name=}')
             return None
 
         except Exception as e:
@@ -2228,13 +2209,13 @@ class Database:
 
         if not target:
             (target,) = self.select_where(
-                table="pose", key="id", value=pose_id, query="pose_target"
+                table='pose', key='id', value=pose_id, query='pose_target'
             )
 
         assert isinstance(target, int)
 
         if not subsite_id:
-            subsite_id = self.get_subsite_id(name=name, none="quiet")
+            subsite_id = self.get_subsite_id(name=name, none='quiet')
 
         if not subsite_id:
             subsite_id = self.insert_subsite(name=name, target=target)
@@ -2249,9 +2230,9 @@ class Database:
         try:
             self.execute(sql, (subsite_id, pose_id))
 
-        except self.ERROR_UNIQUE_VIOLATION as e:
+        except self.ERROR_UNIQUE_VIOLATION:
             mrich.warning(
-                f"Skipping existing subsite_tag for {subsite_id=} with {pose_id=}"
+                f'Skipping existing subsite_tag for {subsite_id=} with {pose_id=}'
             )
             return None
 
@@ -2267,7 +2248,7 @@ class Database:
     def register_route(
         self,
         *,
-        recipe: "Recipe",
+        recipe: 'Recipe',
         commit: bool = True,
     ) -> int:
         """
@@ -2329,12 +2310,12 @@ class Database:
 
         """
 
-        sql = f"SELECT {query} FROM {self.SQL_SCHEMA_PREFIX}{table}"
+        sql = f'SELECT {query} FROM {self.SQL_SCHEMA_PREFIX}{table}'
 
         try:
             self.execute(sql)
-        except sqlite3.OperationalError as e:
-            mrich.var("sql", sql)
+        except sqlite3.OperationalError:
+            mrich.var('sql', sql)
             raise
 
         if multiple:
@@ -2351,7 +2332,7 @@ class Database:
         key: str,
         value: str | None = None,
         multiple: bool = False,
-        none: str | None = "error",
+        none: str | None = 'error',
         sort: str = None,
         debug: bool = False,
     ) -> tuple | list[tuple]:
@@ -2410,15 +2391,15 @@ class Database:
                 value = f"'{value}'"
 
         if value is not None:
-            where_str = f"{table}_{key}={value}"
+            where_str = f'{table}_{key}={value}'
         else:
             where_str = key
 
         if sort:
-            sql = f"SELECT {query} FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {where_str} ORDER BY {sort}"
+            sql = f'SELECT {query} FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {where_str} ORDER BY {sort}'
         else:
             sql = (
-                f"SELECT {query} FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {where_str}"
+                f'SELECT {query} FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {where_str}'
             )
 
         if debug:
@@ -2426,8 +2407,8 @@ class Database:
 
         try:
             self.execute(sql)
-        except sqlite3.OperationalError as e:
-            mrich.var("sql", strip_sql(sql))
+        except sqlite3.OperationalError:
+            mrich.var('sql', strip_sql(sql))
             raise
 
         if multiple:
@@ -2435,12 +2416,12 @@ class Database:
         else:
             result = self.cursor.fetchone()
 
-        if not result and none == "error":
-            mrich.error(f"No entry in {self.SQL_SCHEMA_PREFIX}{table} with {where_str}")
+        if not result and none == 'error':
+            mrich.error(f'No entry in {self.SQL_SCHEMA_PREFIX}{table} with {where_str}')
             return None
-        elif not result and none == "exception":
+        elif not result and none == 'exception':
             raise ValueError(
-                f"No entry in {self.SQL_SCHEMA_PREFIX}{table} with {where_str}"
+                f'No entry in {self.SQL_SCHEMA_PREFIX}{table} with {where_str}'
             )
 
         # if not result:
@@ -2454,7 +2435,7 @@ class Database:
         key: str,
         value: str | None = None,
         multiple: bool = False,
-        none: str | None = "error",
+        none: str | None = 'error',
     ) -> tuple | list[tuple]:
         """Select ID's where ``key==value``. Similar to :meth:`.select_where` except the query argument is always ``{table}_id``.
 
@@ -2467,7 +2448,7 @@ class Database:
 
         """
         return self.select_where(
-            query=f"{table}_id",
+            query=f'{table}_id',
             table=table,
             key=key,
             value=value,
@@ -2481,7 +2462,7 @@ class Database:
         key: str,
         value: str | None = None,
         multiple: bool = False,
-        none: str | None = "error",
+        none: str | None = 'error',
     ) -> tuple | list[tuple]:
         """Select entries where ``key==value``. Similar to :meth:`.select_where` except the query argument is always ``*``.
 
@@ -2494,7 +2475,7 @@ class Database:
 
         """
         return self.select_where(
-            query="*", table=table, key=key, value=value, multiple=multiple, none=none
+            query='*', table=table, key=key, value=value, multiple=multiple, none=none
         )
 
     ### DELETION
@@ -2516,21 +2497,19 @@ class Database:
         """
 
         if value is not None:
-
             if isinstance(value, str):
                 value = f"'{value}'"
 
-            sql = f"DELETE FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {table}_{key}={value}"
+            sql = f'DELETE FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {table}_{key}={value}'
 
         else:
-
-            sql = f"DELETE FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {key}"
+            sql = f'DELETE FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {key}'
 
         try:
             result = self.execute(sql)
 
-        except sqlite3.OperationalError as e:
-            mrich.var("sql", sql)
+        except sqlite3.OperationalError:
+            mrich.var('sql', sql)
             raise
 
         if commit:
@@ -2545,33 +2524,33 @@ class Database:
         :param tag: tag name to match
 
         """
-        self.delete_where(table="tag", key="name", value=tag)
+        self.delete_where(table='tag', key='name', value=tag)
 
     def delete_interactions(self) -> None:
         """Delete all calculated interactions and set pose_fingerprint appropriately"""
 
-        self.delete_where(table="interaction", key="interaction_id > 0")
-        self.update_all(table="pose", key="pose_fingerprint", value=0)
+        self.delete_where(table='interaction', key='interaction_id > 0')
+        self.update_all(table='pose', key='pose_fingerprint', value=0)
 
     def delete_features(self) -> None:
         """Delete all protein features"""
 
-        self.delete_where(table="feature", key="feature_id > 0")
+        self.delete_where(table='feature', key='feature_id > 0')
 
     def delete_reactions(self) -> None:
         """Delete all reaction data"""
 
-        tables = ["reaction", "reactant", "route", "component"]
+        tables = ['reaction', 'reactant', 'route', 'component']
 
         for table in tables:
-            self.execute(f"DELETE FROM {self.SQL_SCHEMA_PREFIX}{table};")
+            self.execute(f'DELETE FROM {self.SQL_SCHEMA_PREFIX}{table};')
         self.commit()
 
     def delete_subsites(self) -> None:
         """Delete all protein subsites"""
 
-        self.delete_where(table="subsite", key="subsite_id > 0")
-        self.delete_where(table="subsite_tag", key="subsite_tag_id > 0")
+        self.delete_where(table='subsite', key='subsite_id > 0')
+        self.delete_where(table='subsite_tag', key='subsite_tag_id > 0')
 
     ### UPDATE
 
@@ -2604,8 +2583,8 @@ class Database:
 
         try:
             self.execute(sql, (value,))
-        except self.ERROR_UNIQUE_VIOLATION as e:
-            mrich.var("sql", sql)
+        except self.ERROR_UNIQUE_VIOLATION:
+            mrich.var('sql', sql)
             self.rollback()
             raise
 
@@ -2640,25 +2619,24 @@ class Database:
 
         try:
             self.execute(sql, (value,))
-        except sqlite3.OperationalError as e:
-            mrich.var("sql", sql)
+        except sqlite3.OperationalError:
+            mrich.var('sql', sql)
             raise
 
         if commit:
             self.commit()
 
-    def update_pose_mol(self, pose_id: int, mol: "Chem.Mol") -> None:
+    def update_pose_mol(self, pose_id: int, mol: 'Chem.Mol') -> None:
         """Update the molecule stored for a specific pose"""
 
-        self.update(table="pose", id=pose_id, key="pose_mol", value=mol.ToBinary())
+        self.update(table='pose', id=pose_id, key='pose_mol', value=mol.ToBinary())
 
     ### COPYING / MIGRATION
 
-    def copy_temp_interactions(self, source_db: "Database | None" = None) -> None:
+    def copy_temp_interactions(self, source_db: 'Database | None' = None) -> None:
         """Copy the records from the 'temp_interaction' table to the 'interaction' table"""
 
         if source_db is not None:
-
             sql = """
             SELECT
                 interaction_feature,
@@ -2680,30 +2658,29 @@ class Database:
             cursor = self.executemany(self.SQL_BULK_INSERT_INTERACTIONS, records)
 
         else:
-
             sql = f"""
             INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}interaction(
-                interaction_feature, 
-                interaction_pose, 
-                interaction_type, 
-                interaction_family, 
-                interaction_atom_ids, 
-                interaction_prot_coord, 
-                interaction_lig_coord, 
-                interaction_distance, 
-                interaction_angle, 
+                interaction_feature,
+                interaction_pose,
+                interaction_type,
+                interaction_family,
+                interaction_atom_ids,
+                interaction_prot_coord,
+                interaction_lig_coord,
+                interaction_distance,
+                interaction_angle,
                 interaction_energy
             )
-            SELECT {self.SQL_SCHEMA_PREFIX}interaction_feature, 
-                interaction_pose, 
-                interaction_type, 
-                interaction_family, 
-                interaction_atom_ids, 
-                interaction_prot_coord, 
-                interaction_lig_coord, 
-                interaction_distance, 
-                interaction_angle, 
-                interaction_energy 
+            SELECT {self.SQL_SCHEMA_PREFIX}interaction_feature,
+                interaction_pose,
+                interaction_type,
+                interaction_family,
+                interaction_atom_ids,
+                interaction_prot_coord,
+                interaction_lig_coord,
+                interaction_distance,
+                interaction_angle,
+                interaction_energy
             FROM temp_interaction
             """
 
@@ -2718,27 +2695,27 @@ class Database:
         cursor = self.execute(
             f"""
             INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}temp_interaction(
-                interaction_feature, 
-                interaction_pose, 
-                interaction_type, 
-                interaction_family, 
-                interaction_atom_ids, 
-                interaction_prot_coord, 
-                interaction_lig_coord, 
-                interaction_distance, 
-                interaction_angle, 
+                interaction_feature,
+                interaction_pose,
+                interaction_type,
+                interaction_family,
+                interaction_atom_ids,
+                interaction_prot_coord,
+                interaction_lig_coord,
+                interaction_distance,
+                interaction_angle,
                 interaction_energy
             )
-            SELECT interaction_feature, 
-                interaction_pose, 
-                interaction_type, 
-                interaction_family, 
-                interaction_atom_ids, 
-                interaction_prot_coord, 
-                interaction_lig_coord, 
-                interaction_distance, 
-                interaction_angle, 
-                interaction_energy 
+            SELECT interaction_feature,
+                interaction_pose,
+                interaction_type,
+                interaction_family,
+                interaction_atom_ids,
+                interaction_prot_coord,
+                interaction_lig_coord,
+                interaction_distance,
+                interaction_angle,
+                interaction_energy
             FROM {self.SQL_SCHEMA_PREFIX}interaction
             WHERE interaction_pose = {pose_id}
         """
@@ -2752,7 +2729,7 @@ class Database:
         :returns: ID of the last inserted scaffold record
         """
 
-        mrich.debug("HIPPO.Database.migrate_legacy_scaffolds()")
+        mrich.debug('HIPPO.Database.migrate_legacy_scaffolds()')
 
         cursor = self.execute(
             f"""
@@ -2781,16 +2758,14 @@ class Database:
         # set values
 
         match self.engine:
-            case "sqlite3":
-
+            case 'sqlite3':
                 sql = """
                 UPDATE component
                 SET component_amount = :component_amount
                 WHERE component_type = :component_type;
                 """
 
-            case "psycopg":
-
+            case 'psycopg':
                 sql = """
                 UPDATE hippo.component
                 SET component_amount = %(component_amount)s
@@ -2860,48 +2835,48 @@ class Database:
 
         flat_routes = [value for key, value in routes.items()]
 
-        mrich.var("#routes", len(flat_routes))
+        mrich.var('#routes', len(flat_routes))
 
         counter = Counter(flat_routes)
         duplicates = {item: count for item, count in counter.items() if count > 1}
 
-        mrich.var("products with duplicate routes", len(duplicates))
+        mrich.var('products with duplicate routes', len(duplicates))
 
         if not duplicates:
-            mrich.success("No duplicate routes found")
+            mrich.success('No duplicate routes found')
             return None
 
         delete = set()
         for dupe in duplicates:
             matched_ids = [k for k, v in routes.items() if v == dupe]
             mrich.print(
-                "compound", dupe[0], "has", len(matched_ids), "duplicate routes"
+                'compound', dupe[0], 'has', len(matched_ids), 'duplicate routes'
             )
             for route_id in matched_ids[1:]:
                 delete.add(route_id)
 
-        str_ids = str(tuple(delete)).replace(",)", ")")
-        self.delete_where(table="component", key=f"component_route IN {str_ids}")
-        self.delete_where(table="route", key=f"route_id IN {str_ids}")
+        str_ids = str(tuple(delete)).replace(',)', ')')
+        self.delete_where(table='component', key=f'component_route IN {str_ids}')
+        self.delete_where(table='route', key=f'route_id IN {str_ids}')
 
-        mrich.success("Deleted", len(delete), "duplicate routes")
+        mrich.success('Deleted', len(delete), 'duplicate routes')
 
         return delete
 
     def reinitialise_molecules(self):
         """In the case where the Mol binaries in a database are throwing unpickling errors, run this to reinitialise them all from their smiles."""
 
-        mrich.var("#compounds", self.count("compound"))
+        mrich.var('#compounds', self.count('compound'))
 
         sql = f"""
         UPDATE {self.SQL_SCHEMA_PREFIX}compound
         SET compound_mol = {self.SQL_SCHEMA_PREFIX}mol_from_smiles(compound_smiles);
         """
 
-        with mrich.loading("Reinitialising compounds..."):
+        with mrich.loading('Reinitialising compounds...'):
             self.execute(sql)
 
-        mrich.success("compound_mol records updated")
+        mrich.success('compound_mol records updated')
 
     def fix_incorrect_pose_compound_assignments(self):
         """Fix pose_compound values that reference incorrect chemical structures"""
@@ -2909,16 +2884,16 @@ class Database:
         lookup = self.get_compound_id_smiles_dict()
         lookup = {v: k for k, v in lookup.items()}
 
-        count = self.count_where(table="pose", key="mol", value="NOT null")
+        count = self.count_where(table='pose', key='mol', value='NOT null')
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
                 SELECT pose_id, pose_compound, mol_to_smiles(mol_from_binary_mol(pose_mol))
                 FROM pose
                 WHERE pose_mol IS NOT null
                 """
-            case "psycopg":
+            case 'psycopg':
                 sql = """
                 SELECT pose_id, pose_compound, hippo.mol_to_smiles(hippo.mol_from_pkl(pose_mol))
                 FROM hippo.pose
@@ -2932,21 +2907,21 @@ class Database:
         for pose_id, pose_compound, smiles in mrich.track(c, total=count):
             try:
                 flat_smiles = sanitise_smiles(smiles)
-            except Exception as e:
-                mrich.error("Could not sanitise", pose_id, smiles)
+            except Exception:
+                mrich.error('Could not sanitise', pose_id, smiles)
 
             comp_id = lookup.get(flat_smiles)
 
             if not comp_id:
-                mrich.error("No matching compound", pose_id, smiles)
+                mrich.error('No matching compound', pose_id, smiles)
                 continue
 
             if comp_id != pose_compound:
                 fix.add((comp_id, pose_id))
                 fix_count += 1
-                mrich.set_progress_field("#fix", fix_count)
+                mrich.set_progress_field('#fix', fix_count)
 
-        mrich.var("#fix", len(fix))
+        mrich.var('#fix', len(fix))
 
         sql = f"""
         UPDATE {self.SQL_SCHEMA_PREFIX}pose
@@ -2963,7 +2938,7 @@ class Database:
         self,
         *,
         smiles: list[str],
-        radical: str = "warning",
+        radical: str = 'warning',
         sanitisation_verbosity: bool = True,
         sanitise: bool = True,
         debug: bool = False,
@@ -2973,26 +2948,25 @@ class Database:
         values = []
 
         if len(smiles) > 1000:
-            generator = mrich.track(smiles, prefix="Sanitising...")
+            generator = mrich.track(smiles, prefix='Sanitising...')
         else:
             generator = smiles
 
         for s in generator:
-
             if sanitise:
                 try:
                     new_smiles = sanitise_smiles(
                         s,
-                        sanitisation_failed="error",
+                        sanitisation_failed='error',
                         radical=radical,
                         verbosity=sanitisation_verbosity,
                     )
                 except SanitisationError as e:
-                    mrich.error(f"Could not sanitise {s=}")
+                    mrich.error(f'Could not sanitise {s=}')
                     mrich.error(str(e))
                     continue
                 except AssertionError:
-                    mrich.error(f"Could not sanitise {s=}")
+                    mrich.error(f'Could not sanitise {s=}')
                     continue
             else:
                 new_smiles = s
@@ -3001,20 +2975,19 @@ class Database:
             values.append((inchikey, new_smiles))
 
         if self.auto_compute_bfps:
-
             sql = f"""
             INSERT OR IGNORE INTO {self.SQL_SCHEMA_PREFIX}compound(
-                compound_inchikey, 
-                compound_smiles, 
-                compound_mol, 
-                compound_pattern_bfp, 
+                compound_inchikey,
+                compound_smiles,
+                compound_mol,
+                compound_pattern_bfp,
                 compound_morgan_bfp
             )
             VALUES(
-                ?1, 
-                ?2, 
-                mol_from_smiles(?2), 
-                mol_pattern_bfp(mol_from_smiles(?2), 2048), 
+                ?1,
+                ?2,
+                mol_from_smiles(?2),
+                mol_pattern_bfp(mol_from_smiles(?2), 2048),
                 mol_morgan_bfp(mol_from_smiles(?2), 2, 2048)
             )
             """
@@ -3022,25 +2995,24 @@ class Database:
             self.executemany(sql, values)
 
         else:
-
             match self.engine:
-                case "sqlite3":
+                case 'sqlite3':
                     sql = """
                     INSERT OR IGNORE INTO compound(compound_inchikey, compound_smiles, compound_mol)
                     VALUES(?1, ?2, mol_from_smiles(?2))
                     """
 
                     if debug:
-                        mrich.debug("Inserting...")
+                        mrich.debug('Inserting...')
 
                     self.executemany(sql, values)
 
-                case "psycopg":
+                case 'psycopg':
                     sql = """
                     INSERT INTO hippo.compound(compound_inchikey, compound_smiles, compound_mol)
                     VALUES(
-                        %(inchikey)s, 
-                        %(smiles)s, 
+                        %(inchikey)s,
+                        %(smiles)s,
                         hippo.mol_from_smiles(%(smiles)s)
                     )
                     ON CONFLICT DO NOTHING;
@@ -3085,62 +3057,62 @@ class Database:
         ### POSES
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
                 INSERT OR IGNORE INTO pose(
-                    pose_inchikey, 
-                    pose_smiles, 
-                    pose_alias, 
-                    pose_reference, 
-                    pose_path, 
-                    pose_compound, 
-                    pose_target, 
-                    pose_mol, 
-                    pose_energy_score, 
-                    pose_distance_score, 
+                    pose_inchikey,
+                    pose_smiles,
+                    pose_alias,
+                    pose_reference,
+                    pose_path,
+                    pose_compound,
+                    pose_target,
+                    pose_mol,
+                    pose_energy_score,
+                    pose_distance_score,
                     pose_metadata
                 )
                 VALUES(
-                    :inchikey, 
-                    :smiles, 
-                    :alias, 
-                    :reference, 
-                    :path, 
-                    :compound, 
-                    :target, 
-                    :mol, 
-                    :energy_score, 
-                    :distance_score, 
+                    :inchikey,
+                    :smiles,
+                    :alias,
+                    :reference,
+                    :path,
+                    :compound,
+                    :target,
+                    :mol,
+                    :energy_score,
+                    :distance_score,
                     :metadata
                 )
                 """
 
-            case "psycopg":
+            case 'psycopg':
                 sql = """
                 INSERT INTO hippo.pose(
-                    pose_inchikey, 
-                    pose_smiles, 
-                    pose_alias, 
-                    pose_reference, 
-                    pose_path, 
-                    pose_compound, 
-                    pose_target, 
-                    pose_mol, 
-                    pose_energy_score, 
-                    pose_distance_score, 
+                    pose_inchikey,
+                    pose_smiles,
+                    pose_alias,
+                    pose_reference,
+                    pose_path,
+                    pose_compound,
+                    pose_target,
+                    pose_mol,
+                    pose_energy_score,
+                    pose_distance_score,
                     pose_metadata
                 )
                 VALUES(
-                    %(inchikey)s, 
-                    %(smiles)s, 
-                    %(alias)s, 
-                    %(reference)s, 
-                    %(path)s, 
-                    %(compound)s, 
-                    %(target)s, 
-                    %(mol)s, 
-                    %(energy_score)s, 
-                    %(distance_score)s, 
+                    %(inchikey)s,
+                    %(smiles)s,
+                    %(alias)s,
+                    %(reference)s,
+                    %(path)s,
+                    %(compound)s,
+                    %(target)s,
+                    %(mol)s,
+                    %(energy_score)s,
+                    %(distance_score)s,
                     %(metadata)s
                 )
                 ON CONFLICT DO NOTHING;
@@ -3148,9 +3120,8 @@ class Database:
 
         values = []
         for i, d in enumerate(dicts):
-
-            alias = d["alias"]
-            reference_id = d.get("reference_id")
+            alias = d['alias']
+            reference_id = d.get('reference_id')
             if reference_id:
                 reference_id = int(reference_id)
 
@@ -3160,21 +3131,21 @@ class Database:
             try:
                 values.append(
                     dict(
-                        inchikey=str(d["inchikey"]),
-                        smiles=str(d["smiles"]),
+                        inchikey=str(d['inchikey']),
+                        smiles=str(d['smiles']),
                         alias=alias,
                         reference=reference_id,
-                        path=str(d["path"]),
-                        compound=int(d["compound_id"]),
-                        target=int(d["target_id"]),
-                        mol=d["mol"].ToBinary(),
-                        energy_score=float(d["energy_score"]),
-                        distance_score=float(d["distance_score"]),
-                        metadata=dumps(d["metadata"]),
+                        path=str(d['path']),
+                        compound=int(d['compound_id']),
+                        target=int(d['target_id']),
+                        mol=d['mol'].ToBinary(),
+                        energy_score=float(d['energy_score']),
+                        distance_score=float(d['distance_score']),
+                        metadata=dumps(d['metadata']),
                     )
                 )
             except KeyError as e:
-                mrich.error("Skipping", i, str(e))
+                mrich.error('Skipping', i, str(e))
 
         self.executemany(sql, values)
         self.commit()
@@ -3187,24 +3158,24 @@ class Database:
         pose_ids = set()
 
         for i, d in enumerate(dicts):
-            if "inspiration_ids" not in d:
+            if 'inspiration_ids' not in d:
                 continue
-            derivative_id = lookup.get(str(d["path"]))
+            derivative_id = lookup.get(str(d['path']))
             if not derivative_id:
-                mrich.error("Could not get derivative by path:", str(d["path"]))
+                mrich.error('Could not get derivative by path:', str(d['path']))
                 continue
             pose_ids.add(derivative_id)
-            for inspiration_id in d["inspiration_ids"]:
+            for inspiration_id in d['inspiration_ids']:
                 values.append((inspiration_id, derivative_id))
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
                 INSERT OR IGNORE INTO inspiration(inspiration_original, inspiration_derivative)
                 VALUES(?1, ?2)
                 """
 
-            case "psycopg":
+            case 'psycopg':
                 sql = """
                 INSERT INTO hippo.inspiration(inspiration_original, inspiration_derivative)
                 VALUES(%s, %s)
@@ -3219,24 +3190,24 @@ class Database:
     def calculate_all_scaffolds(self) -> None:
         """Determine and insert records for all substructure/superstructure relationships in the Compound table"""
 
-        n_before = self.count("scaffold")
+        n_before = self.count('scaffold')
 
-        mrich.var("#compounds", self.count("compound"))
-        mrich.var("#scaffold defs", n_before)
+        mrich.var('#compounds', self.count('compound'))
+        mrich.var('#scaffold defs', n_before)
 
         sql = """
-        SELECT compound_id, compound_mol, compound_pattern_bfp 
+        SELECT compound_id, compound_mol, compound_pattern_bfp
         FROM compound
         """
 
-        with mrich.loading("Fetching compounds..."):
+        with mrich.loading('Fetching compounds...'):
             records = self.execute(sql).fetchall()
 
         self.commit()
 
         sql = """
         INSERT OR IGNORE INTO scaffold
-        SELECT ?1, c.compound_id 
+        SELECT ?1, c.compound_id
         FROM compound AS c, compound_pattern_bfp AS fp
         WHERE c.compound_id = fp.compound_id
         AND c.compound_id <> ?1
@@ -3244,45 +3215,45 @@ class Database:
         AND fp.compound_id MATCH rdtree_subset(?3)
         """
 
-        with mrich.loading("Calculating scaffolds..."):
+        with mrich.loading('Calculating scaffolds...'):
             t1 = time.time()
             self.executemany(sql, records)
-            mrich.print("Took", f"{time.time() - t1:.1f}", "seconds")
+            mrich.print('Took', f'{time.time() - t1:.1f}', 'seconds')
 
         self.commit()
 
-        diff = self.count("scaffold") - n_before
+        diff = self.count('scaffold') - n_before
 
         if diff:
             mrich.success(
-                "Found", diff, "new substructure-superstructure relationships"
+                'Found', diff, 'new substructure-superstructure relationships'
             )
         else:
             mrich.warning(
-                "Found", diff, "new substructure-superstructure relationships"
+                'Found', diff, 'new substructure-superstructure relationships'
             )
 
     def calculate_all_murcko_scaffolds(
         self, generic: bool = True
-    ) -> "dict | (dict, dict)":
+    ) -> 'dict | (dict, dict)':
         """Determine Murcko and optionally generic Murcko scaffolds for all Compounds in the Database and add relevant records.
 
         :param generic: Calculate generic (single bonds and all carbon) scaffolds as well
         """
 
-        n_before = self.count("scaffold")
+        n_before = self.count('scaffold')
 
-        mrich.var("#compounds", self.count("compound"))
-        mrich.var("#scaffold defs", n_before)
+        mrich.var('#compounds', self.count('compound'))
+        mrich.var('#scaffold defs', n_before)
 
         from rdkit.Chem import MolFromSmiles, MolToSmiles
         from rdkit.Chem.Scaffolds.MurckoScaffold import (
-            MurckoScaffoldSmiles,
             MakeScaffoldGeneric,
+            MurckoScaffoldSmiles,
         )
 
         compound_records = self.select(
-            query="compound_id, compound_smiles", table="compound", multiple=True
+            query='compound_id, compound_smiles', table='compound', multiple=True
         )
 
         ### CALCULATE SCAFFOLDS
@@ -3291,7 +3262,6 @@ class Database:
         generic_data = {}
         generic_to_murcko = {}
         for c_id, smiles in mrich.track(compound_records):
-
             # murcko
 
             try:
@@ -3310,7 +3280,6 @@ class Database:
             # generic
 
             if generic:
-
                 try:
                     generic_smiles = sanitise_smiles(
                         MolToSmiles(MakeScaffoldGeneric(MolFromSmiles(murcko_smiles)))
@@ -3330,8 +3299,8 @@ class Database:
                 generic_data[generic_smiles].add(c_id)
                 generic_to_murcko[generic_smiles].add(murcko_smiles)
 
-        mrich.var("#murcko scaffolds", len(murcko_data))
-        mrich.var("#generic murcko scaffolds", len(generic_data))
+        mrich.var('#murcko scaffolds', len(murcko_data))
+        mrich.var('#generic murcko scaffolds', len(generic_data))
 
         ### REGISTER MURCKOS
 
@@ -3351,42 +3320,41 @@ class Database:
         ### TAG MURCKOS
 
         murcko_ids = self.select_id_where(
-            table="compound",
-            key=f"compound_inchikey IN {tuple(murcko_s2i.values())}",
+            table='compound',
+            key=f'compound_inchikey IN {tuple(murcko_s2i.values())}',
             multiple=True,
         )
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
-                INSERT OR IGNORE INTO tag(tag_name, tag_compound) 
+                INSERT OR IGNORE INTO tag(tag_name, tag_compound)
                 VALUES (?,?)
                 """
-            case "psycopg":
+            case 'psycopg':
                 sql = """
-                INSERT INTO hippo.tag(tag_name, tag_compound) 
+                INSERT INTO hippo.tag(tag_name, tag_compound)
                 VALUES (%s,%s)
                 ON CONFLICT DO NOTHING;
                 """
 
         self.executemany(
             sql,
-            [("MurckoScaffold", i) for i, in murcko_ids],
+            [('MurckoScaffold', i) for (i,) in murcko_ids],
         )
 
         ### TAG GENERICS
 
         if generic:
-
             generic_ids = self.select_id_where(
-                table="compound",
-                key=f"compound_inchikey IN {tuple(generic_s2i.values())}",
+                table='compound',
+                key=f'compound_inchikey IN {tuple(generic_s2i.values())}',
                 multiple=True,
             )
 
             self.executemany(
                 sql,
-                [("GenericMurckoScaffold", i) for i, in generic_ids],
+                [('GenericMurckoScaffold', i) for (i,) in generic_ids],
             )
 
         ### ADD MURCKO SCAFFOLD RELATIONS
@@ -3401,18 +3369,18 @@ class Database:
 
         pairs = [(a, b) for a, b in pairs if a != b]
 
-        mrich.var("#murcko scaffold relations", len(pairs))
+        mrich.var('#murcko scaffold relations', len(pairs))
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
-                INSERT OR IGNORE INTO scaffold (scaffold_base, scaffold_superstructure) 
+                INSERT OR IGNORE INTO scaffold (scaffold_base, scaffold_superstructure)
                 VALUES (?,?)
                 """
 
-            case "psycopg":
+            case 'psycopg':
                 sql = """
-                INSERT INTO hippo.scaffold (scaffold_base, scaffold_superstructure) 
+                INSERT INTO hippo.scaffold (scaffold_base, scaffold_superstructure)
                 VALUES (%s, %s)
                 ON CONFLICT DO NOTHING;
                 """
@@ -3425,7 +3393,6 @@ class Database:
         ### ADD GENERIC SCAFFOLD RELATIONS
 
         if generic:
-
             pairs = []
 
             generic_inchikey_lookup = self.get_compound_inchikey_id_dict(
@@ -3444,10 +3411,10 @@ class Database:
 
             pairs = [(a, b) for a, b in pairs if a != b]
 
-            mrich.var("#generic murcko scaffold relations", len(pairs))
+            mrich.var('#generic murcko scaffold relations', len(pairs))
 
             self.executemany(
-                "INSERT OR IGNORE INTO scaffold (scaffold_base, scaffold_superstructure) VALUES (?,?)",
+                'INSERT OR IGNORE INTO scaffold (scaffold_base, scaffold_superstructure) VALUES (?,?)',
                 pairs,
             )
 
@@ -3462,14 +3429,14 @@ class Database:
         """Propagate all subsite assignments from inspirations to their derivatives"""
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
                 INSERT OR IGNORE INTO subsite_tag(subsite_tag_ref, subsite_tag_pose)
                 SELECT subsite_tag_ref, inspiration_derivative FROM subsite_tag
                 INNER JOIN inspiration ON subsite_tag_pose = inspiration_original
                 """
 
-            case "psycopg":
+            case 'psycopg':
                 sql = """
                 INSERT INTO hippo.subsite_tag(subsite_tag_ref, subsite_tag_pose)
                 SELECT subsite_tag_ref, inspiration_derivative FROM hippo.subsite_tag
@@ -3483,7 +3450,7 @@ class Database:
             self.commit()
 
     def set_subsites_from_metadata_field(
-        self, pose_str_ids: str, field="CanonSites alias"
+        self, pose_str_ids: str, field='CanonSites alias'
     ) -> None:
         """Create and assign subsite entries from a metadata field
 
@@ -3495,9 +3462,9 @@ class Database:
         from json import loads
 
         records = self.select_where(
-            table="pose",
-            query="pose_id, pose_target, pose_metadata",
-            key=f"pose_id IN {pose_str_ids}",
+            table='pose',
+            query='pose_id, pose_target, pose_metadata',
+            key=f'pose_id IN {pose_str_ids}',
             multiple=True,
         )
 
@@ -3505,25 +3472,24 @@ class Database:
         subsite_tags = set()
 
         for pose_id, pose_target, metadata in records:
-
             metadata = loads(metadata)
 
             key = metadata.get(field)
 
             if not key:
-                mrich.warning(field, "not in metadata pose_id=", pose_id)
+                mrich.warning(field, 'not in metadata pose_id=', pose_id)
                 continue
 
             subsites.add((pose_target, key))
             subsite_tags.add((pose_target, key, pose_id))
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
                 INSERT OR IGNORE INTO subsite(subsite_target, subsite_name)
                 VALUES(?, ?)
                 """
-            case "psycopg":
+            case 'psycopg':
                 sql = strip_sql(
                     """
                 INSERT INTO hippo.subsite(subsite_target, subsite_name)
@@ -3535,20 +3501,20 @@ class Database:
         self.executemany(sql, sorted(list(subsites)))
 
         subsite_records = self.select(
-            table="subsite",
-            query="subsite_id, subsite_target, subsite_name",
+            table='subsite',
+            query='subsite_id, subsite_target, subsite_name',
             multiple=True,
         )
 
         subsite_lookup = {(t, name): i for i, t, name in subsite_records}
 
         match self.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
                 INSERT OR IGNORE INTO subsite_tag(subsite_tag_ref, subsite_tag_pose)
                 VALUES(?, ?)
                 """
-            case "psycopg":
+            case 'psycopg':
                 sql = strip_sql(
                     """
                 INSERT INTO hippo.subsite_tag(subsite_tag_ref, subsite_tag_pose)
@@ -3574,7 +3540,7 @@ class Database:
         inchikey: str | None = None,
         alias: str | None = None,
         smiles: str | None = None,
-        none: str = "error",
+        none: str = 'error',
         **kwargs,
     ) -> Compound:
         """Get a :class:`.Compound` using one of the following fields: ['id', 'inchikey', 'alias', 'smiles']
@@ -3593,13 +3559,13 @@ class Database:
             )
 
         if not id:
-            if none == "error":
-                mrich.error(f"Invalid {id=}")
+            if none == 'error':
+                mrich.error(f'Invalid {id=}')
             return None
 
-        query = "compound_id, compound_inchikey, compound_alias, compound_smiles"
+        query = 'compound_id, compound_inchikey, compound_alias, compound_smiles'
         entry = self.select_where(
-            query=query, table="compound", key="id", value=id, none=none, **kwargs
+            query=query, table='compound', key='id', value=id, none=none, **kwargs
         )
         compound = Compound(self._animal, self, *entry, metadata=None, mol=None)
         return compound
@@ -3623,17 +3589,17 @@ class Database:
 
         if inchikey:
             entry = self.select_id_where(
-                table="compound", key="inchikey", value=inchikey, **kwargs
+                table='compound', key='inchikey', value=inchikey, **kwargs
             )
 
         elif alias:
             entry = self.select_id_where(
-                table="compound", key="alias", value=alias, **kwargs
+                table='compound', key='alias', value=alias, **kwargs
             )
 
         elif smiles:
             entry = self.select_id_where(
-                table="compound", key="smiles", value=smiles, **kwargs
+                table='compound', key='smiles', value=smiles, **kwargs
             )
 
         else:
@@ -3647,15 +3613,15 @@ class Database:
     def get_compound_mol(
         self,
         compound_id: int,
-    ) -> "Chem.Mol":
+    ) -> 'Chem.Mol':
         """Get the rdkit.Chem.Mol for a given :class:`.Compound`"""
 
         from rdkit.Chem import Mol
 
         (bytestr,) = self.select_where(
-            query="mol_to_binary_mol(compound_mol)",
-            table="compound",
-            key="id",
+            query='mol_to_binary_mol(compound_mol)',
+            table='compound',
+            key='id',
             value=compound_id,
         )
 
@@ -3679,12 +3645,12 @@ class Database:
         if not isinstance(function, str):
             function, extra = function
         else:
-            extra = ""
+            extra = ''
 
         (val,) = self.select_where(
-            query=f"{function}(compound_mol{extra})",
-            table="compound",
-            key="id",
+            query=f'{function}(compound_mol{extra})',
+            table='compound',
+            key='id',
             value=compound_id,
             multiple=False,
         )
@@ -3716,12 +3682,12 @@ class Database:
             return PoseSet(self, id)
 
         if not id:
-            mrich.error(f"Invalid {id=}")
+            mrich.error(f'Invalid {id=}')
             return None
 
-        query = ", ".join(self.POSE_FIELDS)
+        query = ', '.join(self.POSE_FIELDS)
 
-        entry = self.select_where(query=query, table="pose", key="id", value=id)
+        entry = self.select_where(query=query, table='pose', key='id', value=id)
 
         if debug:
             mrich.print(entry)
@@ -3736,12 +3702,12 @@ class Database:
     ) -> list[Pose]:
         """Get list of initialised :class:`.Pose` objects with given ID's"""
 
-        query = ", ".join(self.POSE_FIELDS)
+        query = ', '.join(self.POSE_FIELDS)
 
-        str_ids = str(tuple(ids)).replace(",)", ")")
+        str_ids = str(tuple(ids)).replace(',)', ')')
 
         records = self.select_where(
-            query=query, table="pose", key=f"pose_id IN {str_ids}", multiple=True
+            query=query, table='pose', key=f'pose_id IN {str_ids}', multiple=True
         )
 
         poses = [Pose(self, *entry) for entry in records]
@@ -3766,16 +3732,16 @@ class Database:
         if inchikey:
             # inchikey might not be unique
             entries = self.select_id_where(
-                table="pose", key="inchikey", value=inchikey, multiple=True
+                table='pose', key='inchikey', value=inchikey, multiple=True
             )
             if len(entries) != 1:
-                mrich.warning(f"Multiple poses with {inchikey=}")
-                return [i for i, in entries]
+                mrich.warning(f'Multiple poses with {inchikey=}')
+                return [i for (i,) in entries]
             else:
                 entry = entries[0]
 
         elif alias:
-            entry = self.select_id_where(table="pose", key="alias", value=alias)
+            entry = self.select_id_where(table='pose', key='alias', value=alias)
 
         else:
             raise NotImplementedError
@@ -3800,12 +3766,12 @@ class Database:
         """
 
         if not id:
-            mrich.error(f"Invalid {id=}")
+            mrich.error(f'Invalid {id=}')
             return None
 
-        query = "reaction_id, reaction_type, reaction_product, reaction_product_yield"
+        query = 'reaction_id, reaction_type, reaction_product, reaction_product_yield'
         entry = self.select_where(
-            query=query, table="reaction", key="id", value=id, none=none
+            query=query, table='reaction', key='id', value=id, none=none
         )
 
         if not entry:
@@ -3828,25 +3794,25 @@ class Database:
 
         """
 
-        query = ", ".join(
+        query = ', '.join(
             [
-                "quote_compound",
-                "quote_supplier",
-                "quote_catalogue",
-                "quote_entry",
-                "quote_amount",
-                "quote_price",
-                "quote_currency",
-                "quote_lead_time",
-                "quote_purity",
-                "quote_date",
-                "quote_smiles",
-                "quote_id",
+                'quote_compound',
+                'quote_supplier',
+                'quote_catalogue',
+                'quote_entry',
+                'quote_amount',
+                'quote_price',
+                'quote_currency',
+                'quote_lead_time',
+                'quote_purity',
+                'quote_date',
+                'quote_smiles',
+                'quote_id',
             ]
         )
 
         entry = self.select_where(
-            query=query, table="quote", key="id", value=id, none=none
+            query=query, table='quote', key='id', value=id, none=none
         )
 
         return Quote(
@@ -3865,33 +3831,33 @@ class Database:
             smiles=entry[10],
         )
 
-    def get_quote_df(self, ids: list[int]) -> "pd.DataFrame":
+    def get_quote_df(self, ids: list[int]) -> 'pd.DataFrame':
         """Get a pandas DataFrame representing quotes with given IDs"""
 
         from pandas import DataFrame
 
-        str_ids = str(tuple(ids)).replace(",)", ")")
+        str_ids = str(tuple(ids)).replace(',)', ')')
 
-        query = ", ".join(
+        query = ', '.join(
             [
-                "quote_compound",
-                "quote_supplier",
-                "quote_catalogue",
-                "quote_entry",
-                "quote_amount",
-                "quote_price",
-                "quote_currency",
-                "quote_lead_time",
-                "quote_purity",
-                "quote_date",
-                "quote_smiles",
-                "quote_id",
+                'quote_compound',
+                'quote_supplier',
+                'quote_catalogue',
+                'quote_entry',
+                'quote_amount',
+                'quote_price',
+                'quote_currency',
+                'quote_lead_time',
+                'quote_purity',
+                'quote_date',
+                'quote_smiles',
+                'quote_id',
             ]
         )
         records = self.select_where(
             query=query,
-            table="quote",
-            key=f"quote_id IN {str_ids}",
+            table='quote',
+            key=f'quote_id IN {str_ids}',
             multiple=True,
         )
 
@@ -3932,7 +3898,7 @@ class Database:
         """
 
         (payload,) = self.select_where(
-            query=f"{table}_metadata", table=table, key=f"id", value=id
+            query=f'{table}_metadata', table=table, key='id', value=id
         )
 
         if payload:
@@ -3975,9 +3941,9 @@ class Database:
 
         """
 
-        table = "target"
+        table = 'target'
         (payload,) = self.select_where(
-            query=f"{table}_name", table=table, key="id", value=id
+            query=f'{table}_name', table=table, key='id', value=id
         )
         return payload
 
@@ -3993,8 +3959,8 @@ class Database:
 
         """
 
-        table = "target"
-        entry = self.select_id_where(table=table, key="name", value=name)
+        table = 'target'
+        entry = self.select_id_where(table=table, key='name', value=name)
 
         if entry:
             return entry[0]
@@ -4013,7 +3979,7 @@ class Database:
 
         """
 
-        entry = self.select_all_where(table="feature", key="id", value=id)
+        entry = self.select_all_where(table='feature', key='id', value=id)
 
         return Feature(*entry)
 
@@ -4035,16 +4001,16 @@ class Database:
         from .rset import ReactionSet
 
         (product_id,) = self.select_where(
-            table="route", query="route_product", key="id", value=id
+            table='route', query='route_product', key='id', value=id
         )
 
         if debug:
-            mrich.var("product_id", product_id)
+            mrich.var('product_id', product_id)
 
         triples = self.select_where(
-            table="component",
-            query="component_ref, component_type, component_amount",
-            key=f"component_route IS {id} ORDER BY component_id",
+            table='component',
+            query='component_ref, component_type, component_amount',
+            key=f'component_route IS {id} ORDER BY component_id',
             multiple=True,
         )
 
@@ -4065,10 +4031,10 @@ class Database:
                     intermediate_ids.append(ref)
                     intermediate_amounts.append(amount)
                 case _:
-                    raise ValueError(f"Unknown component type {c_type}")
+                    raise ValueError(f'Unknown component type {c_type}')
 
         if debug:
-            mrich.var("pairs", pairs)
+            mrich.var('pairs', pairs)
 
         products = CompoundSet(self, [product_id])
         reactants = CompoundSet(self, reactant_ids)
@@ -4094,34 +4060,33 @@ class Database:
         )
 
         if debug:
-            mrich.var("recipe", recipe)
+            mrich.var('recipe', recipe)
 
         return recipe
 
-    def get_route_products(self) -> "CompoundSet | None":
+    def get_route_products(self) -> 'CompoundSet | None':
         """Get a :class:`.CompoundSet` of all route products"""
         from .cset import CompoundSet
 
         records = self.execute(
-            f"SELECT DISTINCT route_product FROM {self.SQL_SCHEMA_PREFIX}route"
+            f'SELECT DISTINCT route_product FROM {self.SQL_SCHEMA_PREFIX}route'
         ).fetchall()
         if not records:
             return None
-        return CompoundSet(self, [i for i, in records])
+        return CompoundSet(self, [i for (i,) in records])
 
     def get_route_id_product_dict(self) -> dict[int, int]:
         """Get a dictionary mapping route ID's to their product :class:`.Compound`"""
-        records = self.execute("SELECT route_id, route_product FROM route").fetchall()
+        records = self.execute('SELECT route_id, route_product FROM route').fetchall()
         return {route_id: route_product for route_id, route_product in records}
 
     def get_product_id_routes_dict(self) -> dict[int, set[int]]:
         """Get a dictionary mapping product :class:`.Compound` to their route IDs"""
-        records = self.execute("SELECT route_id, route_product FROM route").fetchall()
+        records = self.execute('SELECT route_id, route_product FROM route').fetchall()
 
         lookup = {}
 
         for route_id, route_product in records:
-
             if route_product not in lookup:
                 lookup[route_product] = set()
 
@@ -4148,10 +4113,10 @@ class Database:
 
         return lookup
 
-    def get_compound_id_pose_ids_dict(self, cset: "CompoundSet") -> dict[int, set]:
+    def get_compound_id_pose_ids_dict(self, cset: 'CompoundSet') -> dict[int, set]:
         """Get a dictionary mapping :class:`.Compound` ID's to their associated :class:`.Pose` ID's"""
         records = self.execute(
-            f"SELECT pose_compound, pose_id FROM {self.SQL_SCHEMA_PREFIX}pose WHERE pose_compound IN {cset.str_ids}"
+            f'SELECT pose_compound, pose_id FROM {self.SQL_SCHEMA_PREFIX}pose WHERE pose_compound IN {cset.str_ids}'
         ).fetchall()
 
         d = {}
@@ -4162,11 +4127,11 @@ class Database:
         return d
 
     def get_compound_id_suppliers_dict(
-        self, cset: "CompoundSet"
+        self, cset: 'CompoundSet'
     ) -> dict[int, set[str]]:
         """Get a dictionary mapping :class:`.Compound` ID's to suppliers which stock it"""
         records = self.execute(
-            f"SELECT quote_compound, quote_supplier FROM {self.SQL_SCHEMA_PREFIX}quote WHERE quote_compound IN {cset.str_ids}"
+            f'SELECT quote_compound, quote_supplier FROM {self.SQL_SCHEMA_PREFIX}quote WHERE quote_compound IN {cset.str_ids}'
         ).fetchall()
 
         d = {}
@@ -4179,15 +4144,15 @@ class Database:
 
     def get_compound_id_smiles_dict(
         self,
-        cset: "CompoundSet | None" = None,
+        cset: 'CompoundSet | None' = None,
     ) -> dict[int, set[str]]:
         """Get a dictionary mapping :class:`.Compound` ID's to suppliers which stock it"""
 
         if cset:
-            sql = f"SELECT compound_id, compound_smiles FROM {self.SQL_SCHEMA_PREFIX}compound WHERE compound_id IN {cset.str_ids}"
+            sql = f'SELECT compound_id, compound_smiles FROM {self.SQL_SCHEMA_PREFIX}compound WHERE compound_id IN {cset.str_ids}'
 
         else:
-            sql = "SELECT compound_id, compound_smiles FROM compound"
+            sql = 'SELECT compound_id, compound_smiles FROM compound'
 
         c = self.execute(sql)
 
@@ -4200,13 +4165,13 @@ class Database:
     def get_compound_inchikey_id_dict(self, inchikeys: list[str]) -> dict[str, int]:
         """Get a dictionary mapping :class:`.Compound` inchikeys to their ID's"""
 
-        inchikey_str = str(tuple(inchikeys)).replace(",)", ")")
+        inchikey_str = str(tuple(inchikeys)).replace(',)', ')')
 
         records = self.select_where(
-            table="compound",
+            table='compound',
             multiple=True,
-            query="compound_inchikey, compound_id",
-            key=f"compound_inchikey IN {inchikey_str}",
+            query='compound_inchikey, compound_id',
+            key=f'compound_inchikey IN {inchikey_str}',
         )
 
         return {
@@ -4217,8 +4182,8 @@ class Database:
         """Get a dictionary mapping :class:`.Compound` smiles to their ID's"""
 
         records = self.select(
-            table="compound",
-            query="compound_smiles, compound_id",
+            table='compound',
+            query='compound_smiles, compound_id',
             multiple=True,
         )
 
@@ -4227,25 +4192,23 @@ class Database:
         }
 
     def get_compound_id_inchikey_dict(
-        self, cset: "CompoundSet | None" = None
+        self, cset: 'CompoundSet | None' = None
     ) -> dict[int, str]:
         """Get a dictionary mapping :class:`.Compound` IDs to their inchikeys"""
 
         if cset:
-
             records = self.select_where(
-                table="compound",
+                table='compound',
                 multiple=True,
-                query="compound_id, compound_inchikey",
-                key=f"compound_id IN {cset.str_ids}",
+                query='compound_id, compound_inchikey',
+                key=f'compound_id IN {cset.str_ids}',
             )
 
         else:
-
             records = self.select(
-                table="compound",
+                table='compound',
                 multiple=True,
-                query="compound_id, compound_inchikey",
+                query='compound_id, compound_inchikey',
             )
 
         return {
@@ -4256,22 +4219,22 @@ class Database:
         """Get a dictionary mapping IDs to metadata dictionaries"""
         from json import loads
 
-        str_ids = str(tuple(ids)).replace(",)", ")")
+        str_ids = str(tuple(ids)).replace(',)', ')')
         records = self.select_where(
-            query=f"{table}_id, {table}_metadata",
+            query=f'{table}_id, {table}_metadata',
             table=table,
-            key=f"{table}_id IN {str_ids}",
+            key=f'{table}_id IN {str_ids}',
             multiple=True,
         )
         return {i: (loads(m) if m is not None else {}) for i, m in records}
 
     def get_compound_cluster_dict(
         self,
-        cset: "CompoundSet | None" = None,
+        cset: 'CompoundSet | None' = None,
         *,
         fractions: bool = False,
         max_scaffolds: int | None = None,
-        fraction_reference: "CompoundSet | None" = None,
+        fraction_reference: 'CompoundSet | None' = None,
     ) -> dict[tuple, set]:
         """Create a dictionary grouping compounds by their scaffold/base cluster.
 
@@ -4327,8 +4290,8 @@ class Database:
         """Get a dictionary mapping scaffold_base compound ID's to a set of their superstructure IDs"""
 
         records = self.select(
-            table="scaffold",
-            query="scaffold_base, scaffold_superstructure",
+            table='scaffold',
+            query='scaffold_base, scaffold_superstructure',
             multiple=True,
         )
 
@@ -4342,7 +4305,7 @@ class Database:
 
     def get_compound_tag_dict(
         self,
-        cset: "CompoundSet | None" = None,
+        cset: 'CompoundSet | None' = None,
     ) -> dict[int, set[str]]:
         """Get a dictionary mapping compound ID's to their tags"""
 
@@ -4350,7 +4313,7 @@ class Database:
             raise NotImplementedError
 
         records = self.select(
-            query="tag_name, tag_compound", table="tag", multiple=True
+            query='tag_name, tag_compound', table='tag', multiple=True
         )
 
         data = {}
@@ -4360,8 +4323,8 @@ class Database:
             data[compound_id].add(tag_name)
 
         # null IDS
-        comp_ids = self.select(table="compound", query="compound_id", multiple=True)
-        comp_ids = set(q for q, in comp_ids)
+        comp_ids = self.select(table='compound', query='compound_id', multiple=True)
+        comp_ids = set(q for (q,) in comp_ids)
 
         null_ids = comp_ids - set(data.keys())
 
@@ -4372,21 +4335,21 @@ class Database:
 
     def get_pose_tag_dict(
         self,
-        pset: "PoseSet | None" = None,
+        pset: 'PoseSet | None' = None,
     ) -> dict[int, set[str]]:
         """Get a dictionary mapping pose ID's to their tags"""
 
         if pset:
             records = self.select_where(
-                query="tag_name, tag_pose",
-                table="tag",
-                key=f"tag_pose IN {pset.str_ids}",
+                query='tag_name, tag_pose',
+                table='tag',
+                key=f'tag_pose IN {pset.str_ids}',
                 multiple=True,
             )
 
         else:
             records = self.select(
-                query="tag_name, tag_pose", table="tag", multiple=True
+                query='tag_name, tag_pose', table='tag', multiple=True
             )
 
         data = {}
@@ -4401,8 +4364,8 @@ class Database:
             null_ids = set(pset.ids) - set(data.keys())
 
         else:
-            pose_ids = self.select(table="pose", query="pose_id", multiple=True)
-            pose_ids = set(q for q, in pose_ids)
+            pose_ids = self.select(table='pose', query='pose_id', multiple=True)
+            pose_ids = set(q for (q,) in pose_ids)
 
             null_ids = pose_ids - set(data.keys())
 
@@ -4417,13 +4380,13 @@ class Database:
         lookup = {
             i: n
             for i, n in self.select(
-                query="subsite_id, subsite_name", table="subsite", multiple=True
+                query='subsite_id, subsite_name', table='subsite', multiple=True
             )
         }
 
         records = self.select(
-            query="subsite_tag_ref, subsite_tag_pose",
-            table="subsite_tag",
+            query='subsite_tag_ref, subsite_tag_pose',
+            table='subsite_tag',
             multiple=True,
         )
 
@@ -4433,8 +4396,8 @@ class Database:
             data[pose_id].add(lookup[subsite_id])
 
         # null IDS
-        pose_ids = self.select(table="pose", query="pose_id", multiple=True)
-        pose_ids = set(q for q, in pose_ids)
+        pose_ids = self.select(table='pose', query='pose_id', multiple=True)
+        pose_ids = set(q for (q,) in pose_ids)
 
         null_ids = pose_ids - set(data.keys())
 
@@ -4443,10 +4406,10 @@ class Database:
 
         return data
 
-    def get_pose_id_interaction_ids_dict(self, pset: "PoseSet") -> dict[int, set]:
+    def get_pose_id_interaction_ids_dict(self, pset: 'PoseSet') -> dict[int, set]:
         """Get a dictionary mapping :class:`.Pose` ID's to their associated :class:`.Interaction` ID's"""
         records = self.execute(
-            f"SELECT interaction_pose, interaction_id FROM {self.SQL_SCHEMA_PREFIX}interaction WHERE interaction_pose IN {pset.str_ids}"
+            f'SELECT interaction_pose, interaction_id FROM {self.SQL_SCHEMA_PREFIX}interaction WHERE interaction_pose IN {pset.str_ids}'
         ).fetchall()
 
         d = {}
@@ -4456,20 +4419,20 @@ class Database:
             d[pose_id].add(interaction_id)
         return d
 
-    def get_pose_alias_id_dict(self, pset: "PoseSet | None" = None) -> dict[str, int]:
+    def get_pose_alias_id_dict(self, pset: 'PoseSet | None' = None) -> dict[str, int]:
         """Get a dictionary mapping :class:`.Pose` aliases to ID's"""
 
         if pset:
             records = self.execute(
                 f"""
-            SELECT pose_id, pose_alias FROM {self.SQL_SCHEMA_PREFIX}pose 
+            SELECT pose_id, pose_alias FROM {self.SQL_SCHEMA_PREFIX}pose
             WHERE pose_alias IS NOT NULL
             AND pose_id IN {pset.str_ids}"""
             ).fetchall()
 
         else:
             records = self.execute(
-                """SELECT pose_id, pose_alias FROM pose 
+                """SELECT pose_id, pose_alias FROM pose
             WHERE pose_alias IS NOT NULL"""
             ).fetchall()
 
@@ -4479,13 +4442,13 @@ class Database:
 
         return d
 
-    def get_pose_alias_path_dict(self, pset: "PoseSet | None" = None) -> dict[str, str]:
+    def get_pose_alias_path_dict(self, pset: 'PoseSet | None' = None) -> dict[str, str]:
         """Get a dictionary mapping :class:`.Pose` aliases to paths"""
 
         if pset:
             records = self.execute(
                 f"""
-            SELECT pose_alias, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose 
+            SELECT pose_alias, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose
             WHERE pose_id IN {pset.str_ids}"""
             ).fetchall()
 
@@ -4500,20 +4463,20 @@ class Database:
 
         return d
 
-    def get_pose_id_alias_dict(self, pset: "PoseSet | None" = None) -> dict[str, int]:
+    def get_pose_id_alias_dict(self, pset: 'PoseSet | None' = None) -> dict[str, int]:
         """Get a dictionary mapping :class:`.Pose` aliases to ID's"""
 
         if pset:
             records = self.execute(
                 f"""
-            SELECT pose_id, pose_alias FROM {self.SQL_SCHEMA_PREFIX}pose 
+            SELECT pose_id, pose_alias FROM {self.SQL_SCHEMA_PREFIX}pose
             WHERE pose_alias IS NOT NULL
             AND pose_id IN {pset.str_ids}"""
             ).fetchall()
 
         else:
             records = self.execute(
-                """SELECT pose_id, pose_alias FROM pose 
+                """SELECT pose_id, pose_alias FROM pose
             WHERE pose_alias IS NOT NULL"""
             ).fetchall()
 
@@ -4523,13 +4486,13 @@ class Database:
 
         return d
 
-    def get_pose_path_id_dict(self, pset: "PoseSet | None" = None) -> dict[str, int]:
+    def get_pose_path_id_dict(self, pset: 'PoseSet | None' = None) -> dict[str, int]:
         """Get a dictionary mapping :class:`.Pose` aliases to ID's"""
 
         if pset:
             records = self.execute(
                 f"""
-            SELECT pose_id, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose 
+            SELECT pose_id, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose
             WHERE pose_path IS NOT NULL
             AND pose_id IN {pset.str_ids}"""
             ).fetchall()
@@ -4537,7 +4500,7 @@ class Database:
         else:
             records = self.execute(
                 f"""
-            SELECT pose_id, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose 
+            SELECT pose_id, pose_path FROM {self.SQL_SCHEMA_PREFIX}pose
             WHERE pose_path IS NOT NULL"""
             ).fetchall()
 
@@ -4547,33 +4510,32 @@ class Database:
 
         return d
 
-    def get_pose_id_obj_dict(self, pset: "PoseSet") -> "dict[id, Pose]":
+    def get_pose_id_obj_dict(self, pset: 'PoseSet') -> 'dict[id, Pose]':
         """Get a dictionary mapping :class:`.Pose` ID's to their objects"""
 
-        query = ", ".join(
+        query = ', '.join(
             [
-                "pose_id",
-                "pose_inchikey",
-                "pose_alias",
-                "pose_smiles",
-                "pose_reference",
-                "pose_path",
-                "pose_compound",
-                "pose_target",
-                "pose_mol",
-                "pose_fingerprint",
-                "pose_energy_score",
-                "pose_distance_score",
+                'pose_id',
+                'pose_inchikey',
+                'pose_alias',
+                'pose_smiles',
+                'pose_reference',
+                'pose_path',
+                'pose_compound',
+                'pose_target',
+                'pose_mol',
+                'pose_fingerprint',
+                'pose_energy_score',
+                'pose_distance_score',
             ]
         )
 
         records = self.select_where(
-            query=query, table="pose", key=f"pose_id IN {pset.str_ids}", multiple=True
+            query=query, table='pose', key=f'pose_id IN {pset.str_ids}', multiple=True
         )
 
         d = {}
         for entry in records:
-
             (
                 pose_id,
                 pose_inchikey,
@@ -4607,11 +4569,11 @@ class Database:
 
         return d
 
-    def get_pose_id_interaction_tuples_dict(self, pset: "PoseSet") -> dict[int, set]:
+    def get_pose_id_interaction_tuples_dict(self, pset: 'PoseSet') -> dict[int, set]:
         """Get a dictionary mapping :class:`.Pose` ID's to lists of `(interaction_type, feature_id)` tuples describing their interactions"""
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_id, interaction_type FROM {self.SQL_SCHEMA_PREFIX}interaction 
+        SELECT DISTINCT interaction_pose, feature_id, interaction_type FROM {self.SQL_SCHEMA_PREFIX}interaction
         INNER JOIN {self.SQL_SCHEMA_PREFIX}feature ON interaction_feature = feature_id
         WHERE interaction_pose IN {pset.str_ids}
         """
@@ -4635,7 +4597,7 @@ class Database:
         INNER JOIN {self.SQL_SCHEMA_PREFIX}inspiration ON pose_id = inspiration_derivative
         """
 
-        with mrich.spinner("Database.get_pose_id_interaction_ids_dict()"):
+        with mrich.spinner('Database.get_pose_id_interaction_ids_dict()'):
             records = self.execute(sql).fetchall()
 
         d = {}
@@ -4648,7 +4610,7 @@ class Database:
 
     def get_pose_id_inspiration_ids_dict(
         self,
-        pset: "PoseSet" = None,
+        pset: 'PoseSet' = None,
     ) -> dict[int, set]:
         """Get a dictionary mapping :class:`.Pose` ID's to a set of :class:`Pose` ID's for the inspirations for the whole database"""
 
@@ -4660,13 +4622,12 @@ class Database:
             """
 
         else:
-
             sql = f"""
             SELECT pose_id, inspiration_original FROM {self.SQL_SCHEMA_PREFIX}pose
             INNER JOIN {self.SQL_SCHEMA_PREFIX}inspiration ON pose_id = inspiration_derivative
             """
 
-        with mrich.spinner("Database.get_pose_id_interaction_ids_dict()"):
+        with mrich.spinner('Database.get_pose_id_interaction_ids_dict()'):
             records = self.execute(sql).fetchall()
 
         d = {}
@@ -4682,14 +4643,14 @@ class Database:
         sql = f"""SELECT inspiration_original, inspiration_derivative FROM {self.SQL_SCHEMA_PREFIX}inspiration"""
         return self.execute(sql).fetchall()
 
-    def get_compound_id_obj_dict(self, cset: "CompoundSet") -> "dict[id, Compound]":
+    def get_compound_id_obj_dict(self, cset: 'CompoundSet') -> 'dict[id, Compound]':
         """Get a dictionary mapping :class:`.Compound` ID's to their objects"""
 
-        query = "compound_id, compound_inchikey, compound_alias, compound_smiles"
+        query = 'compound_id, compound_inchikey, compound_alias, compound_smiles'
         records = self.select_where(
             query=query,
-            table="compound",
-            key=f"compound_id IN {cset.str_ids}",
+            table='compound',
+            key=f'compound_id IN {cset.str_ids}',
             multiple=True,
         )
 
@@ -4708,7 +4669,7 @@ class Database:
             )
         return d
 
-    def get_interaction(self, *, id: int, table: str = "interaction") -> "Interaction":
+    def get_interaction(self, *, id: int, table: str = 'interaction') -> 'Interaction':
         """Fetch the :class:`.Interaction` object with given ID
 
         :param id: the ID of the Interaction to retrieve
@@ -4718,7 +4679,7 @@ class Database:
 
         from .interaction import Interaction
 
-        result = self.select_all_where(table=table, key=f"interaction_id = {id}")
+        result = self.select_all_where(table=table, key=f'interaction_id = {id}')
 
         (
             id,
@@ -4755,7 +4716,7 @@ class Database:
     ) -> dict[tuple[str, int], set[int]]:
         """Get a dictionary mapping (reaction_type, product_id) tuples to sets of reactant_ids"""
 
-        str_ids = str(tuple(product_ids)).replace(",)", ")")
+        str_ids = str(tuple(product_ids)).replace(',)', ')')
 
         records = self.execute(
             f"""
@@ -4768,7 +4729,6 @@ class Database:
 
         mapping = {}
         for reaction_type, reaction_product, reaction_id, reactant_compound in records:
-
             key = (reaction_type, reaction_product)
 
             if key not in mapping:
@@ -4793,40 +4753,40 @@ class Database:
 
         """
 
-        compound_ids_str = str(tuple(compound_ids)).replace(",)", ")")
+        compound_ids_str = str(tuple(compound_ids)).replace(',)', ')')
 
         result = self.execute(
             f"""
-            WITH possible_reactants AS 
+            WITH possible_reactants AS
             (
-                SELECT reactant_reaction, CASE 
-                    WHEN reactant_compound IN {compound_ids_str} 
-                    THEN reactant_compound END AS [possible_reactant] 
+                SELECT reactant_reaction, CASE
+                    WHEN reactant_compound IN {compound_ids_str}
+                    THEN reactant_compound END AS [possible_reactant]
                 FROM {self.SQL_SCHEMA_PREFIX}reactant
             )
 
             , possible_reactions AS (
                 SELECT reactant_reaction, COUNT(
-                    CASE 
-                        WHEN possible_reactant IS NULL 
-                        THEN 1 END) AS [count_null] 
+                    CASE
+                        WHEN possible_reactant IS NULL
+                        THEN 1 END) AS [count_null]
                     FROM possible_reactants
                 GROUP BY reactant_reaction
             )
-            
+
             SELECT reactant_reaction FROM possible_reactions
             WHERE count_null = 0
         """
         ).fetchall()
 
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     def get_unsolved_reaction_tree(
         self,
         *,
         product_ids: list[int],
         debug: bool = False,
-    ) -> "(CompoundSet, ReactionSet)":
+    ) -> '(CompoundSet, ReactionSet)':
         """Given a set of product :class:`.Compound` IDs, recursively solve for all the reactants (:class:`.CompoundSet`) and reactions (:class:`.ReactionSet`) that could be involved in their synthesis. N.B. This evaluates all synthesis branches.
 
         :param product_ids: list of product :class:`.Compound` IDs
@@ -4847,24 +4807,23 @@ class Database:
         #     all_reactants.add(product_id)
 
         for i in range(300):
+            if debug:
+                mrich.var('recursive depth', i + 1)
 
             if debug:
-                mrich.var("recursive depth", i + 1)
+                mrich.var('#products', len(product_ids))
 
-            if debug:
-                mrich.var("#products", len(product_ids))
-
-            product_ids_str = str(tuple(product_ids)).replace(",)", ")")
+            product_ids_str = str(tuple(product_ids)).replace(',)', ')')
 
             reaction_ids = self.select_where(
-                table="reaction",
-                query="DISTINCT reaction_id",
-                key=f"reaction_product in {product_ids_str}",
+                table='reaction',
+                query='DISTINCT reaction_id',
+                key=f'reaction_product in {product_ids_str}',
                 multiple=True,
-                none="quiet",
+                none='quiet',
             )
 
-            reaction_ids = [q for q, in reaction_ids]
+            reaction_ids = [q for (q,) in reaction_ids]
 
             if not reaction_ids:
                 break
@@ -4873,21 +4832,21 @@ class Database:
                 all_reactions.add(reaction_id)
 
             if debug:
-                mrich.var("#reactions", len(reaction_ids))
+                mrich.var('#reactions', len(reaction_ids))
 
-            reaction_ids_str = str(tuple(reaction_ids)).replace(",)", ")")
+            reaction_ids_str = str(tuple(reaction_ids)).replace(',)', ')')
 
             reactant_ids = self.select_where(
-                table="reactant",
-                query="DISTINCT reactant_compound",
-                key=f"reactant_reaction in {reaction_ids_str}",
+                table='reactant',
+                query='DISTINCT reactant_compound',
+                key=f'reactant_reaction in {reaction_ids_str}',
                 multiple=True,
             )
 
             if debug:
-                mrich.var("#reactants", len(reactant_ids))
+                mrich.var('#reactants', len(reactant_ids))
 
-            reactant_ids = [q for q, in reactant_ids]
+            reactant_ids = [q for (q,) in reactant_ids]
 
             if not reactant_ids:
                 break
@@ -4900,13 +4859,13 @@ class Database:
         # all intermediates
         ids = self.execute(
             f"""
-            SELECT DISTINCT reaction_product 
-            FROM {self.SQL_SCHEMA_PREFIX}reaction 
-            INNER JOIN {self.SQL_SCHEMA_PREFIX}reactant 
+            SELECT DISTINCT reaction_product
+            FROM {self.SQL_SCHEMA_PREFIX}reaction
+            INNER JOIN {self.SQL_SCHEMA_PREFIX}reactant
             ON reaction_product = reactant_compound
             """
         ).fetchall()
-        ids = [q for q, in ids]
+        ids = [q for (q,) in ids]
         intermediates = CompoundSet(self, ids)
 
         # remove intermediates
@@ -4917,8 +4876,8 @@ class Database:
         all_reactions = ReactionSet(self, all_reactions)
 
         if debug:
-            mrich.var("#all_reactants", len(all_reactants))
-            mrich.var("#all_reactions", len(all_reactions))
+            mrich.var('#all_reactants', len(all_reactants))
+            mrich.var('#all_reactions', len(all_reactions))
 
         return all_reactants, all_reactions
 
@@ -4936,7 +4895,7 @@ class Database:
 
         # get reactants for a given reaction
 
-        mrich.warning("Price estimate does not account for branching!")
+        mrich.warning('Price estimate does not account for branching!')
         reactants, _ = self.get_unsolved_reaction_tree(
             product_ids=reaction.reactant_ids
         )
@@ -4947,10 +4906,10 @@ class Database:
 
         (price,) = self.execute(
             f"""
-        WITH unit_prices AS 
+        WITH unit_prices AS
         (
-            SELECT quote_compound, MIN(quote_price/quote_amount) AS unit_price 
-            FROM {self.SQL_SCHEMA_PREFIX}quote 
+            SELECT quote_compound, MIN(quote_price/quote_amount) AS unit_price
+            FROM {self.SQL_SCHEMA_PREFIX}quote
             WHERE quote_compound IN {reactants.str_ids}
             GROUP BY quote_compound
         )
@@ -4971,18 +4930,18 @@ class Database:
         :returns: list of :class:`.Compound` IDs
 
         """
-        reaction_ids_str = str(tuple(reaction_ids)).replace(",)", ")")
+        reaction_ids_str = str(tuple(reaction_ids)).replace(',)', ')')
         return [
             q
-            for q, in self.select_where(
-                query="DISTINCT reaction_product",
-                table="reaction",
-                key=f"reaction_id IN {reaction_ids_str}",
+            for (q,) in self.select_where(
+                query='DISTINCT reaction_product',
+                table='reaction',
+                key=f'reaction_id IN {reaction_ids_str}',
                 multiple=True,
             )
         ]
 
-    def get_subsite(self, *, id) -> "Subsite":
+    def get_subsite(self, *, id) -> 'Subsite':
         """Get protein subsite with a given ID
 
         :param ID: the subsite ID
@@ -4993,15 +4952,15 @@ class Database:
         from .subsite import Subsite
 
         results = self.select_where(
-            table="subsite",
-            key="id",
+            table='subsite',
+            key='id',
             value=id,
             multiple=False,
-            query="subsite_name, subsite_target",
+            query='subsite_name, subsite_target',
         )
 
         if not results:
-            mrich.error(f"No subsite with {id=}")
+            mrich.error(f'No subsite with {id=}')
             return None
 
         name, target = results
@@ -5010,7 +4969,7 @@ class Database:
 
         return subsite
 
-    def get_subsite_tag(self, *, id) -> "SubsiteTag":
+    def get_subsite_tag(self, *, id) -> 'SubsiteTag':
         """Get subsite_tag with a given ID
 
         :param ID: the subsite_tag ID
@@ -5021,11 +4980,11 @@ class Database:
         from .subsite import SubsiteTag
 
         subsite_id, pose_id = self.select_where(
-            table="subsite_tag",
-            key="id",
+            table='subsite_tag',
+            key='id',
             value=id,
             multiple=False,
-            query="subsite_tag_ref, subsite_tag_pose",
+            query='subsite_tag_ref, subsite_tag_pose',
         )
 
         subsite_tag = SubsiteTag(db=self, id=id, subsite_id=subsite_id, pose_id=pose_id)
@@ -5040,8 +4999,8 @@ class Database:
 
         """
 
-        table = "Subsite"
-        entry = self.select_id_where(table=table, key="name", value=name, **kwargs)
+        table = 'Subsite'
+        entry = self.select_id_where(table=table, key='name', value=name, **kwargs)
 
         if entry:
             return entry[0]
@@ -5056,9 +5015,9 @@ class Database:
 
         """
 
-        table = "subsite"
+        table = 'subsite'
         entry = self.select_where(
-            query="subsite_name", table=table, key="id", value=id, **kwargs
+            query='subsite_name', table=table, key='id', value=id, **kwargs
         )
 
         if entry:
@@ -5067,7 +5026,7 @@ class Database:
         return None
 
     def get_scaffold_similarity_dict(
-        self, scaffolds: "CompoundSet | None" = None
+        self, scaffolds: 'CompoundSet | None' = None
     ) -> list[dict]:
         """Get a dictionary mapping scaffold :class:`.Compound` IDs to their superstructure's IDs"""
 
@@ -5079,8 +5038,7 @@ class Database:
         """
 
         if scaffolds:
-
-            sql += f" WHERE a IN {scaffolds.str_ids}"
+            sql += f' WHERE a IN {scaffolds.str_ids}'
 
         records = self.execute(sql).fetchall()
 
@@ -5096,16 +5054,16 @@ class Database:
         """Get tuples of (reactant, product) :class:`.Compound` IDs"""
 
         sql = f"""
-        SELECT reactant_compound, reaction_product 
+        SELECT reactant_compound, reaction_product
         FROM {self.SQL_SCHEMA_PREFIX}reactant
-        INNER JOIN {self.SQL_SCHEMA_PREFIX}reaction 
+        INNER JOIN {self.SQL_SCHEMA_PREFIX}reaction
         ON reactant_reaction = reaction_id
         """
 
         if compound_ids:
-            str_ids = str(tuple(compound_ids)).replace(",)", ")")
+            str_ids = str(tuple(compound_ids)).replace(',)', ')')
             sql += (
-                f"WHERE reactant_compound IN {str_ids} OR reaction_product IN {str_ids}"
+                f'WHERE reactant_compound IN {str_ids} OR reaction_product IN {str_ids}'
             )
 
         records = self.execute(sql)
@@ -5120,13 +5078,13 @@ class Database:
         """Get tuples of (reactant, product) :class:`.Compound` IDs"""
 
         sql = f"""
-        SELECT scaffold_base, scaffold_superstructure 
+        SELECT scaffold_base, scaffold_superstructure
         FROM {self.SQL_SCHEMA_PREFIX}scaffold
         """
 
         if compound_ids:
-            str_ids = str(tuple(compound_ids)).replace(",)", ")")
-            sql += f"WHERE scaffold_base IN {str_ids} OR scaffold_superstructure IN {str_ids}"
+            str_ids = str(tuple(compound_ids)).replace(',)', ')')
+            sql += f'WHERE scaffold_base IN {str_ids} OR scaffold_superstructure IN {str_ids}'
 
         records = self.execute(sql)
         return set((a, b) for a, b in records)
@@ -5138,9 +5096,9 @@ class Database:
         query: str,
         *,
         fast: bool = True,
-        none: str = "error",
+        none: str = 'error',
         smarts: bool = False,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Search for compounds by substructure
 
         :param query: SMILES string of the substructure
@@ -5151,41 +5109,39 @@ class Database:
         """
 
         if smarts:
-            func = "mol_from_smarts"
+            func = 'mol_from_smarts'
         else:
-            func = "mol_from_smiles"
+            func = 'mol_from_smiles'
 
         # smiles
         if isinstance(query, str):
-
             if fast:
                 sql = f"""
-                SELECT compound.compound_id, compound.compound_inchikey 
-                FROM {self.SQL_SCHEMA_PREFIX}compound, compound_pattern_bfp AS bfp 
-                WHERE {self.SQL_SCHEMA_PREFIX}compound.compound_id = {self.SQL_SCHEMA_PREFIX}bfp.compound_id 
+                SELECT compound.compound_id, compound.compound_inchikey
+                FROM {self.SQL_SCHEMA_PREFIX}compound, compound_pattern_bfp AS bfp
+                WHERE {self.SQL_SCHEMA_PREFIX}compound.compound_id = {self.SQL_SCHEMA_PREFIX}bfp.compound_id
                 AND mol_is_substruct(compound.compound_mol, {func}(?))
                 """
 
             else:
                 sql = f"""
-                SELECT compound_id, compound_inchikey FROM {self.SQL_SCHEMA_PREFIX}compound 
+                SELECT compound_id, compound_inchikey FROM {self.SQL_SCHEMA_PREFIX}compound
                 WHERE mol_is_substruct(compound_mol, {func}(?))
                 """
 
         else:
-
             raise NotImplementedError
 
         try:
             self.execute(sql, (query,))
-        except sqlite3.OperationalError as e:
-            mrich.var("sql", sql)
+        except sqlite3.OperationalError:
+            mrich.var('sql', sql)
             raise
 
         result = self.cursor.fetchall()
 
-        if not result and none == "error":
-            mrich.error(f"No compounds with substructure {query}")
+        if not result and none == 'error':
+            mrich.error(f'No compounds with substructure {query}')
             return None
         elif not result:
             return None
@@ -5195,13 +5151,13 @@ class Database:
         if not smarts:
             smiles = query
             try:
-                smiles = sanitise_smiles(smiles, sanitisation_failed="error")
+                smiles = sanitise_smiles(smiles, sanitisation_failed='error')
             except SanitisationError as e:
-                mrich.error(f"Could not sanitise {smiles=}")
+                mrich.error(f'Could not sanitise {smiles=}')
                 mrich.error(str(e))
                 return None
             except AssertionError:
-                mrich.error(f"Could not sanitise {smiles=}")
+                mrich.error(f'Could not sanitise {smiles=}')
                 return None
                 return c
             inchikey = inchikey_from_smiles(smiles)
@@ -5215,13 +5171,13 @@ class Database:
     def query_most_similar(
         self,
         query: str,
-        subset: "CompoundSet",
-        fp="pattern",
+        subset: 'CompoundSet',
+        fp='pattern',
         bits=2048,
         morgan_radius=1,
         return_similarity: bool = False,
-        none="error",
-    ) -> "Compound | (Compound, float)":
+        none='error',
+    ) -> 'Compound | (Compound, float)':
         """Search for the most similar compound by tanimoto similarity of binary pattern fingerprints using the chemicalite function `mol_pattern_bfp`
 
         :param query: SMILES string
@@ -5231,9 +5187,7 @@ class Database:
         :returns: :class:`.Compound` and optionally a similarity values
         """
 
-        from .compound import Compound
-
-        if fp == "pattern" and bits == 2048:
+        if fp == 'pattern' and bits == 2048:
             sql = f"""
             WITH subset AS (
                 SELECT compound_id, fp
@@ -5241,26 +5195,25 @@ class Database:
                 JOIN compound_pattern_bfp USING (compound_id)
                 WHERE compound_id IN {subset.str_ids}
             )
-            
-            SELECT compound_id, 
-            bfp_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), {bits}), fp) 
+
+            SELECT compound_id,
+            bfp_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), {bits}), fp)
             AS similarity
             FROM subset
             ORDER BY similarity DESC
             LIMIT 1
             """
 
-        elif fp == "morgan":
-
+        elif fp == 'morgan':
             sql = f"""
             WITH subset AS (
                 SELECT compound_id, mol_{fp}_bfp(compound_mol, {morgan_radius}, {bits}) AS fp
                 FROM {self.SQL_SCHEMA_PREFIX}compound
                 WHERE compound_id IN {subset.str_ids}
             )
-            
-            SELECT compound_id, 
-            bfp_tanimoto(mol_{fp}_bfp(mol_from_smiles(?1), {morgan_radius}, {bits}), fp) 
+
+            SELECT compound_id,
+            bfp_tanimoto(mol_{fp}_bfp(mol_from_smiles(?1), {morgan_radius}, {bits}), fp)
             AS similarity
             FROM subset
             ORDER BY similarity DESC
@@ -5268,15 +5221,14 @@ class Database:
             """
 
         else:
-
             sql = f"""
             WITH subset AS (
                 SELECT compound_id, mol_{fp}_bfp(compound_mol, {bits}) AS fp
                 FROM {self.SQL_SCHEMA_PREFIX}compound
                 WHERE compound_id IN {subset.str_ids}
             )
-            
-            SELECT compound_id, bfp_tanimoto(mol_{fp}_bfp(mol_from_smiles(?1), {bits}), fp) 
+
+            SELECT compound_id, bfp_tanimoto(mol_{fp}_bfp(mol_from_smiles(?1), {bits}), fp)
             AS similarity
             FROM subset
             ORDER BY similarity DESC
@@ -5285,8 +5237,8 @@ class Database:
 
         try:
             self.execute(sql, (query,))
-        except sqlite3.OperationalError as e:
-            mrich.var("sql", sql)
+        except sqlite3.OperationalError:
+            mrich.var('sql', sql)
             raise
 
         compound_id, similarity = self.cursor.fetchone()
@@ -5301,9 +5253,9 @@ class Database:
         query: str,
         threshold: float,
         return_similarity: bool = False,
-        subset: "CompoundSet" = None,
-        none="error",
-    ) -> "CompoundSet | (CompoundSet, list[float])":
+        subset: 'CompoundSet' = None,
+        none='error',
+    ) -> 'CompoundSet | (CompoundSet, list[float])':
         """Search compounds by tanimoto similarity of binary pattern fingerprints using the chemicalite function `mol_pattern_bfp`
 
         :param query: SMILES string
@@ -5319,15 +5271,14 @@ class Database:
 
         # smiles
         if subset:
-
             if return_similarity:
                 sql = f"""
-                SELECT compound_id, 
-                       bfp_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048), 
-                       mol_pattern_bfp(compound.compound_mol, 2048)) as t 
-                FROM {self.SQL_SCHEMA_PREFIX}compound 
-                JOIN compound_pattern_bfp AS mfp 
-                USING(compound_id) 
+                SELECT compound_id,
+                       bfp_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048),
+                       mol_pattern_bfp(compound.compound_mol, 2048)) as t
+                FROM {self.SQL_SCHEMA_PREFIX}compound
+                JOIN compound_pattern_bfp AS mfp
+                USING(compound_id)
                 WHERE mfp.compound_id
                 MATCH rdtree_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048), ?2)
                 AND compound_id IN {subset.str_ids}
@@ -5335,31 +5286,30 @@ class Database:
                 """
             else:
                 sql = f"""
-                SELECT compound_id 
-                FROM compound_pattern_bfp AS bfp 
+                SELECT compound_id
+                FROM compound_pattern_bfp AS bfp
                 WHERE bfp.compound_id
                 MATCH rdtree_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048), ?2)
                 AND compound_id IN {subset.str_ids}
                 """
 
         elif isinstance(query, str):
-
             if return_similarity:
                 sql = f"""
-                SELECT compound_id, 
-                       bfp_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048), 
-                       mol_pattern_bfp(compound.compound_mol, 2048)) as t 
-                FROM {self.SQL_SCHEMA_PREFIX}compound 
-                JOIN compound_pattern_bfp AS mfp 
-                USING(compound_id) 
+                SELECT compound_id,
+                       bfp_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048),
+                       mol_pattern_bfp(compound.compound_mol, 2048)) as t
+                FROM {self.SQL_SCHEMA_PREFIX}compound
+                JOIN compound_pattern_bfp AS mfp
+                USING(compound_id)
                 WHERE mfp.compound_id
-                MATCH rdtree_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048), ?2) 
+                MATCH rdtree_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048), ?2)
                 ORDER BY t DESC
                 """
             else:
-                sql = f"""
-                SELECT compound_id 
-                FROM compound_pattern_bfp AS bfp 
+                sql = """
+                SELECT compound_id
+                FROM compound_pattern_bfp AS bfp
                 WHERE bfp.compound_id
                 MATCH rdtree_tanimoto(mol_pattern_bfp(mol_from_smiles(?1), 2048), ?2)
                 """
@@ -5368,22 +5318,22 @@ class Database:
 
         try:
             self.execute(sql, (query, threshold))
-        except sqlite3.OperationalError as e:
-            mrich.var("sql", sql)
+        except sqlite3.OperationalError:
+            mrich.var('sql', sql)
             raise
 
         result = self.cursor.fetchall()
 
-        if not result and none == "error":
-            mrich.error(f"No compounds with similarity >= {threshold} to {query}")
+        if not result and none == 'error':
+            mrich.error(f'No compounds with similarity >= {threshold} to {query}')
             return None
 
         if return_similarity:
-            ids, similarities = zip(*result)
+            ids, similarities = zip(*result, strict=False)
             cset = CompoundSet(self, ids)
             return cset, similarities
 
-        ids = [r for r, in result]
+        ids = [r for (r,) in result]
         cset = CompoundSet(self, ids)
 
         return cset
@@ -5392,7 +5342,7 @@ class Database:
         self,
         query: str,
         threshold: float = 0.989,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Search for exact match compounds (default similarity > 0.989)
 
         :param query: SMILES string
@@ -5413,8 +5363,8 @@ class Database:
 
         pairs = self.execute(
             f"""
-            SELECT {table}_id, {table}_metadata 
-            FROM {self.SQL_SCHEMA_PREFIX}{table} 
+            SELECT {table}_id, {table}_metadata
+            FROM {self.SQL_SCHEMA_PREFIX}{table}
             WHERE {table}_metadata LIKE '%"{key}": "%'
             """
         ).fetchall()
@@ -5438,7 +5388,7 @@ class Database:
 
         """
 
-        sql = f"SELECT COUNT(1) FROM {self.SQL_SCHEMA_PREFIX}{table};"
+        sql = f'SELECT COUNT(1) FROM {self.SQL_SCHEMA_PREFIX}{table};'
         self.execute(sql)
         return self.cursor.fetchone()[0]
 
@@ -5463,11 +5413,11 @@ class Database:
                 value = f"'{value}'"
 
         if value is not None:
-            where_str = f"{table}_{key}={value}"
+            where_str = f'{table}_{key}={value}'
         else:
             where_str = key
 
-        sql = f"SELECT COUNT(1) FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {where_str};"
+        sql = f'SELECT COUNT(1) FROM {self.SQL_SCHEMA_PREFIX}{table} WHERE {where_str};'
         self.execute(sql)
         return self.cursor.fetchone()[0]
 
@@ -5484,7 +5434,7 @@ class Database:
 
         """
 
-        (id,) = self.select(table=table, query=f"MIN({table}_id)")
+        (id,) = self.select(table=table, query=f'MIN({table}_id)')
         return id
 
     def max_id(
@@ -5497,7 +5447,7 @@ class Database:
         :returns: the largest entry ID
 
         """
-        (id,) = self.select(table=table, query=f"MAX({table}_id)")
+        (id,) = self.select(table=table, query=f'MAX({table}_id)')
         return id
 
     def slice_ids(
@@ -5528,27 +5478,27 @@ class Database:
 
         if not (start >= 0 and start <= max_id):
             raise IndexError(
-                f"Slice {start=} outside of DB {table}_id range ({min_id}, {max_id})"
+                f'Slice {start=} outside of DB {table}_id range ({min_id}, {max_id})'
             )
 
         if not (stop >= 0 and stop <= max_id + 1):
             raise IndexError(
-                f"Slice {stop=} outside of DB {table}_id range ({min_id}, {max_id})"
+                f'Slice {stop=} outside of DB {table}_id range ({min_id}, {max_id})'
             )
 
         if step != 1:
-            raise NotImplementedError(f"Slice {step=} not supported")
+            raise NotImplementedError(f'Slice {step=} not supported')
 
         ids = self.select_where(
             table=table,
-            query=f"{table}_id",
-            key=f"{table}_id >= {start} AND {table}_id < {stop}",
+            query=f'{table}_id',
+            key=f'{table}_id >= {start} AND {table}_id < {stop}',
             multiple=True,
         )
-        ids = [q for q, in ids]
+        ids = [q for (q,) in ids]
 
         if name:
-            return ids, f"{table}s[{start}:{stop}]"
+            return ids, f'{table}s[{start}:{stop}]'
         else:
             return ids
 
@@ -5556,7 +5506,7 @@ class Database:
 
     def prune_reactions(
         self,
-        reactions: "ReactionSet",
+        reactions: 'ReactionSet',
     ) -> list[Reaction]:
         """Remove duplicate reactions
 
@@ -5569,7 +5519,6 @@ class Database:
         del_list = []
 
         for i, reaction in enumerate(reactions):
-
             matches = [r for r in pruned if r == reaction]
 
             if not matches:
@@ -5579,8 +5528,8 @@ class Database:
                 del_list.append(reaction)
 
         for reaction in del_list:
-            mrich.warning(f"Deleted duplicate {reaction=}")
-            self.delete_where("reaction", "id", reaction.id)
+            mrich.warning(f'Deleted duplicate {reaction=}')
+            self.delete_where('reaction', 'id', reaction.id)
 
         return pruned
 
@@ -5604,16 +5553,15 @@ class Database:
         # get id's with specific metadata key and value
         value_str = json.dumps(value)
         result = self.select_where(
-            query=f"{table}_id, {table}_metadata",
+            query=f'{table}_id, {table}_metadata',
             table=table,
-            key=f"{table}_metadata LIKE '%\"export\": [%{value_str}%]%'",
+            key=f'{table}_metadata LIKE \'%"export": [%{value_str}%]%\'',
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
 
         # loop over all matches
         for id, metadata_str in result:
-
             # read the metadata
             metadata = json.loads(metadata_str)
 
@@ -5629,7 +5577,7 @@ class Database:
             self.update(
                 table=table,
                 id=id,
-                key=f"{table}_metadata",
+                key=f'{table}_metadata',
                 value=metadata_str,
                 commit=False,
             )
@@ -5656,7 +5604,7 @@ class Database:
     def table_df(
         self,
         table: str,
-    ) -> "pandas.DataFrame":
+    ) -> 'pandas.DataFrame':
         """Get a DataFrame of a table
 
         :param table: the table to get
@@ -5668,11 +5616,11 @@ class Database:
 
         column_names = self.column_names(table)
 
-        self.execute(f"SELECT * FROM {self.SQL_SCHEMA_PREFIX}{table}")
+        self.execute(f'SELECT * FROM {self.SQL_SCHEMA_PREFIX}{table}')
 
         for record in self.cursor:
             d = {}
-            for key, value in zip(column_names, record):
+            for key, value in zip(column_names, record, strict=False):
                 d[key] = value
             data.append(d)
 
@@ -5691,7 +5639,7 @@ class Database:
 
         """
 
-        self.execute(f"PRAGMA table_info({self.SQL_SCHEMA_PREFIX}{table})")
+        self.execute(f'PRAGMA table_info({self.SQL_SCHEMA_PREFIX}{table})')
         return self.cursor.fetchall()
 
     def column_names(self, table: str) -> list[str]:
@@ -5710,24 +5658,24 @@ class Database:
         """
         )
 
-        return [n for n, in cursor]
+        return [n for (n,) in cursor]
 
     ### DUNDERS
 
     def __str__(self):
         """Unformatted string representation"""
         if self.in_memory:
-            return f"Database [IN-MEMORY]"
+            return 'Database [IN-MEMORY]'
         else:
-            return f"Database @ {self.path.resolve()}"
+            return f'Database @ {self.path.resolve()}'
 
     def __repr__(self):
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.clear}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.clear}'
 
     def __rich__(self) -> str:
         """Representation for mrich"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
 
 class LegacyDatabaseError(Exception):
@@ -5740,7 +5688,7 @@ def backup(
     source: Path | str,
     destination: Path | str | None = None,
     pages: int = 10_000,
-) -> "Path":
+) -> 'Path':
     """Create a backup of the database"""
 
     from .tools import dt_hash
@@ -5748,17 +5696,16 @@ def backup(
     source = Path(source)
 
     if not destination:
-        destination = str(source.resolve()).replace(".sqlite", f"_{dt_hash()}.sqlite")
+        destination = str(source.resolve()).replace('.sqlite', f'_{dt_hash()}.sqlite')
 
     destination = Path(destination)
 
-    with mrich.spinner(f"Backing up {source}..."):
-
+    with mrich.spinner(f'Backing up {source}...'):
         mrich.writing(destination)
 
         def progress(status, remaining, total):
             """print progress"""
-            mrich.debug(f"Copied {total-remaining} of {total} pages...")
+            mrich.debug(f'Copied {total - remaining} of {total} pages...')
 
         src = sqlite3.connect(source)
         dst = sqlite3.connect(destination)

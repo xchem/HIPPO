@@ -19,14 +19,14 @@ class FP:
         Names of the features
     """
 
-    def __init__(self, fp: "np.array", names: list[str]) -> None:
+    def __init__(self, fp: 'np.array', names: list[str]) -> None:
         """FP initialisation"""
         self.fp = fp
         self.names = names
 
     def __str__(self) -> str:
         """string representation"""
-        return "%d bit FP" % len(self.fp)
+        return '%d bit FP' % len(self.fp)
 
     def __len__(self) -> int:
         """length"""
@@ -34,7 +34,7 @@ class FP:
 
 
 def get_cfps(
-    mol: "rdkit.Chem.Mol",
+    mol: 'rdkit.Chem.Mol',
     radius: int = 2,
     nBits: int = 1024,
     useFeatures: bool = False,
@@ -72,7 +72,6 @@ def get_cfps(
         )
         DataStructs.ConvertToNumpyArray(fp, arr)
     else:
-
         # https://greglandrum.github.io/rdkit-blog/posts/2023-01-18-fingerprint-generator-tutorial.html#additional-information-explaining-bits
         fmgen = rdFingerprintGenerator.GetMorganGenerator(
             radius=radius,

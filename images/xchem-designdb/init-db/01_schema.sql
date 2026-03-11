@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS designdb.poses (
     inchi_version TEXT,  -- Must be done by codebase
     created_on TIMESTAMPTZ DEFAULT now(),
     updated_on TIMESTAMPTZ DEFAULT now()
-    -- CONSTRAINT uc_pose_alias UNIQUE (pose_alias), -- Removed 
+    -- CONSTRAINT uc_pose_alias UNIQUE (pose_alias), -- Removed
     -- CONSTRAINT uc_pose_path UNIQUE (pose_path) -- Removed
 );
 
@@ -305,7 +305,7 @@ CREATE TABLE IF NOT EXISTS designdb.routes (
 CREATE TABLE IF NOT EXISTS designdb.components (
     id BIGSERIAL PRIMARY KEY,
     route_id BIGINT NOT NULL REFERENCES designdb.routes (id) ON DELETE RESTRICT, -- Insert by codebase/notebook, Synderilla
-    component_type INTEGER, -- Insert by codebase/notebook, Synderilla-- 
+    component_type INTEGER, -- Insert by codebase/notebook, Synderilla--
     component_ref INTEGER, -- Insert by codebase/notebook, Synderilla
     component_amount REAL, -- Insert by codebase/notebook, Synderilla
     created_on TIMESTAMPTZ DEFAULT now(),

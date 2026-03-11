@@ -1,15 +1,14 @@
 """Classes for working with sets of compounds"""
 
+from collections.abc import Callable
+
 import mcol
 import mrich
+from numpy import int64, isnan, mean
 
-import os
-from typing import Callable
-from numpy import int64, nan, isnan, mean, std
-
+from .compound import Compound, Ingredient
 from .db import Database
 from .recipe import Recipe
-from .compound import Compound, Ingredient
 
 
 class CompoundTable:
@@ -59,8 +58,8 @@ class CompoundTable:
 
     """
 
-    _table = "compound"
-    _name = "all compounds"
+    _table = 'compound'
+    _name = 'all compounds'
 
     def __init__(
         self,
@@ -85,8 +84,8 @@ class CompoundTable:
     @property
     def names(self) -> list[str]:
         """Returns the names of child compounds"""
-        result = self.db.select(table=self.table, query="compound_name", multiple=True)
-        return [q for q, in result]
+        result = self.db.select(table=self.table, query='compound_name', multiple=True)
+        return [q for (q,) in result]
 
     @property
     def name(self) -> None | str:
@@ -96,92 +95,92 @@ class CompoundTable:
     @property
     def ids(self) -> list[int]:
         """Returns the IDs of child compounds"""
-        result = self.db.select(table=self.table, query="compound_id", multiple=True)
-        return [q for q, in result]
+        result = self.db.select(table=self.table, query='compound_id', multiple=True)
+        return [q for (q,) in result]
 
     @property
     def str_ids(self) -> str:
         """Return an SQL formatted tuple string of the :class:`.Compound` IDs"""
-        return str(tuple(self.ids)).replace(",)", ")")
+        return str(tuple(self.ids)).replace(',)', ')')
 
     @property
     def inchikeys(self) -> list[str]:
         """Returns the inchikeys of all compounds"""
         result = self.db.select(
-            query="compound_inchikey",
-            table="compound",
+            query='compound_inchikey',
+            table='compound',
             multiple=True,
         )
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     @property
     def tags(self) -> set[str]:
         """Returns the set of unique tags present in this compound set"""
         values = self.db.select_where(
-            table="tag",
-            query="DISTINCT tag_name",
-            key="tag_compound IS NOT NULL",
+            table='tag',
+            query='DISTINCT tag_name',
+            key='tag_compound IS NOT NULL',
             multiple=True,
         )
-        return set(v for v, in values)
+        return set(v for (v,) in values)
 
     @property
-    def reactants(self) -> "CompoundSet":
+    def reactants(self) -> 'CompoundSet':
         """Returns a :class:`.CompoundSet` of all compounds that are used as a reactants"""
         # ids = self.db.select(table='reactant', query='DISTINCT reactant_compound', multiple=True)
 
         sql = f"""
-        SELECT reactant_compound FROM {self.db.SQL_SCHEMA_PREFIX}reactant 
-        LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction 
-        ON reactant_compound = reaction_product 
+        SELECT reactant_compound FROM {self.db.SQL_SCHEMA_PREFIX}reactant
+        LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reaction
+        ON reactant_compound = reaction_product
         WHERE reaction_product IS NULL
         """
 
         ids = self.db.execute(sql).fetchall()
-        ids = [q for q, in ids]
+        ids = [q for (q,) in ids]
         from .cset import CompoundSet
 
         cset = CompoundSet(self.db, ids)
-        cset._name = "all reactants"
+        cset._name = 'all reactants'
         return cset
 
     @property
-    def products(self) -> "CompoundSet":
+    def products(self) -> 'CompoundSet':
         """Returns a :class:`.CompoundSet` of all compounds that are a product of a reaction but not a reactant"""
 
         sql = f"""
-        SELECT reaction_product 
-        FROM {self.db.SQL_SCHEMA_PREFIX}reaction 
-        LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reactant 
-        ON reaction_product = reactant_compound 
+        SELECT reaction_product
+        FROM {self.db.SQL_SCHEMA_PREFIX}reaction
+        LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reactant
+        ON reaction_product = reactant_compound
         WHERE reactant_compound IS NULL
         """
 
         ids = self.db.execute(sql).fetchall()
-        ids = [q for q, in ids]
+        ids = [q for (q,) in ids]
         from .cset import CompoundSet
 
         cset = CompoundSet(self.db, ids)
-        cset._name = "all products"
+        cset._name = 'all products'
         return cset
 
     @property
-    def intermediates(self) -> "CompoundSet":
+    def intermediates(self) -> 'CompoundSet':
         """Returns a :class:`.CompoundSet` of all compounds that are products and reactants"""
 
         sql = f"""
-        SELECT DISTINCT reaction_product 
-        FROM {self.db.SQL_SCHEMA_PREFIX}reaction 
-        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant 
+        SELECT DISTINCT reaction_product
+        FROM {self.db.SQL_SCHEMA_PREFIX}reaction
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant
         ON reaction_product = reactant_compound
         """
 
         ids = self.db.execute(sql).fetchall()
-        ids = [q for q, in ids]
+        ids = [q for (q,) in ids]
         from .cset import CompoundSet
 
         cset = CompoundSet(self.db, ids)
-        cset._name = "all intermediates"
+        cset._name = 'all intermediates'
         return cset
 
     @property
@@ -200,41 +199,41 @@ class CompoundTable:
         return len(self.products)
 
     @property
-    def elabs(self) -> "CompoundSet":
+    def elabs(self) -> 'CompoundSet':
         """Returns a :class:`.CompoundSet` of all compounds that are a an elaboration of an existing scaffold"""
         ids = self.db.select_where(
-            query="scaffold_superstructure",
-            table="scaffold",
-            key="scaffold_superstructure IS NOT NULL",
+            query='scaffold_superstructure',
+            table='scaffold',
+            key='scaffold_superstructure IS NOT NULL',
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
 
         if not ids:
             return None
 
-        ids = [q for q, in ids]
+        ids = [q for (q,) in ids]
         from .cset import CompoundSet
 
         cset = CompoundSet(self.db, ids)
-        cset._name = "all elaborations"
+        cset._name = 'all elaborations'
         return cset
 
     @property
-    def scaffolds(self) -> "CompoundSet":
+    def scaffolds(self) -> 'CompoundSet':
         """Returns a :class:`.CompoundSet` of all compounds that are the basis for a set of elaborations"""
         ids = self.db.select_where(
-            query="DISTINCT scaffold_base",
-            table="scaffold",
-            key="scaffold_base IS NOT NULL",
+            query='DISTINCT scaffold_base',
+            table='scaffold',
+            key='scaffold_base IS NOT NULL',
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
-        ids = [q for q, in ids]
+        ids = [q for (q,) in ids]
         from .cset import CompoundSet
 
         cset = CompoundSet(self.db, ids)
-        cset._name = "all scaffolds"
+        cset._name = 'all scaffolds'
         return cset
 
     @property
@@ -253,7 +252,7 @@ class CompoundTable:
         self,
         tag: str,
         inverse: bool = False,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Get all child compounds with a certain tag
 
         :param tag: tag to filter by
@@ -261,38 +260,36 @@ class CompoundTable:
         """
 
         if not inverse:
-
             values = self.db.select_where(
-                query="tag_compound", table="tag", key="name", value=tag, multiple=True
+                query='tag_compound', table='tag', key='name', value=tag, multiple=True
             )
 
         else:
-
             values = self.db.select_where(
-                query="tag_compound", table="tag", key="name", value=tag, multiple=True
+                query='tag_compound', table='tag', key='name', value=tag, multiple=True
             )
 
             if not values:
                 return self
 
-            ids = [v for v, in values if v]
+            ids = [v for (v,) in values if v]
 
             values = self.db.select_where(
-                query="compound_id",
-                table="compound",
-                key=f"compound_id NOT IN {str(tuple(ids))}",
+                query='compound_id',
+                table='compound',
+                key=f'compound_id NOT IN {str(tuple(ids))}',
                 multiple=True,
             )
 
         if not values:
             return None
 
-        ids = [v for v, in values if v]
+        ids = [v for (v,) in values if v]
         cset = self[ids]
         if inverse:
-            cset._name = f"compounds not tagged {tag}"
+            cset._name = f'compounds not tagged {tag}'
         else:
-            cset._name = f"compounds tagged {tag}"
+            cset._name = f'compounds tagged {tag}'
         return cset
 
     def get_by_metadata(
@@ -307,16 +304,16 @@ class CompoundTable:
 
         """
         results = self.db.select(
-            query="compound_id, compound_metadata", table="compound", multiple=True
+            query='compound_id, compound_metadata', table='compound', multiple=True
         )
         if value is None:
             ids = [i for i, d in results if d and f'"{key}":' in d]
-            name = f"compounds with {key} in metadata"
+            name = f'compounds with {key} in metadata'
         else:
             if isinstance(value, str):
                 value = f'"{value}"'
             ids = [i for i, d in results if d and f'"{key}": {value}' in d]
-            name = f"compounds with metadata[{key}] == {value}"
+            name = f'compounds with metadata[{key}] == {value}'
 
         cset = self[ids]
         cset._name = name
@@ -325,24 +322,24 @@ class CompoundTable:
     def get_by_metadata_substring_match(
         self,
         substring: str,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Get :class:`.CompoundSet` of poses with metadata JSON containing substring"""
 
         assert substring
         assert isinstance(substring, str)
 
         compound_ids = self.db.select_where(
-            table="compound",
-            query="compound_id",
+            table='compound',
+            query='compound_id',
             key=f"""compound_metadata LIKE '%{substring}%'""",
             multiple=True,
         )
 
         if not compound_ids:
-            mrich.error(f"No compounds with metadata substring: {substring}")
+            mrich.error(f'No compounds with metadata substring: {substring}')
             return None
 
-        compound_ids = [i for i, in compound_ids]
+        compound_ids = [i for (i,) in compound_ids]
 
         name = f"compounds with '{substring}' in metadata"
 
@@ -354,7 +351,7 @@ class CompoundTable:
     def get_by_scaffold(
         self,
         scaffold: Compound | int,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Get all compounds that elaborate the given scaffold compound
 
         :param scaffold: :class:`.Compound` object or ID to search by
@@ -362,35 +359,35 @@ class CompoundTable:
         """
 
         if not isinstance(scaffold, int):
-            assert scaffold._table == "compound"
+            assert scaffold._table == 'compound'
             scaffold = scaffold.id
 
         values = self.db.select_where(
-            query="scaffold_superstructure",
-            table="scaffold",
-            key="base",
+            query='scaffold_superstructure',
+            table='scaffold',
+            key='base',
             value=scaffold,
             multiple=True,
         )
-        ids = [v for v, in values if v]
+        ids = [v for (v,) in values if v]
         cset = self[ids]
-        cset._name = f"elaborations of C{scaffold}"
+        cset._name = f'elaborations of C{scaffold}'
         return cset
 
-    def get_by_smiles(self, smiles: str, **kwargs) -> "Compound | None":
+    def get_by_smiles(self, smiles: str, **kwargs) -> 'Compound | None':
         """Get a member compound by its smiles"""
 
-        from .tools import inchikey_from_smiles, sanitise_smiles, SanitisationError
+        from .tools import SanitisationError, inchikey_from_smiles, sanitise_smiles
 
-        assert isinstance(smiles, str), f"Non-string {smiles=}"
+        assert isinstance(smiles, str), f'Non-string {smiles=}'
         try:
-            smiles = sanitise_smiles(smiles, sanitisation_failed="error")
+            smiles = sanitise_smiles(smiles, sanitisation_failed='error')
         except SanitisationError as e:
-            mrich.error(f"Could not sanitise {smiles=}")
+            mrich.error(f'Could not sanitise {smiles=}')
             mrich.error(str(e))
             return None
         except AssertionError:
-            mrich.error(f"Could not sanitise {smiles=}")
+            mrich.error(f'Could not sanitise {smiles=}')
             return None
             return c
         inchikey = inchikey_from_smiles(smiles)
@@ -398,15 +395,15 @@ class CompoundTable:
 
     def summary(self) -> None:
         """Print a summary of this compound set"""
-        mrich.header("CompoundTable()")
-        mrich.var("#compounds", len(self))
+        mrich.header('CompoundTable()')
+        mrich.var('#compounds', len(self))
         # mrich.var('#poses', self.num_poses)
-        mrich.var("tags", self.tags)
-        mrich.var("#scaffolds", self.num_scaffolds)
-        mrich.var("#elabs", self.num_elabs)
-        mrich.var("#reactants", self.num_reactants)
-        mrich.var("#intermediates", self.num_intermediates)
-        mrich.var("#products", self.num_products)
+        mrich.var('tags', self.tags)
+        mrich.var('#scaffolds', self.num_scaffolds)
+        mrich.var('#elabs', self.num_elabs)
+        mrich.var('#reactants', self.num_reactants)
+        mrich.var('#intermediates', self.num_intermediates)
+        mrich.var('#products', self.num_products)
 
     def draw(self) -> None:
         """2D grid of drawings of molecules in this set
@@ -428,7 +425,7 @@ class CompoundTable:
         """
         self[self.ids].interactive()
 
-    def plot_tsnee(self, **kwargs) -> "go.Figure":
+    def plot_tsnee(self, **kwargs) -> 'go.Figure':
         """Plot a tanimoto similarity plot of these compounds. See :func:`hippo.plotting.plot_compound_tsnee`"""
         return self[:].plot_tsnee(**kwargs)
 
@@ -441,8 +438,8 @@ class CompoundTable:
         from pandas import DataFrame
 
         sql = f"""
-        SELECT compound_id, compound_smiles 
-        FROM {self.db.SQL_SCHEMA_PREFIX}compound 
+        SELECT compound_id, compound_smiles
+        FROM {self.db.SQL_SCHEMA_PREFIX}compound
         ORDER BY compound_id
         """
 
@@ -465,7 +462,7 @@ class CompoundTable:
         ids: list | set | None = None,
         sort: bool = True,
         **kwargs,
-    ) -> "CompoundSet | Compound | None":
+    ) -> 'CompoundSet | Compound | None':
         """Filter compounds by a given tag, scaffold, or it's SMILES string. See :meth:`.CompoundTable.get_by_tag` and :meth:`.CompoundTable.get_by_scaffold`
 
         :param tag: optional tag to filter by
@@ -486,7 +483,7 @@ class CompoundTable:
         elif ids:
             return CompoundSet(self.db, indices=list(ids), sort=sort)
         else:
-            mrich.error("Must provide one of tag, scaffold, or smiles arguments")
+            mrich.error('Must provide one of tag, scaffold, or smiles arguments')
             return None
 
     def __getitem__(
@@ -503,10 +500,8 @@ class CompoundTable:
         from pandas import Index, Series
 
         match key:
-
             # case int():
             case key if isinstance(key, int) or isinstance(key, int64):
-
                 if key == 0:
                     return self.__getitem__(key=1)
 
@@ -518,7 +513,7 @@ class CompoundTable:
                     return self.db.get_compound(id=key)
 
             case str():
-                comp = self.db.get_compound(inchikey=key, none="quiet")
+                comp = self.db.get_compound(inchikey=key, none='quiet')
                 if not comp:
                     comp = self.db.get_compound(alias=key)
                 return comp
@@ -531,7 +526,6 @@ class CompoundTable:
                 or isinstance(key, Index)
                 or isinstance(key, Series)
             ):
-
                 if isinstance(key, Index):
                     assert key.nlevels == 1
 
@@ -562,7 +556,7 @@ class CompoundTable:
 
             case _:
                 mrich.error(
-                    f"Unsupported type for CompoundTable.__getitem__(): {key=} {type(key)}"
+                    f'Unsupported type for CompoundTable.__getitem__(): {key=} {type(key)}'
                 )
 
         return None
@@ -571,21 +565,21 @@ class CompoundTable:
         """Unformatted string representation"""
 
         if self.name:
-            s = f"{self.name}: "
+            s = f'{self.name}: '
         else:
-            s = ""
+            s = ''
 
-        s += "{" f"C × {len(self)}" "}"
+        s += f'{{C × {len(self)}}}'
 
         return s
 
     def __repr__(self) -> str:
         """ANSI ormatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Representation for mrich"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __len__(self) -> int:
         """Total number of compounds"""
@@ -650,7 +644,7 @@ class CompoundSet:
 
     """
 
-    _table = "compound"
+    _table = 'compound'
 
     def __init__(
         self,
@@ -681,7 +675,7 @@ class CompoundSet:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Associated :class:`.Database` object"""
         return self._db
 
@@ -709,96 +703,95 @@ class CompoundSet:
     def names(self) -> list[str]:
         """Returns the aliases of compounds in this set"""
         result = self.db.select_where(
-            query="compound_alias",
-            table="compound",
-            key=f"compound_id in {self.str_ids}",
+            query='compound_alias',
+            table='compound',
+            key=f'compound_id in {self.str_ids}',
             multiple=True,
         )
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     @property
     def smiles(self) -> list[str]:
         """Returns the smiles of child compounds"""
         result = self.db.select_where(
-            query="compound_smiles",
-            table="compound",
-            key=f"compound_id in {self.str_ids}",
+            query='compound_smiles',
+            table='compound',
+            key=f'compound_id in {self.str_ids}',
             multiple=True,
         )
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     @property
-    def mols(self) -> "list[Chem.Mol]":
+    def mols(self) -> 'list[Chem.Mol]':
         """Returns the molecules of child compounds"""
         from rdkit.Chem import Mol
 
         result = self.db.select_where(
-            query="mol_to_binary_mol(compound_mol)",
-            table="compound",
-            key=f"compound_id in {self.str_ids}",
+            query='mol_to_binary_mol(compound_mol)',
+            table='compound',
+            key=f'compound_id in {self.str_ids}',
             multiple=True,
         )
-        return [Mol(q) for q, in result]
+        return [Mol(q) for (q,) in result]
 
     @property
     def inchikeys(self) -> list[str]:
         """Returns the inchikeys of compounds in this set"""
         result = self.db.select_where(
-            query="compound_inchikey",
-            table="compound",
-            key=f"compound_id in {self.str_ids}",
+            query='compound_inchikey',
+            table='compound',
+            key=f'compound_id in {self.str_ids}',
             multiple=True,
         )
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     @property
     def tags(self) -> set[str]:
         """Returns the set of unique tags present in this compound set"""
         values = self.db.select_where(
-            table="tag",
-            query="DISTINCT tag_name",
-            key=f"tag_compound in {self.str_ids}",
+            table='tag',
+            query='DISTINCT tag_name',
+            key=f'tag_compound in {self.str_ids}',
             multiple=True,
         )
         if not values:
             return set()
-        return set(v for v, in values)
+        return set(v for (v,) in values)
 
     @property
     def num_poses(self) -> int:
         """Count the poses associated to this set of compounds"""
-        from .pset import PoseSet
 
-        return self.db.count_where(table="pose", key=f"pose_compound in {self.str_ids}")
+        return self.db.count_where(table='pose', key=f'pose_compound in {self.str_ids}')
 
     @property
-    def poses(self) -> "PoseSet":
+    def poses(self) -> 'PoseSet':
         """Get the poses associated to this set of compounds"""
         from .pset import PoseSet
 
         ids = self.db.select_where(
-            query="pose_id",
-            table="pose",
-            key=f"pose_compound in {self.str_ids}",
+            query='pose_id',
+            table='pose',
+            key=f'pose_compound in {self.str_ids}',
             multiple=True,
-            none="warning",
+            none='warning',
         )
 
         if not ids:
             return PoseSet(self.db, {})
 
-        ids = [v for v, in ids]
+        ids = [v for (v,) in ids]
         return PoseSet(self.db, ids)
 
     @property
-    def best_placed_poses(self) -> "PoseSet":
+    def best_placed_poses(self) -> 'PoseSet':
         """Get the best placed pose for each compound in this set"""
         from .pset import PoseSet
 
         query = self.db.select_where(
-            table="pose",
-            query="pose_id, MIN(pose_distance_score)",
-            key=f"pose_compound in {self.str_ids} GROUP BY pose_compound",
+            table='pose',
+            query='pose_id, MIN(pose_distance_score)',
+            key=f'pose_compound in {self.str_ids} GROUP BY pose_compound',
             multiple=True,
         )
         ids = [i for i, s in query]
@@ -807,7 +800,7 @@ class CompoundSet:
     @property
     def str_ids(self) -> str:
         """Return an SQL formatted tuple string of the :class:`.Compound` IDs"""
-        return str(tuple(self.ids)).replace(",)", ")")
+        return str(tuple(self.ids)).replace(',)', ')')
 
     @property
     def num_heavy_atoms(self) -> int:
@@ -829,7 +822,7 @@ class CompoundSet:
     @property
     def atomtype_dict(self) -> dict[str, int]:
         """Get a dictionary with atomtypes as keys and corresponding quantities/counts as values"""
-        from molparse.atomtypes import formula_to_atomtype_dict, combine_atomtype_dicts
+        from molparse.atomtypes import combine_atomtype_dicts
 
         atomtype_dicts = [c.atomtype_dict for c in self]
         return combine_atomtype_dicts(atomtype_dicts)
@@ -844,9 +837,9 @@ class CompoundSet:
 
         sql = f"""
         WITH nums AS (
-            SELECT 
-                A.compound_id AS comp_id, 
-                {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(A.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(B.compound_mol) AS diff 
+            SELECT
+                A.compound_id AS comp_id,
+                {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(A.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(B.compound_mol) AS diff
             FROM {self.db.SQL_SCHEMA_PREFIX}compound A, {self.db.SQL_SCHEMA_PREFIX}compound B
             WHERE A.compound_base = B.compound_id
             AND A.compound_id IN {self.str_ids}
@@ -873,9 +866,9 @@ class CompoundSet:
         """
         sql = f"""
         WITH nums AS (
-            SELECT 
-                A.compound_id AS comp_id, 
-                {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(A.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(B.compound_mol) AS diff 
+            SELECT
+                A.compound_id AS comp_id,
+                {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(A.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(B.compound_mol) AS diff
             FROM {self.db.SQL_SCHEMA_PREFIX}compound A, {self.db.SQL_SCHEMA_PREFIX}compound B
             WHERE A.compound_base = B.compound_id
             AND A.compound_id IN {self.str_ids}
@@ -913,7 +906,7 @@ class CompoundSet:
 
         counts = self.db.execute(sql).fetchall()
 
-        counts = [c for c, in counts]  # + [0 for _ in range(len(self)-len(counts))]
+        counts = [c for (c,) in counts]  # + [0 for _ in range(len(self)-len(counts))]
 
         from hirsch import hirsch
 
@@ -932,14 +925,14 @@ class CompoundSet:
         (count,) = self.db.execute(
             f"""
                 SELECT COUNT(DISTINCT scaffold_base) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
-                WHERE scaffold_superstructure IN {self.str_ids}  
+                WHERE scaffold_superstructure IN {self.str_ids}
             """
         ).fetchone()
 
         return count
 
     @property
-    def scaffolds(self) -> "CompoundSet":
+    def scaffolds(self) -> 'CompoundSet':
         """Get the scaffold compounds that have at least one elaboration in this set
 
         :returns: :class:`.CompoundSet`
@@ -953,10 +946,10 @@ class CompoundSet:
         scaffold_ids = self.db.execute(
             f"""
                 SELECT DISTINCT scaffold_base FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
-                WHERE scaffold_superstructure IN {self.str_ids}  
+                WHERE scaffold_superstructure IN {self.str_ids}
             """
         ).fetchall()
-        return [i for i, in scaffold_ids]
+        return [i for (i,) in scaffold_ids]
 
     @property
     def num_scaffolds(self) -> int:
@@ -964,27 +957,27 @@ class CompoundSet:
         (count,) = self.db.execute(
             f"""
                 SELECT COUNT(DISTINCT scaffold_base) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
-                WHERE scaffold_superstructure IN {self.str_ids}  
+                WHERE scaffold_superstructure IN {self.str_ids}
             """
         ).fetchone()
         return count
 
     @property
-    def elabs(self) -> "CompoundSet":
+    def elabs(self) -> 'CompoundSet':
         """Returns a :class:`.CompoundSet` of all compounds that are a an elaboration of an existing scaffold"""
 
         ids = self.db.select_where(
-            query="scaffold_superstructure",
-            table="scaffold",
-            key=f"scaffold_superstructure IS NOT NULL and scaffold_base IN {self.str_ids}",
+            query='scaffold_superstructure',
+            table='scaffold',
+            key=f'scaffold_superstructure IS NOT NULL and scaffold_base IN {self.str_ids}',
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
 
         if not ids:
             return None
 
-        ids = [q for q, in ids]
+        ids = [q for (q,) in ids]
         from .cset import CompoundSet
 
         return CompoundSet(self.db, ids)
@@ -995,13 +988,13 @@ class CompoundSet:
         (count,) = self.db.execute(
             f"""
                 SELECT COUNT(DISTINCT scaffold_superstructure) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
-                WHERE scaffold_base IN {self.str_ids}  
+                WHERE scaffold_base IN {self.str_ids}
             """
         ).fetchone()
         return count
 
     @property
-    def elab_df(self) -> "pd.DataFrame":
+    def elab_df(self) -> 'pd.DataFrame':
         """Get a DataFrame summarising the elaborations in this CompoundSet"""
         from pandas import DataFrame
 
@@ -1056,14 +1049,14 @@ class CompoundSet:
     def reaction_ids(self) -> list[int]:
         """Returns a list of :class:`.Reaction` IDs that result in members of this set"""
         records = self.db.select_where(
-            table="reaction",
-            query="reaction_id",
-            key=f"reaction_product IN {self.str_ids}",
+            table='reaction',
+            query='reaction_id',
+            key=f'reaction_product IN {self.str_ids}',
             multiple=True,
         )
         if not records:
             return None
-        return [r for r, in records]
+        return [r for (r,) in records]
 
     ### FILTERING
 
@@ -1071,25 +1064,25 @@ class CompoundSet:
         self,
         tag: str,
         inverse: bool = False,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Get all child compounds with a certain tag"""
 
         values = self.db.select_where(
-            query="tag_compound",
-            table="tag",
+            query='tag_compound',
+            table='tag',
             key=f'tag_name = "{tag}" AND tag_compound IN {self.str_ids}',
             multiple=True,
         )
 
         if inverse:
-            matches = set(v for v, in values)
+            matches = set(v for (v,) in values)
             ids = [i for i in self.ids if i not in matches]
         else:
-            ids = [v for v, in values]
+            ids = [v for (v,) in values]
 
         return CompoundSet(self.db, ids)
 
-    def get_by_metadata(self, key: str, value: str | None = None) -> "CompoundSet":
+    def get_by_metadata(self, key: str, value: str | None = None) -> 'CompoundSet':
         """Get all child compounds with by their metadata. If no value is passed, then simply containing the key in the metadata dictionary is sufficient
 
         :param key: metadata key
@@ -1097,9 +1090,9 @@ class CompoundSet:
         """
 
         results = self.db.select_where(
-            query="compound_id, compound_metadata",
-            table="compound",
-            key=f"compound_id IN {self.str_ids}",
+            query='compound_id, compound_metadata',
+            table='compound',
+            key=f'compound_id IN {self.str_ids}',
             multiple=True,
         )
         if value is None:
@@ -1113,24 +1106,24 @@ class CompoundSet:
     def get_by_metadata_substring_match(
         self,
         substring: str,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Get :class:`.CompoundSet` of poses with metadata JSON containing substring"""
 
         assert substring
         assert isinstance(substring, str)
 
         compound_ids = self.db.select_where(
-            table="compound",
-            query="compound_id",
+            table='compound',
+            query='compound_id',
             key=f"""compound_metadata LIKE '%{substring}%' AND compound_id IN {self.str_ids}""",
             multiple=True,
         )
 
         if not compound_ids:
-            mrich.error(f"No compounds with metadata substring: {substring}")
+            mrich.error(f'No compounds with metadata substring: {substring}')
             return None
 
-        compound_ids = [i for i, in compound_ids]
+        compound_ids = [i for (i,) in compound_ids]
 
         name = f"compounds with '{substring}' in metadata"
 
@@ -1142,8 +1135,8 @@ class CompoundSet:
     def get_by_scaffold(
         self,
         scaffold: Compound | int,
-        none: str = "error",
-    ) -> "CompoundSet":
+        none: str = 'error',
+    ) -> 'CompoundSet':
         """Get all compounds that elaborate the given scaffold compound
 
         :param scaffold: :class:`.Compound` object or ID to search by
@@ -1151,17 +1144,17 @@ class CompoundSet:
         """
 
         if not isinstance(scaffold, int):
-            assert scaffold._table == "compound"
+            assert scaffold._table == 'compound'
             scaffold = scaffold.id
 
         values = self.db.select_where(
-            query="scaffold_superstructure",
-            table="scaffold",
-            key=f"scaffold_base = {scaffold} AND scaffold_superstructure IN {self.str_ids}",
+            query='scaffold_superstructure',
+            table='scaffold',
+            key=f'scaffold_base = {scaffold} AND scaffold_superstructure IN {self.str_ids}',
             multiple=True,
             none=none,
         )
-        ids = [v for v, in values if v]
+        ids = [v for (v,) in values if v]
 
         if not ids:
             return None
@@ -1170,7 +1163,7 @@ class CompoundSet:
     def get_all_possible_reactants(
         self,
         debug: bool = False,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Recursively searches for all the reactants that could possible be needed to synthesise these compounds.
 
         :param debug: Increased verbosity for debugging (Default value = False)
@@ -1184,7 +1177,7 @@ class CompoundSet:
     def get_all_possible_reactions(
         self,
         debug: bool = False,
-    ) -> "ReactionSet":
+    ) -> 'ReactionSet':
         """Recursively searches for all the reactants that could possible be needed to synthesise these compounds.
 
         :param debug: Increased verbosity for debugging (Default value = False)
@@ -1205,15 +1198,15 @@ class CompoundSet:
         variances = self.db.execute(
             f"""
         WITH nums AS (
-            SELECT scaffold_base AS base, scaffold_superstructure AS elab, 
-            {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(c2.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS["num_heavy_atoms"]}(c1.compound_mol) AS diff
+            SELECT scaffold_base AS base, scaffold_superstructure AS elab,
+            {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(c2.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(c1.compound_mol) AS diff
             FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
             INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound AS c1 ON scaffold_base = c1.compound_id
             INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound AS c2 ON scaffold_superstructure = c2.compound_id
             WHERE scaffold_superstructure IN {self.str_ids}
         ),
 
-        means AS (  
+        means AS (
             SELECT base, AVG(diff) AS mean FROM nums
             GROUP BY base
         )
@@ -1228,25 +1221,25 @@ class CompoundSet:
         if not variances:
             return None
 
-        variances = [v for v, in variances]
+        variances = [v for (v,) in variances]
 
         if debug:
-            mrich.debug(f"{variances=}")
+            mrich.debug(f'{variances=}')
 
         return mean(variances)
 
     def count_by_tag(
         self,
         tag: str,
-    ) -> "CompoundSet":
+    ) -> 'CompoundSet':
         """Count all child compounds with a certain tag
 
         :param tag: tag to filter by
 
         """
         (count,) = self.db.select_where(
-            query="COUNT(tag_compound)",
-            table="tag",
+            query='COUNT(tag_compound)',
+            table='tag',
             key=f'tag_name = "{tag}" AND tag_compound IN {self.str_ids}',
             multiple=False,
         )
@@ -1304,7 +1297,7 @@ class CompoundSet:
         data = [dict(tag=a, num_compounds=b) for a, b in cursor.fetchall()]
 
         df = DataFrame(data)
-        df = df.set_index("tag")
+        df = df.set_index('tag')
 
         # poses
 
@@ -1322,7 +1315,7 @@ class CompoundSet:
         cursor = self.db.execute(sql)
 
         for tag, count in cursor.fetchall():
-            df.loc[tag, "num_poses"] = count
+            df.loc[tag, 'num_poses'] = count
 
         # compounds with poses
 
@@ -1338,11 +1331,11 @@ class CompoundSet:
         cursor = self.db.execute(sql)
 
         for tag, count in cursor.fetchall():
-            df.loc[tag, "num_posed_compounds"] = count
+            df.loc[tag, 'num_posed_compounds'] = count
 
-        df.loc["TOTAL", "num_compounds"] = len(self)
-        df.loc["TOTAL", "num_poses"] = self.num_poses
-        df.loc["TOTAL", "num_posed_compounds"] = len(self.poses.compounds)
+        df.loc['TOTAL', 'num_compounds'] = len(self)
+        df.loc['TOTAL', 'num_poses'] = self.num_poses
+        df.loc['TOTAL', 'num_posed_compounds'] = len(self.poses.compounds)
 
         df = df.fillna(0)
         df = df.astype(int)
@@ -1358,18 +1351,16 @@ class CompoundSet:
     ) -> None:
         """Creates a ipywidget to interactively navigate this PoseSet."""
 
+        from IPython.display import display
         from ipywidgets import (
-            interactive,
             BoundedIntText,
             Checkbox,
-            interactive_output,
-            HBox,
             GridBox,
             Layout,
             VBox,
+            interactive,
+            interactive_output,
         )
-        from IPython.display import display
-        from pprint import pprint
 
         if function:
 
@@ -1386,40 +1377,39 @@ class CompoundSet:
                     min=0,
                     max=len(self) - 1,
                     step=1,
-                    description=f"Comp (/{len(self)}):",
+                    description=f'Comp (/{len(self)}):',
                     disabled=False,
                 ),
             )
 
         else:
-
             a = BoundedIntText(
                 value=0,
                 min=0,
                 max=len(self) - 1,
                 step=1,
-                description=f"Comp (/{len(self)}):",
+                description=f'Comp (/{len(self)}):',
                 disabled=False,
             )
 
-            b = Checkbox(description="Name", value=True)
-            c = Checkbox(description="Summary", value=False)
-            d = Checkbox(description="2D", value=True)
-            e = Checkbox(description="Poses", value=False)
-            f = Checkbox(description="Reactions", value=False)
-            g = Checkbox(description="Tags", value=False)
-            h = Checkbox(description="Quotes", value=False)
-            i = Checkbox(description="Metadata", value=False)
-            j = Checkbox(description="Classify", value=False)
+            b = Checkbox(description='Name', value=True)
+            c = Checkbox(description='Summary', value=False)
+            d = Checkbox(description='2D', value=True)
+            e = Checkbox(description='Poses', value=False)
+            f = Checkbox(description='Reactions', value=False)
+            g = Checkbox(description='Tags', value=False)
+            h = Checkbox(description='Quotes', value=False)
+            i = Checkbox(description='Metadata', value=False)
+            j = Checkbox(description='Classify', value=False)
 
             ui1 = GridBox(
-                [b, c, d], layout=Layout(grid_template_columns="repeat(3, 100px)")
+                [b, c, d], layout=Layout(grid_template_columns='repeat(3, 100px)')
             )
             ui2 = GridBox(
-                [e, f, g], layout=Layout(grid_template_columns="repeat(3, 100px)")
+                [e, f, g], layout=Layout(grid_template_columns='repeat(3, 100px)')
             )
             ui3 = GridBox(
-                [h, i, j], layout=Layout(grid_template_columns="repeat(3, 100px)")
+                [h, i, j], layout=Layout(grid_template_columns='repeat(3, 100px)')
             )
             ui = VBox([a, ui1, ui2, ui3])
 
@@ -1469,40 +1459,40 @@ class CompoundSet:
                         r.draw()
 
                 if tags:
-                    mrich.title("Tags")
+                    mrich.title('Tags')
                     mrich.print(comp.tags)
 
                 if quotes:
-                    mrich.title("Quotes")
+                    mrich.title('Quotes')
                     display(comp.get_quotes(df=True))
 
                 if metadata:
-                    mrich.title("Metadata:")
+                    mrich.title('Metadata:')
                     mrich.print(comp.metadata)
 
                 if classify:
-                    mrich.title("Classification:")
+                    mrich.title('Classification:')
                     comp.classify()
 
             out = interactive_output(
                 widget,
                 {
-                    "i": a,
-                    "name": b,
-                    "summary": c,
-                    "draw": d,
-                    "poses": e,
-                    "reactions": f,
-                    "tags": g,
-                    "quotes": h,
-                    "metadata": i,
-                    "classify": j,
+                    'i': a,
+                    'name': b,
+                    'summary': c,
+                    'draw': d,
+                    'poses': e,
+                    'reactions': f,
+                    'tags': g,
+                    'quotes': h,
+                    'metadata': i,
+                    'classify': j,
                 },
             )
 
             display(ui, out)
 
-    def tag_summary(self) -> "pd.DataFrame":
+    def tag_summary(self) -> 'pd.DataFrame':
         """Print a summary table of tags with compound counts"""
 
         from pandas import DataFrame
@@ -1521,7 +1511,7 @@ class CompoundSet:
         data = [dict(tag=a, num_compounds=b) for a, b in cursor.fetchall()]
 
         df = DataFrame(data)
-        df = df.set_index("tag")
+        df = df.set_index('tag')
 
         df = df.astype(int)
 
@@ -1551,7 +1541,7 @@ class CompoundSet:
         amount: float = 1,
         debug: bool = False,
         pick_cheapest: bool = False,
-        permitted_reactions: "ReactionSet | None" = None,
+        permitted_reactions: 'ReactionSet | None' = None,
         quoted_only: bool = False,
         supplier: None | str = None,
         **kwargs,
@@ -1560,7 +1550,6 @@ class CompoundSet:
 
         See :meth:`.Recipe.from_compounds`
         """
-        from .recipe import Recipe
 
         return Recipe.from_compounds(
             self,
@@ -1575,26 +1564,25 @@ class CompoundSet:
 
     def get_routes(
         self,
-        permitted_reactions: "None | ReactionSet" = None,
+        permitted_reactions: 'None | ReactionSet' = None,
         return_ids: bool = False,
         debug: bool = True,
-    ) -> "RouteSet":
+    ) -> 'RouteSet':
         """Get a RoutSet to products in this set.
 
         :param permitted_reactions: optionally restrict reactions to those in this :class:`.ReactionSet`
 
         """
 
-        if "route" not in self.db.table_names:
-            mrich.error("route table not in Database")
+        if 'route' not in self.db.table_names:
+            mrich.error('route table not in Database')
             raise NotImplementedError
 
         if permitted_reactions is not None:
-
             sql = f"""
-            SELECT route_id, route_product, component_ref 
+            SELECT route_id, route_product, component_ref
             FROM {self.db.SQL_SCHEMA_PREFIX}route
-            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component 
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component
             ON route_id = component_route
             WHERE route_product IN {self.str_ids}
             AND component_type = 1
@@ -1603,27 +1591,27 @@ class CompoundSet:
             permitted_reactions = set(permitted_reactions.ids)
 
             if debug:
-                mrich.debug("Querying database for routes")
+                mrich.debug('Querying database for routes')
             records = self.db.execute(sql).fetchall()
 
             if debug:
-                mrich.debug("Assembling route dictionary")
+                mrich.debug('Assembling route dictionary')
 
             routes = {}
             for route_id, route_product, reaction_id in records:
                 if route_id not in routes:
                     routes[route_id] = dict(product=route_product, reactions=set())
-                assert routes[route_id]["product"] == route_product
-                routes[route_id]["reactions"].add(reaction_id)
+                assert routes[route_id]['product'] == route_product
+                routes[route_id]['reactions'].add(reaction_id)
 
             if debug:
-                mrich.debug("Checking availability")
+                mrich.debug('Checking availability')
 
             available_routes = set()
             for route_id, route_dict in routes.items():
-                product = route_dict["product"]
+                product = route_dict['product']
                 assert product in self
-                reactions = route_dict["reactions"]
+                reactions = route_dict['reactions']
                 if all(r in permitted_reactions for r in reactions):
                     available_routes.add(route_id)
 
@@ -1632,37 +1620,36 @@ class CompoundSet:
 
             routes = [
                 self.db.get_route(id=route_id)
-                for route_id in mrich.track(available_routes, prefix="Getting routes")
+                for route_id in mrich.track(available_routes, prefix='Getting routes')
             ]
 
         else:
-
             sql = f"""
             SELECT route_id FROM {self.db.SQL_SCHEMA_PREFIX}route
             WHERE route_product IN {self.str_ids}
             """
 
             if debug:
-                mrich.debug("Querying database for routes")
+                mrich.debug('Querying database for routes')
             records = self.db.execute(sql).fetchall()
 
             if return_ids:
-                return [i for i, in records]
+                return [i for (i,) in records]
 
             routes = [
                 self.db.get_route(id=route_id)
-                for route_id, in mrich.track(records, prefix="Getting routes")
+                for (route_id,) in mrich.track(records, prefix='Getting routes')
             ]
 
         from .recipe import RouteSet
 
         return RouteSet(self.db, routes)
 
-    def copy(self) -> "CompoundSet":
+    def copy(self) -> 'CompoundSet':
         """Returns a copy of this set"""
         return CompoundSet(self.db, self.ids)
 
-    def shuffled(self) -> "CompoundSet":
+    def shuffled(self) -> 'CompoundSet':
         """Returns a randomised copy of this set"""
         copy = self.copy()
         copy.shuffle()
@@ -1701,7 +1688,7 @@ class CompoundSet:
         routes: bool = False,
         debug: bool = False,
         **kwargs,
-    ) -> "DataFrame":
+    ) -> 'DataFrame':
         """Get a DataFrame representation of this set
 
         :param smiles: include SMILES column (Default value = True)
@@ -1721,29 +1708,30 @@ class CompoundSet:
         """
 
         from json import loads
-        from rdkit.Chem import Mol
+
         from pandas import DataFrame
+        from rdkit.Chem import Mol
 
         data = []
 
-        query = ["compound_id"]
+        query = ['compound_id']
 
         if smiles:
-            query.append("compound_smiles")
+            query.append('compound_smiles')
 
         if inchikey:
-            query.append("compound_inchikey")
+            query.append('compound_inchikey')
 
         if alias:
-            query.append("compound_alias")
+            query.append('compound_alias')
 
         if mol:
-            query.append("mol_to_binary_mol(compound_mol)")
+            query.append('mol_to_binary_mol(compound_mol)')
 
         if metadata:
-            query.append("compound_metadata")
+            query.append('compound_metadata')
 
-        query = ", ".join(query)
+        query = ', '.join(query)
 
         sql = f"""
         SELECT {query}
@@ -1752,7 +1740,7 @@ class CompoundSet:
         """
 
         if debug:
-            mrich.debug("querying...")
+            mrich.debug('querying...')
         records = self.db.execute(sql).fetchall()
 
         if debug:
@@ -1761,25 +1749,23 @@ class CompoundSet:
             generator = records
 
         for row in generator:
-
             row = list(row)
 
             d = dict(id=row.pop(0))
 
             if smiles:
-                d["smiles"] = row.pop(0)
+                d['smiles'] = row.pop(0)
 
             if inchikey:
-                d["inchikey"] = row.pop(0)
+                d['inchikey'] = row.pop(0)
 
             if alias:
-                d["alias"] = row.pop(0)
+                d['alias'] = row.pop(0)
 
             if mol:
-                d["mol"] = Mol(row.pop(0))
+                d['mol'] = Mol(row.pop(0))
 
             if metadata and (meta_str := row.pop(0)):
-
                 meta_dict = loads(meta_str)
 
                 if expand_metadata:
@@ -1787,7 +1773,7 @@ class CompoundSet:
                         d[k] = v
 
                 else:
-                    d["metadata"] = meta_dict
+                    d['metadata'] = meta_dict
 
             data.append(d)
 
@@ -1795,17 +1781,17 @@ class CompoundSet:
 
         if poses or num_poses:
             if debug:
-                mrich.debug("adding pose column")
+                mrich.debug('adding pose column')
 
             lookup = self.db.get_compound_id_pose_ids_dict(self)
             if poses:
-                df["poses"] = df["id"].apply(lambda x: lookup.get(x, {}))
+                df['poses'] = df['id'].apply(lambda x: lookup.get(x, {}))
             if num_poses:
-                df["num_poses"] = df["id"].apply(lambda x: len(lookup.get(x, {})))
+                df['num_poses'] = df['id'].apply(lambda x: len(lookup.get(x, {})))
 
         if num_reactant or num_reactions:
             if debug:
-                mrich.debug("adding reaction columns")
+                mrich.debug('adding reaction columns')
             tuples = self.db.get_reactant_product_tuples(self.ids, deduplicated=False)
 
             if num_reactant:
@@ -1813,18 +1799,18 @@ class CompoundSet:
                 for r, p in tuples:
                     lookup.setdefault(r, 0)
                     lookup[r] += 1
-                df["num_reactant"] = df["id"].apply(lambda x: lookup.get(x, 0))
+                df['num_reactant'] = df['id'].apply(lambda x: lookup.get(x, 0))
 
             if num_reactions:
                 lookup = {}
                 for r, p in tuples:
                     lookup.setdefault(p, 0)
                     lookup[p] += 1
-                df["num_reactions"] = df["id"].apply(lambda x: lookup.get(x, 0))
+                df['num_reactions'] = df['id'].apply(lambda x: lookup.get(x, 0))
 
         if scaffolds or elabs:
             if debug:
-                mrich.debug("adding scaffold columns")
+                mrich.debug('adding scaffold columns')
             tuples = self.db.get_scaffold_tuples(self.ids)
 
             if scaffolds:
@@ -1832,62 +1818,62 @@ class CompoundSet:
                 for b, e in tuples:
                     lookup.setdefault(e, set())
                     lookup[e].add(b)
-                df["scaffolds"] = df["id"].apply(lambda x: lookup.get(x, set()))
+                df['scaffolds'] = df['id'].apply(lambda x: lookup.get(x, set()))
 
             if elabs:
                 lookup = {}
                 for b, e in tuples:
                     lookup.setdefault(b, set())
                     lookup[b].add(e)
-                df["elabs"] = df["id"].apply(lambda x: lookup.get(x, set()))
+                df['elabs'] = df['id'].apply(lambda x: lookup.get(x, set()))
 
         if tags:
             if debug:
-                mrich.debug("adding tag column")
+                mrich.debug('adding tag column')
             lookup = self.db.get_compound_tag_dict()
-            df["tags"] = df["id"].apply(lambda x: lookup.get(x, {}))
+            df['tags'] = df['id'].apply(lambda x: lookup.get(x, {}))
 
         if routes:
             if debug:
-                mrich.debug("adding route column")
+                mrich.debug('adding route column')
             lookup = self.db.get_product_id_routes_dict()
-            df["routes"] = df["id"].apply(lambda x: lookup.get(x, {}))
+            df['routes'] = df['id'].apply(lambda x: lookup.get(x, {}))
 
-        df = df.set_index("id")
+        df = df.set_index('id')
 
         return df
 
     def get_quoted(
         self,
         *,
-        supplier: str = "any",
-    ) -> "CompoundSet":
+        supplier: str = 'any',
+    ) -> 'CompoundSet':
         """Get all member compounds that have a quote from given supplier
 
         :param supplier: supplier name (Default value = 'any')
 
         """
 
-        if supplier == "any":
-            key = f"quote_compound IN {self.str_ids}"
+        if supplier == 'any':
+            key = f'quote_compound IN {self.str_ids}'
         else:
             key = f'quote_compound IN {self.str_ids} AND quote_supplier = "{supplier}"'
 
         ids = self.db.select_where(
-            table="quote",
-            query="DISTINCT quote_compound",
+            table='quote',
+            query='DISTINCT quote_compound',
             key=key,
             multiple=True,
         )
 
-        ids = [i for i, in ids]
+        ids = [i for (i,) in ids]
         return CompoundSet(self.db, ids)
 
     def get_unquoted(
         self,
         *,
-        supplier: str = "any",
-    ) -> "CompoundSet":
+        supplier: str = 'any',
+    ) -> 'CompoundSet':
         """Get all member compounds that do not have a quote from given supplier
 
         :param supplier: supplier name (Default value = 'any')
@@ -1915,11 +1901,11 @@ class CompoundSet:
 
         if tags:
             records = self.db.select_where(
-                table="tag",
-                query="tag_compound, tag_name",
-                key=f"tag_compound IN {self.str_ids}",
+                table='tag',
+                query='tag_compound, tag_name',
+                key=f'tag_compound IN {self.str_ids}',
                 multiple=True,
-                none="quiet",
+                none='quiet',
             )
             TAGS = {}
             if records:
@@ -1930,8 +1916,8 @@ class CompoundSet:
 
         records = self.db.select_where(
             table=self.table,
-            query="compound_id, compound_smiles",
-            key=f"compound_id IN {self.str_ids}",
+            query='compound_id, compound_smiles',
+            key=f'compound_id IN {self.str_ids}',
             multiple=True,
         )
 
@@ -1939,14 +1925,13 @@ class CompoundSet:
 
         if tags:
             for d in data:
-
-                tagset = TAGS.get(d["id"], set())
+                tagset = TAGS.get(d['id'], set())
 
                 if split_tags:
                     for tag in tagset:
                         d[tag] = True
                 else:
-                    d["tags"] = tagset
+                    d['tags'] = tagset
 
         df = DataFrame(data)
         mrich.writing(file)
@@ -1956,8 +1941,8 @@ class CompoundSet:
         self,
         file,
         *,
-        supplier: str = "Enamine",
-        prefix: str = "fragment",
+        supplier: str = 'Enamine',
+        prefix: str = 'fragment',
     ) -> None:
         """Write a CSV formatted for upload to Postera's Manifold
 
@@ -1968,15 +1953,15 @@ class CompoundSet:
         """
 
         from datetime import date as dt
+
         from pandas import DataFrame
 
         if prefix:
-            prefix = f"{prefix}_"
+            prefix = f'{prefix}_'
 
         data = []
 
-        for c in mrich.track(self, prefix="Creating DataFrame"):
-
+        for c in mrich.track(self, prefix='Creating DataFrame'):
             # get props
             smiles = c.smiles
             tags = c.tags
@@ -1992,24 +1977,24 @@ class CompoundSet:
             date = dt.today()
 
             # author
-            assert "author" in metadata, c
-            author = metadata["author"]
+            assert 'author' in metadata, c
+            author = metadata['author']
 
             match len(poses):
                 case 1:
                     pose = poses[0]
                 case 0:
-                    mrich.warning(f"{c} has no poses")
+                    mrich.warning(f'{c} has no poses')
                     assert scaffold
                     pose = scaffold.poses[0]
                 case _:
-                    mrich.warning(f"{c} has multiple poses")
+                    mrich.warning(f'{c} has multiple poses')
                     pose = poses[0]
 
             # extract inspirations
             inspirations = pose.inspirations
-            inspiration_names = ",".join(inspirations.names)
-            inspiration_smiles = ".".join(inspirations.smiles)
+            inspiration_names = ','.join(inspirations.names)
+            inspiration_smiles = '.'.join(inspirations.smiles)
 
             # quote info
             quotes = c.get_quotes(supplier=supplier)
@@ -2020,23 +2005,23 @@ class CompoundSet:
             catalog_lead_time = quote.lead_time
 
             # hippo string
-            hippo_str = f"compound={c.id}, pose={pose.id}"
+            hippo_str = f'compound={c.id}, pose={pose.id}'
 
             # create row
             data.append(
                 {
-                    "SMILES": smiles,
-                    f"{prefix}HIPPO_IDs": hippo_str,
-                    f"{prefix}method": method,
-                    f"{prefix}export_date": date,
-                    f"{prefix}author": author,
-                    f"{prefix}inspiration_names": inspiration_names,
-                    f"{prefix}inspiration_SMILES": inspiration_smiles,
-                    f"{prefix}supplier": supplier,
-                    f"{prefix}supplier_catalogue": quote.catalogue,
-                    f"{prefix}supplier_ID": catalog_id,
-                    f"{prefix}supplier_price": catalog_price,
-                    f"{prefix}supplier_lead_time": catalog_lead_time,
+                    'SMILES': smiles,
+                    f'{prefix}HIPPO_IDs': hippo_str,
+                    f'{prefix}method': method,
+                    f'{prefix}export_date': date,
+                    f'{prefix}author': author,
+                    f'{prefix}inspiration_names': inspiration_names,
+                    f'{prefix}inspiration_SMILES': inspiration_smiles,
+                    f'{prefix}supplier': supplier,
+                    f'{prefix}supplier_catalogue': quote.catalogue,
+                    f'{prefix}supplier_ID': catalog_id,
+                    f'{prefix}supplier_price': catalog_price,
+                    f'{prefix}supplier_lead_time': catalog_lead_time,
                 }
             )
 
@@ -2049,14 +2034,14 @@ class CompoundSet:
 
     def write_CAR_csv(
         self,
-        file: "str | Path",
+        file: 'str | Path',
         amount: float = 1,  # in mg
         return_df: bool = False,
         # pick_cheapest: bool = False,
         quoted_only: bool = False,
         get_ingredient_quotes: bool = True,
         **kwargs,
-    ) -> "DataFrame | None":
+    ) -> 'DataFrame | None':
         """List of reactions for CAR
 
         Columns:
@@ -2086,15 +2071,14 @@ class CompoundSet:
         """
 
         from pathlib import Path
+
         from pandas import DataFrame
-        from .recipe import Recipe
 
         file = str(Path(file).resolve())
 
         rows = []
 
-        for r_id in mrich.track(self.reaction_ids, prefix="Solving compound recipes"):
-
+        for r_id in mrich.track(self.reaction_ids, prefix='Solving compound recipes'):
             reaction = self.db.get_reaction(id=r_id)
 
             recipes = Recipe.from_reaction(
@@ -2107,39 +2091,37 @@ class CompoundSet:
             )
 
             for sub_recipe in recipes:
-
                 product = sub_recipe.product
 
                 row = {
-                    "target-names": str(product.compound),
-                    "no-steps": 0,
-                    "concentration-required-mM": None,
-                    "amount-required-uL": None,
-                    "batch-tag": None,
+                    'target-names': str(product.compound),
+                    'no-steps': 0,
+                    'concentration-required-mM': None,
+                    'amount-required-uL': None,
+                    'batch-tag': None,
                 }
 
                 for i, reaction in enumerate(sub_recipe.reactions):
-
                     i = i + 1
 
-                    row["no-steps"] += 1
+                    row['no-steps'] += 1
 
                     match len(reaction.reactants):
                         case 1:
-                            row[f"reactant-1-{i}"] = reaction.reactants[0].smiles
-                            row[f"reactant-2-{i}"] = None
+                            row[f'reactant-1-{i}'] = reaction.reactants[0].smiles
+                            row[f'reactant-2-{i}'] = None
                         case 2:
-                            row[f"reactant-1-{i}"] = reaction.reactants[0].smiles
-                            row[f"reactant-2-{i}"] = reaction.reactants[1].smiles
+                            row[f'reactant-1-{i}'] = reaction.reactants[0].smiles
+                            row[f'reactant-2-{i}'] = reaction.reactants[1].smiles
                         case _:
                             raise NotImplementedError(
-                                f"Unsupported number of reactants for {reaction=}: {len(reaction.reactants)}"
+                                f'Unsupported number of reactants for {reaction=}: {len(reaction.reactants)}'
                             )
 
-                    row[f"reaction-product-smiles-{i}"] = reaction.product.smiles
-                    row[f"reaction-name-{i}"] = reaction.type
-                    row[f"reaction-recipe-{i}"] = None
-                    row[f"reaction-groupby-column-{i}"] = None
+                    row[f'reaction-product-smiles-{i}'] = reaction.product.smiles
+                    row[f'reaction-name-{i}'] = reaction.type
+                    row[f'reaction-recipe-{i}'] = None
+                    row[f'reaction-groupby-column-{i}'] = None
                     # row[f'reaction-id-{i}'] = int(reaction.id)
 
                 rows.append(row)
@@ -2148,9 +2130,9 @@ class CompoundSet:
 
         df = df.convert_dtypes()
 
-        for n_steps in set(df["no-steps"]):
-            subset = df[df["no-steps"] == n_steps]
-            this_file = file.replace(".csv", f"_{n_steps}steps.csv")
+        for n_steps in set(df['no-steps']):
+            subset = df[df['no-steps'] == n_steps]
+            this_file = file.replace('.csv', f'_{n_steps}steps.csv')
             mrich.writing(this_file)
             subset.to_csv(this_file, index=False)
 
@@ -2175,7 +2157,7 @@ class CompoundSet:
 
         self.db.commit()
 
-    def plot_tsnee(self, **kwargs) -> "go.Figure":
+    def plot_tsnee(self, **kwargs) -> 'go.Figure':
         """Plot a tanimoto similarity plot of these compounds"""
         from .plotting import plot_compound_tsnee
 
@@ -2185,13 +2167,13 @@ class CompoundSet:
         self,
         amount: float | list[float] = 1,
         supplier: str | list | None = None,
-    ) -> "IngredientSet":
+    ) -> 'IngredientSet':
         """Get an :class:`.IngredientSet` for these compounds"""
         return IngredientSet.from_compounds(
             compounds=self, amount=amount, supplier=supplier
         )
 
-    def split_by_scaffolds(self) -> "dict[CompoundSet, CompoundSet]":
+    def split_by_scaffolds(self) -> 'dict[CompoundSet, CompoundSet]':
         """Split this set into subsets clustered by scaffold compound"""
 
         cluster_dict = self.db.get_compound_cluster_dict(cset=self)
@@ -2206,65 +2188,59 @@ class CompoundSet:
     def despaghettify(
         self,
         register_missing_routes: bool = True,
-        supplier="Enamine",
-    ) -> "CompoundSet":
+        supplier='Enamine',
+    ) -> 'CompoundSet':
         """Reduce this set to only compounds that elaborate a single reactant at a time.
         Requires routes to be present in the database."""
 
-        from .recipe import RouteSet
-
         if register_missing_routes:
-            mrich.debug("registering_missing_routes...")
+            mrich.debug('registering_missing_routes...')
             route_lookup = self.register_missing_routes(
                 missing_only=True, supplier=supplier
             )
 
-        mrich.debug("clustering by scaffold...")
+        mrich.debug('clustering by scaffold...')
         clustered = self.split_by_scaffolds()
 
         n = len(clustered)
-        mrich.var("#clusters", n)
+        mrich.var('#clusters', n)
 
-        mrich.debug("getting route lookup..." "")
+        mrich.debug('getting route lookup...')
         route_lookup = self.db.get_product_id_routes_dict()
 
-        mrich.debug("getting reactant lookup..." "")
+        mrich.debug('getting reactant lookup...')
         reactant_lookup = self.db.get_route_id_reactant_ids_dict()
 
         keep = set()
         for i, (cluster, elabs) in enumerate(clustered.items()):
-
             for scaffold in cluster:
-
                 mrich.debug(
-                    f"{i}/{n}",
-                    "scaffold:",
+                    f'{i}/{n}',
+                    'scaffold:',
                     scaffold.id,
-                    "#elabs:",
+                    '#elabs:',
                     len(elabs),
-                    "#kept:",
+                    '#kept:',
                     len(keep),
                 )
 
                 route_ids = route_lookup.get(scaffold.id)
 
                 if not route_ids:
-                    mrich.error(f"scaffold {scaffold} has no routes")
+                    mrich.error(f'scaffold {scaffold} has no routes')
                     continue
 
                 elif len(route_ids) > 1:
-                    mrich.warning(f"scaffold {scaffold} has multiple routes")
+                    mrich.warning(f'scaffold {scaffold} has multiple routes')
 
                 for route_id in route_ids:
-
                     scaffold_reactants = reactant_lookup[route_id]
 
                     for elab in elabs:
-
                         route_ids = route_lookup.get(elab.id, set())
 
                         if len(route_ids) != 1:
-                            mrich.error(f"elab {elab.id} has {route_ids=}")
+                            mrich.error(f'elab {elab.id} has {route_ids=}')
                             continue
 
                         reactants = reactant_lookup[list(route_ids)[0]]
@@ -2277,7 +2253,7 @@ class CompoundSet:
         return CompoundSet(self.db, keep)
 
     def register_missing_routes(
-        self, missing_only: bool = True, supplier: str = "Enamine"
+        self, missing_only: bool = True, supplier: str = 'Enamine'
     ) -> None:
         """Calculate missing routes to compounds in this set"""
 
@@ -2285,21 +2261,20 @@ class CompoundSet:
             from .cset import CompoundSet
 
             records = self.db.select_where(
-                table="route",
-                key=f"route_product IN {self.str_ids}",
-                query="route_product",
+                table='route',
+                key=f'route_product IN {self.str_ids}',
+                query='route_product',
                 multiple=True,
             )
-            existing = set(i for i, in records)
+            existing = set(i for (i,) in records)
             missing = set(self.ids) - existing
             return CompoundSet(self.db, missing).register_missing_routes(
                 missing_only=False, supplier=supplier
             )
 
-        mrich.var("#compounds", len(self))
+        mrich.var('#compounds', len(self))
 
         for i, c in mrich.track(enumerate(self), total=len(self)):
-
             try:
                 reactions = c.reactions
             except Exception as e:
@@ -2307,7 +2282,6 @@ class CompoundSet:
                 continue
 
             for reaction in reactions:
-
                 try:
                     recipes = reaction.get_recipes(supplier=supplier)
                 except Exception as e:
@@ -2315,10 +2289,9 @@ class CompoundSet:
                     continue
 
                 for recipe in recipes:
-
                     route = self.db.register_route(recipe=recipe)
 
-                    mrich.print(f"registered {route=}")
+                    mrich.print(f'registered {route=}')
 
         self.db.prune_duplicate_routes()
 
@@ -2335,7 +2308,7 @@ class CompoundSet:
     def __getitem__(
         self,
         key: int | slice,
-    ) -> "Compound | CompoundSet":
+    ) -> 'Compound | CompoundSet':
         """Get compounds or subsets thereof from this set
 
         :param key: integer index or slice of indices
@@ -2355,12 +2328,11 @@ class CompoundSet:
 
     def __sub__(
         self,
-        other: "Compound | CompoundSet | IngredientSet",
-    ) -> "CompoundSet":
+        other: 'Compound | CompoundSet | IngredientSet',
+    ) -> 'CompoundSet':
         """Subtract a :class:`.Compound` object or ID from this set, or subtract multiple at once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
 
         match other:
-
             case Compound():
                 ids = set(self.ids) - set([other.id])
                 return CompoundSet(self.db, ids)
@@ -2371,7 +2343,7 @@ class CompoundSet:
 
             case IngredientSet():
                 mrich.warning(
-                    "Subtracting IngredientSet from CompoundSet. Ignoring quote/amount data"
+                    'Subtracting IngredientSet from CompoundSet. Ignoring quote/amount data'
                 )
                 ids = set(self.ids) - set([int(i) for i in other.compound_ids])
                 return CompoundSet(self.db, ids)
@@ -2381,12 +2353,11 @@ class CompoundSet:
 
     def __add__(
         self,
-        other: "Compound | CompoundSet | IngredientSet | int",
-    ) -> "CompoundSet":
+        other: 'Compound | CompoundSet | IngredientSet | int',
+    ) -> 'CompoundSet':
         """Add a :class:`.Compound` object or ID to this set, or add multiple at once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
 
         match other:
-
             case Compound():
                 ids = set(self.ids)
                 ids.add(other.id)
@@ -2408,11 +2379,10 @@ class CompoundSet:
             case _:
                 raise NotImplementedError
 
-    def __and__(self, other: "CompoundSet"):
+    def __and__(self, other: 'CompoundSet'):
         """AND set operation, returns only compounds in both sets"""
 
         match other:
-
             case CompoundSet():
                 ids = set(self.ids) & set(other.ids)
                 return CompoundSet(self.db, ids)
@@ -2420,11 +2390,10 @@ class CompoundSet:
             case _:
                 raise NotImplementedError
 
-    def __or__(self, other: "CompoundSet"):
+    def __or__(self, other: 'CompoundSet'):
         """OR set operation, returns union of both sets"""
 
         match other:
-
             case CompoundSet():
                 ids = set(self.ids) | set(other.ids)
                 return CompoundSet(self.db, ids)
@@ -2432,11 +2401,10 @@ class CompoundSet:
             case _:
                 raise NotImplementedError
 
-    def __xor__(self, other: "CompoundSet"):
+    def __xor__(self, other: 'CompoundSet'):
         """Exclusive OR set operation, returns all compounds in either set but not both"""
 
         match other:
-
             case CompoundSet():
                 ids = set(self.ids) ^ set(other.ids)
                 return CompoundSet(self.db, ids)
@@ -2448,21 +2416,21 @@ class CompoundSet:
         """Unformatted string representation"""
 
         if self.name:
-            s = f"{self.name}: "
+            s = f'{self.name}: '
         else:
-            s = ""
+            s = ''
 
-        s += "{" f"C × {len(self)}" "}"
+        s += f'{{C × {len(self)}}}'
 
         return s
 
     def __repr__(self) -> str:
         """ANSI ormatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Representation for mrich"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __contains__(self, other: Compound | Ingredient | int):
         """Check if compound or ingredient is a member of this set"""
@@ -2502,18 +2470,18 @@ class IngredientSet:
     """
 
     _columns = [
-        "compound_id",
-        "amount",
-        "quote_id",
-        "supplier",
-        "max_lead_time",
-        "quoted_amount",
+        'compound_id',
+        'amount',
+        'quote_id',
+        'supplier',
+        'max_lead_time',
+        'quoted_amount',
     ]
 
     def __init__(
         self,
-        db: "Database",
-        ingredients: "None | list[Ingredient]" = None,
+        db: 'Database',
+        ingredients: 'None | list[Ingredient]' = None,
         supplier: str | list | None = None,
         debug: bool = False,
     ) -> None:
@@ -2536,7 +2504,7 @@ class IngredientSet:
             self.add(ingredient)
 
         for col in self._columns:
-            assert col in self._data.columns, f"{col} not in df.columns"
+            assert col in self._data.columns, f'{col} not in df.columns'
 
         if debug:
             mrich.debug(self._data)
@@ -2544,10 +2512,10 @@ class IngredientSet:
     @classmethod
     def from_ingredient_df(
         cls,
-        db: "Database",
-        df: "DataFrame",
+        db: 'Database',
+        df: 'DataFrame',
         supplier: str | list | None = None,
-    ) -> "IngredientSet":
+    ) -> 'IngredientSet':
         """Create an :class:`.IngredientSet` from a DataFrame
 
         :param db: HIPPO Database
@@ -2560,7 +2528,7 @@ class IngredientSet:
 
         for col in cls._columns:
             if col not in df.columns:
-                raise Exception(f"{col} not in df.columns")
+                raise Exception(f'{col} not in df.columns')
                 df[col] = None
 
         self._db = db
@@ -2572,11 +2540,11 @@ class IngredientSet:
     @classmethod
     def from_json(
         cls,
-        db: "Database",
+        db: 'Database',
         path: None | str,
         supplier: str | list | None = None,
         data: None | dict = None,
-    ) -> "IngredientSet":
+    ) -> 'IngredientSet':
         """Create an :class:`.IngredientSet` from JSON data or a JSON file
 
         :param db: HIPPO Database
@@ -2589,7 +2557,7 @@ class IngredientSet:
         if not data:
             import json
 
-            data = json.load(open(path, "rt"))
+            data = json.load(open(path))
 
         from pandas import DataFrame
 
@@ -2603,10 +2571,10 @@ class IngredientSet:
     @classmethod
     def from_ingredient_dicts(
         cls,
-        db: "Database",
+        db: 'Database',
         dicts: list[dict],
         supplier: str | list | None = None,
-    ) -> "IngredientSet":
+    ) -> 'IngredientSet':
         """Create an :class:`.IngredientSet` from :class:`.Ingredient` dictionaries
 
         :param db: HIPPO Database
@@ -2623,12 +2591,12 @@ class IngredientSet:
     def from_compounds(
         cls,
         *,
-        compounds: "CompoundSet | None" = None,
+        compounds: 'CompoundSet | None' = None,
         ids: list[int] | None = None,
-        db: "Database | None" = None,
+        db: 'Database | None' = None,
         amount: float | list[float] = 1,
         supplier: str | list | None = None,
-    ) -> "IngredientSet":
+    ) -> 'IngredientSet':
         """Create an :class:`.IngredientSet` from a :class:`.CompoundSet` or IDs
 
         :param compounds: :class:`.CompoundSet` to use, if ``None`` must provide ``ids`` and ``db`` (Default value = None)
@@ -2664,27 +2632,27 @@ class IngredientSet:
     ### PROPERTIES
 
     @property
-    def df(self) -> "DataFrame":
+    def df(self) -> 'DataFrame':
         """Access the raw DataFrame"""
         return self._data
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Linked HIPPO Database"""
         return self._db
 
     @property
-    def price_df(self) -> "DataFrame":
+    def price_df(self) -> 'DataFrame':
         """DataFrame including prices"""
         df = self.df.copy()
         tuples = [(i.price, i.lead_time, i.quote.supplier) for i in self]
-        df["price"] = [t[0] for t in tuples]
-        df["lead_time"] = [t[1] for t in tuples]
-        df["quote_supplier"] = [t[2] for t in tuples]
+        df['price'] = [t[0] for t in tuples]
+        df['lead_time'] = [t[1] for t in tuples]
+        df['quote_supplier'] = [t[2] for t in tuples]
         return df
 
     @property
-    def price(self) -> "Price":
+    def price(self) -> 'Price':
         """Total price of these ingredients"""
         return self.get_price()
 
@@ -2695,7 +2663,6 @@ class IngredientSet:
 
     @supplier.setter
     def supplier(self, s):
-
         if isinstance(s, list) or isinstance(s, tuple):
             for x in s:
                 assert isinstance(x, str)
@@ -2703,36 +2670,36 @@ class IngredientSet:
             assert isinstance(s, str)
 
         self._supplier = s
-        self.df["supplier"] = [s] * len(self)
+        self.df['supplier'] = [s] * len(self)
 
     @property
     def smiles(self) -> list[str]:
         """SMILES for all ingredients"""
-        compound_ids = list(self.df["compound_id"])
+        compound_ids = list(self.df['compound_id'])
         result = self.db.select_where(
-            query="compound_smiles",
-            table="compound",
-            key=f"compound_id in {tuple(compound_ids)}",
+            query='compound_smiles',
+            table='compound',
+            key=f'compound_id in {tuple(compound_ids)}',
             multiple=True,
         )
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     @property
     def inchikeys(self) -> list[str]:
         """InChI-keys for all ingredients"""
-        compound_ids = list(self.df["compound_id"])
+        compound_ids = list(self.df['compound_id'])
         result = self.db.select_where(
-            query="compound_inchikey",
-            table="compound",
-            key=f"compound_id in {tuple(compound_ids)}",
+            query='compound_inchikey',
+            table='compound',
+            key=f'compound_id in {tuple(compound_ids)}',
             multiple=True,
         )
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     @property
     def compound_ids(self) -> list[int]:
         """Compound IDs for all ingredients"""
-        return list(self.df["compound_id"].values)
+        return list(self.df['compound_id'].values)
 
     @property
     def ids(self) -> list[int]:
@@ -2743,16 +2710,16 @@ class IngredientSet:
     def id_amount_pairs(self) -> list[tuple]:
         """Get a list of compound ID and amount pairs"""
         return [
-            (id, amount) for id, amount in self.df[["compound_id", "amount"]].values
+            (id, amount) for id, amount in self.df[['compound_id', 'amount']].values
         ]
 
     @property
     def str_compound_ids(self) -> str:
         """Return an SQL formatted tuple string of the :class:`.Compound` IDs"""
-        return str(tuple(self.df["compound_id"].values)).replace(",)", ")")
+        return str(tuple(self.df['compound_id'].values)).replace(',)', ')')
 
     @property
-    def compounds(self) -> "CompoundSet":
+    def compounds(self) -> 'CompoundSet':
         """:class:`.CompoundSet` of all compounds in this set"""
         return CompoundSet(self.db, self.compound_ids)
 
@@ -2761,13 +2728,13 @@ class IngredientSet:
         """Get a list of quote ID's"""
         from pandas import isna
 
-        return [q for q in self.df["quote_id"].values if not isna(q) and q is not None]
+        return [q for q in self.df['quote_id'].values if not isna(q) and q is not None]
 
     ### METHODS
 
     def get_price(
-        self, supplier: str | list[str] = None, none: str = "error", debug: bool = False
-    ) -> "Price":
+        self, supplier: str | list[str] = None, none: str = 'error', debug: bool = False
+    ) -> 'Price':
         """Calculate the price with a given supplier
 
         :param supplier: supplier to use for all quoting, (Default value = ``None``)
@@ -2776,30 +2743,29 @@ class IngredientSet:
 
         from .price import Price
 
-        pairs = {i: q for i, q in enumerate(self.df["quote_id"])}
+        pairs = {i: q for i, q in enumerate(self.df['quote_id'])}
 
         quote_ids = [q for q in pairs.values() if q is not None and not isnan(q)]
 
         if debug:
-            mrich.debug("quote_ids", quote_ids)
+            mrich.debug('quote_ids', quote_ids)
 
         if quote_ids:
-
-            quote_id_str = str(tuple(quote_ids)).replace(",)", ")")
+            quote_id_str = str(tuple(quote_ids)).replace(',)', ')')
 
             if supplier:
                 result = self.db.select_where(
-                    query="quote_price, quote_currency",
-                    table="quote",
+                    query='quote_price, quote_currency',
+                    table='quote',
                     key=f'quote_id in {quote_id_str} AND quote_supplier = "{supplier}"',
                     multiple=True,
                     none=none,
                 )
             else:
                 result = self.db.select_where(
-                    query="quote_price, quote_currency",
-                    table="quote",
-                    key=f"quote_id in {quote_id_str}",
+                    query='quote_price, quote_currency',
+                    table='quote',
+                    key=f'quote_id in {quote_id_str}',
                     multiple=True,
                     none=none,
                 )
@@ -2810,26 +2776,24 @@ class IngredientSet:
 
             else:
                 quoted = Price.null()
-                self.df["quote_id"] = None
-                pairs = {i: q for i, q in enumerate(self.df["quote_id"])}
+                self.df['quote_id'] = None
+                pairs = {i: q for i, q in enumerate(self.df['quote_id'])}
 
         else:
-
             quoted = Price.null()
 
         if debug:
-            mrich.debug("quoted", quoted)
+            mrich.debug('quoted', quoted)
 
         unquoted = [i for i, q in pairs.items() if q is None or isnan(q)]
 
         unquoted_price = Price.null()
 
         for i in unquoted:
-
             ingredient = self[i]
 
             if debug:
-                mrich.debug("unquoted", i, ingredient)
+                mrich.debug('unquoted', i, ingredient)
 
             p = ingredient.price
 
@@ -2841,19 +2805,19 @@ class IngredientSet:
             quote = ingredient.quote
 
             if not quote:
-                mrich.warning("NULL Quote:", ingredient)
+                mrich.warning('NULL Quote:', ingredient)
                 continue
 
-            self.df.loc[i, "quote_id"] = quote.id
+            self.df.loc[i, 'quote_id'] = quote.id
 
             assert quote.amount
 
-            self.df.loc[i, "quoted_amount"] = quote.amount
+            self.df.loc[i, 'quoted_amount'] = quote.amount
 
         if debug:
-            mrich.debug("quoted", quoted)
-            mrich.debug("unquoted_price", unquoted_price)
-            mrich.error("end of IngredientSet.get_price()")
+            mrich.debug('quoted', quoted)
+            mrich.debug('unquoted_price', unquoted_price)
+            mrich.error('end of IngredientSet.get_price()')
 
         return quoted + unquoted_price
 
@@ -2863,7 +2827,7 @@ class IngredientSet:
 
     def add(
         self,
-        ingredient: "Ingredient | None" = None,
+        ingredient: 'Ingredient | None' = None,
         *,
         compound_id: int | None = None,
         amount: float | None = None,
@@ -2889,12 +2853,12 @@ class IngredientSet:
         from pandas import DataFrame, concat
 
         if ingredient:
-            assert ingredient._table == "ingredient"
+            assert ingredient._table == 'ingredient'
             compound_id = ingredient.compound_id
             amount = ingredient.amount
 
             if (q := ingredient.quote) and not ingredient.quote_id:
-                mrich.warning(f"Losing quote! {ingredient.quote=}")
+                mrich.warning(f'Losing quote! {ingredient.quote=}')
 
             supplier = ingredient.supplier
             max_lead_time = ingredient.max_lead_time
@@ -2935,24 +2899,23 @@ class IngredientSet:
             self._data = addition
 
         else:
-
-            if compound_id in self._data["compound_id"].values:
+            if compound_id in self._data['compound_id'].values:
                 index = self._data.index[
-                    self._data["compound_id"] == compound_id
+                    self._data['compound_id'] == compound_id
                 ].tolist()[0]
-                self._data.loc[index, "amount"] += amount
+                self._data.loc[index, 'amount'] += amount
 
                 # discard if the quote is no longer valid
-                if (a := self.df.loc[index, "quoted_amount"]) and a < self.df.loc[
-                    index, "amount"
+                if (a := self.df.loc[index, 'quoted_amount']) and a < self.df.loc[
+                    index, 'amount'
                 ]:
-                    self._data.loc[index, "quote_id"] = None
-                    self._data.loc[index, "quoted_amount"] = None
+                    self._data.loc[index, 'quote_id'] = None
+                    self._data.loc[index, 'quoted_amount'] = None
 
                 if debug and supplier:
-                    mrich.debug("Adding to existing ingredient")
+                    mrich.debug('Adding to existing ingredient')
                     mrich.debug(f'{self._data.loc[index, "supplier"]=}')
-                    mrich.debug(f"{supplier=}")
+                    mrich.debug(f'{supplier=}')
 
             else:
                 # from numpy import nan
@@ -2971,7 +2934,7 @@ class IngredientSet:
                 )
 
                 self._data = concat(
-                    [self._data, addition], ignore_index=True, join="inner"
+                    [self._data, addition], ignore_index=True, join='inner'
                 )
 
                 if debug:
@@ -2980,24 +2943,24 @@ class IngredientSet:
     def _get_ingredient(
         self,
         series,
-    ) -> "Ingredient":
+    ) -> 'Ingredient':
         """Get ingredient from one of the DataFrame rows"""
 
-        q_id = series["quote_id"]
+        q_id = series['quote_id']
 
         if isinstance(q_id, float) and isnan(q_id):
             q_id = None
 
         return Ingredient(
             db=self._db,
-            compound=series["compound_id"],
-            amount=series["amount"],
+            compound=series['compound_id'],
+            amount=series['amount'],
             quote=q_id,
-            supplier=series["supplier"],
-            max_lead_time=series["max_lead_time"],
+            supplier=series['supplier'],
+            max_lead_time=series['max_lead_time'],
         )
 
-    def copy(self) -> "IngredientSet":
+    def copy(self) -> 'IngredientSet':
         """Return a copy of this :class:`.IngredientSet`"""
         return IngredientSet.from_ingredient_df(
             self.db, self.df, supplier=self.supplier
@@ -3017,12 +2980,12 @@ class IngredientSet:
 
         """
 
-        self.df["amount"] = amount
+        self.df['amount'] = amount
 
         # if amounts are modified the quotes should be cleared
-        self.df["quote_id"] = None
+        self.df['quote_id'] = None
 
-        assert all(self.df["supplier"].isna()) and all(self.df["max_lead_time"].isna())
+        assert all(self.df['supplier'].isna()) and all(self.df['max_lead_time'].isna())
 
         # update quotes
         pairs = self.db.execute(
@@ -3040,10 +3003,10 @@ class IngredientSet:
         ).fetchall()
 
         for compound_id, quote_id in pairs:
-            match = self.df.index[self.df["compound_id"] == compound_id][0]
-            self.df.loc[match, "quote_id"] = quote_id
+            match = self.df.index[self.df['compound_id'] == compound_id][0]
+            self.df.loc[match, 'quote_id'] = quote_id
 
-    def get_dict(self, data_orient: str = "list") -> dict:
+    def get_dict(self, data_orient: str = 'list') -> dict:
         """Get serialisable dictionary
 
         :param data_orient: passed to ``pandas.DataFrame.to_dict`` (Default value = 'list')
@@ -3073,15 +3036,15 @@ class IngredientSet:
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return "{" f"Ingredient × {len(self)}" "}"
+        return f'{{Ingredient × {len(self)}}}'
 
     def __repr__(self) -> str:
         """ANSI ormatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Representation for mrich"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __add__(self, other):
         """Add another  :class:`.IngredientSet` this set"""
@@ -3098,7 +3061,7 @@ class IngredientSet:
 
         return self
 
-    def __getitem__(self, key: int) -> "Ingredient":
+    def __getitem__(self, key: int) -> 'Ingredient':
         """Get a member by it's index"""
         match key:
             case int():
@@ -3117,20 +3080,18 @@ class IngredientSet:
         *,
         compound_id: int | None = None,
         tag: str | None = None,
-    ) -> "IngredientSet | Ingredient | CompoundSet":
+    ) -> 'IngredientSet | Ingredient | CompoundSet':
         """Get members based on a compound_id or tag"""
 
         if compound_id:
-
             # get the ingredient with the matching compound ID
-            matches = self.df[self.df["compound_id"] == compound_id]
+            matches = self.df[self.df['compound_id'] == compound_id]
 
             if len(matches) == 0:
                 return None
 
             elif len(matches) != 1:
-
-                mrich.warning(f"Multiple ingredients in set with {compound_id=}")
+                mrich.warning(f'Multiple ingredients in set with {compound_id=}')
                 # print(matches)
 
                 return IngredientSet(

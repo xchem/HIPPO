@@ -12,14 +12,14 @@ HIPPO Documentation
 Installation
 ============
 
-On Mac OS and Linux it is recommended to install from PyPI using Conda/Miniconda. 
+On Mac OS and Linux it is recommended to install from PyPI using Conda/Miniconda.
 
 Chemicalite is not supported on Windows, but there is a workaround described in the :doc:`windows`.
 
 The `hippo` python module can be obtained from PyPI:
 
 ::
-   
+
    $ pip install --upgrade hippo-db
 
 You will also need `chemicalite` which is an extension to SQLite for cheminformatics:
@@ -28,7 +28,7 @@ You will also need `chemicalite` which is an extension to SQLite for cheminforma
 
    $ conda install -c conda-forge chemicalite=2024.05.1
 
-N.B. Compatibility between rdkit and chemicalite versions is quite strict, and database files created with a certain version pair may not be interoperable with others. 
+N.B. Compatibility between rdkit and chemicalite versions is quite strict, and database files created with a certain version pair may not be interoperable with others.
 
 See also :ref:`installation-snippets`.
 
@@ -52,15 +52,15 @@ HIPPO uses an sqlite database with several inter-connected tables and Python-cla
    Adding data <add_data>
 
    Interfacing with Syndirella and merging algorithms <syndirella>
-   
+
    Example Notebooks <notebooks>
 
    Windows installation <windows>
-   
+
    Command-Line Interface <cli>
 
    API Reference <api_reference>
-   
+
 
 Core concepts
 =============
@@ -70,7 +70,7 @@ HIPPO uses an sqlite database with several inter-connected tables (see :doc:`db`
 Compound
 --------
 
-A :class:`.Compound` represents a ligand/small molecule with stereochemistry removed and no atomic coordinates. I.e. it represents the chemical structure. It's name is always an InChiKey. If a compound is an elaboration it can have a :meth:`.Compound.scaffold` property which is another :class:`.Compound`. :class:`.Compound` objects are target-agnostic and can be linked to any number of catalogue entries (:class:`.Quote`) or synthetic pathways (:class:`.Reaction`). 
+A :class:`.Compound` represents a ligand/small molecule with stereochemistry removed and no atomic coordinates. I.e. it represents the chemical structure. It's name is always an InChiKey. If a compound is an elaboration it can have a :meth:`.Compound.scaffold` property which is another :class:`.Compound`. :class:`.Compound` objects are target-agnostic and can be linked to any number of catalogue entries (:class:`.Quote`) or synthetic pathways (:class:`.Reaction`).
 
 Pose
 ----
@@ -92,7 +92,7 @@ Installation Snippets
 If the above fails in your existing software environments, try this:
 
 ::
-   
+
    mamba create --name py312 python=3.12
    mamba activate py312
    pip install hippo-db syndirella typer neo4j black gemmi
@@ -105,7 +105,7 @@ Additionally, this Dockerfile can be used to create a container with a Jupyter N
 
    FROM quay.io/jupyter/minimal-notebook:2025-04-14
    LABEL authors="Max Winokan"
-       
+
    # Upgrade pip and install JupyterLab
    RUN pip install --upgrade pip && pip install hippo-db syndirella typer neo4j black gemmi
 

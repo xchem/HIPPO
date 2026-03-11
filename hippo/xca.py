@@ -1,8 +1,5 @@
 """Functions for interfacing with XChemAlign data"""
 
-import mrich
-from mrich import print
-
 import re
 
 
@@ -19,7 +16,7 @@ def parse_observation_longcode(longcode: str) -> dict[str]:
     """
 
     match = re.search(
-        r"^(.*)-(.\d{4})_(.)_(\d*)_(\d)_.*-.\d{4}\+.\+\d*\+\d_.LIG$", longcode
+        r'^(.*)-(.\d{4})_(.)_(\d*)_(\d)_.*-.\d{4}\+.\+\d*\+\d_.LIG$', longcode
     )
 
     if not match:

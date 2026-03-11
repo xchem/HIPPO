@@ -2,29 +2,28 @@
 
 
 def reactions_from_row(
-    *, animal: "HIPPO", row: "pandas.Series", num_steps: int
-) -> "ReactionSet":
+    *, animal: 'HIPPO', row: 'pandas.Series', num_steps: int
+) -> 'ReactionSet':
     """Get :class:`.ReactionSet` from a syndirella *to-hippo* DataFrame row"""
 
     reaction_ids = set()
 
     for step in range(num_steps):
-
         step += 1
 
         # get relevant fields
-        reaction_name = row[f"{step}_reaction"]
+        reaction_name = row[f'{step}_reaction']
 
         product = None
         reactants = []
 
-        if reactant1_smiles := row[f"{step}_r1_smiles"]:
+        if reactant1_smiles := row[f'{step}_r1_smiles']:
             reactants.append(animal.register_compound(smiles=reactant1_smiles))
 
-        if reactant2_smiles := row[f"{step}_r2_smiles"]:
+        if reactant2_smiles := row[f'{step}_r2_smiles']:
             reactants.append(animal.register_compound(smiles=reactant2_smiles))
 
-        if product_smiles := row[f"{step}_product_smiles"]:
+        if product_smiles := row[f'{step}_product_smiles']:
             product = animal.register_compound(smiles=product_smiles)
 
         assert product

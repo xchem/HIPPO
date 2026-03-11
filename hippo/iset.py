@@ -13,7 +13,7 @@ class InteractionTable:
 
     """
 
-    def __init__(self, db: "Database", table: str = "interaction") -> None:
+    def __init__(self, db: 'Database', table: str = 'interaction') -> None:
         """InteractionTable initialisation"""
 
         self._db = db
@@ -23,7 +23,7 @@ class InteractionTable:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns the associated :class:`.Database`"""
         return self._db
 
@@ -33,7 +33,7 @@ class InteractionTable:
         return self._table
 
     @property
-    def df(self) -> "pandas.DataFrame":
+    def df(self) -> 'pandas.DataFrame':
         """DataFrame representation of the interactions
 
         :returns: a ``pandas.Dataframe`` of the interactions
@@ -42,7 +42,7 @@ class InteractionTable:
 
         if self._df is None:
             records = self.db.select_all_where(
-                table="interaction", key=f"interaction_id > 0", multiple=True
+                table='interaction', key='interaction_id > 0', multiple=True
             )
             df = df_from_interaction_records(self.db, records)
             self._df = df
@@ -57,15 +57,15 @@ class InteractionTable:
 
     def __str__(self) -> str:
         """Unformatted command-line representation"""
-        return "{" f"I × {len(self)}" "}"
+        return f'{{I × {len(self)}}}'
 
     def __repr__(self) -> str:
         """ANSI formatted command-line representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich formatted command-line representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
 
 class InteractionSet:
@@ -79,9 +79,9 @@ class InteractionSet:
 
     def __init__(
         self,
-        db: "Database",
+        db: 'Database',
         indices: list = None,
-        table: str = "interaction",
+        table: str = 'interaction',
     ) -> None:
         """InteractionSet initialisation"""
 
@@ -103,10 +103,10 @@ class InteractionSet:
     @classmethod
     def from_pose(
         cls,
-        pose: "Pose | PoseSet",
-        table: str = "interaction",
-        db: "Database | None" = None,
-    ) -> "InteractionSet":
+        pose: 'Pose | PoseSet',
+        table: str = 'interaction',
+        db: 'Database | None' = None,
+    ) -> 'InteractionSet':
         """Construct a :class:`.InteractionSet` from one or more poses.
 
         :param pose: a :class:`.Pose` or :class:`.PoseSet` object
@@ -124,16 +124,15 @@ class InteractionSet:
         from .pset import PoseSet
 
         if isinstance(pose, PoseSet):
-
             # check if all poses have fingerprints
             (has_invalid_fps,) = db.select_where(
-                query="COUNT(1)",
-                table="pose",
-                key=f"pose_id IN {pose.str_ids} AND pose_fingerprint = 0",
+                query='COUNT(1)',
+                table='pose',
+                key=f'pose_id IN {pose.str_ids} AND pose_fingerprint = 0',
             )
 
             if has_invalid_fps:
-                mrich.warning(f"{has_invalid_fps} Poses have not been fingerprinted")
+                mrich.warning(f'{has_invalid_fps} Poses have not been fingerprinted')
 
             sql = f"""
             SELECT interaction_id FROM {db.SQL_SCHEMA_PREFIX}{table}
@@ -141,7 +140,6 @@ class InteractionSet:
             """
 
         else:
-
             sql = f"""
             SELECT interaction_id FROM {db.SQL_SCHEMA_PREFIX}{table}
             WHERE interaction_pose = {pose.id}
@@ -149,7 +147,7 @@ class InteractionSet:
 
         ids = db.execute(sql).fetchall()
 
-        ids = [i for i, in ids]
+        ids = [i for (i,) in ids]
 
         self.__init__(db, ids, table=table)
 
@@ -158,20 +156,20 @@ class InteractionSet:
     @classmethod
     def all(
         cls,
-        db: "Database",
-        table: str = "interaction",
-    ) -> "InteractionSet":
+        db: 'Database',
+        table: str = 'interaction',
+    ) -> 'InteractionSet':
         """Construct a :class:`.InteractionSet` for all interactions in the table.
 
         :returns: an :class:`.InteractionSet`
 
         """
 
-        sql = f"SELECT interaction_id FROM {table}"
+        sql = f'SELECT interaction_id FROM {table}'
 
         ids = db.execute(sql).fetchall()
 
-        ids = [i for i, in ids]
+        ids = [i for (i,) in ids]
 
         self = cls.__new__(cls)
         self.__init__(db, ids, table=table)
@@ -181,11 +179,11 @@ class InteractionSet:
     @classmethod
     def from_residue(
         cls,
-        db: "Database",
+        db: 'Database',
         residue_number: int,
         chain: None | str = None,
-        target: "Target | int" = 1,
-    ) -> "InteractionSet":
+        target: 'Target | int' = 1,
+    ) -> 'InteractionSet':
         """Get the set of interactions for a given residue number (and chain)
 
         :param db: HIPPO :class:`.Database`
@@ -215,7 +213,7 @@ class InteractionSet:
 
         ids = db.execute(sql).fetchall()
 
-        ids = [i for i, in ids]
+        ids = [i for (i,) in ids]
 
         self.__init__(db, ids)
 
@@ -237,15 +235,15 @@ class InteractionSet:
     def types(self) -> list[str]:
         """Returns the ids of interactions in this set"""
         records = self.db.select_where(
-            query="interaction_type",
+            query='interaction_type',
             table=self.table,
-            key=f"interaction_id IN {self.str_ids}",
+            key=f'interaction_id IN {self.str_ids}',
             multiple=True,
         )
-        return [r for r, in records]
+        return [r for (r,) in records]
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """The associated HIPPO :class:`.Database`"""
         return self._db
 
@@ -257,18 +255,18 @@ class InteractionSet:
     @property
     def str_ids(self) -> str:
         """Return an SQL formatted tuple string of the :class:`.Interaction` IDs"""
-        return str(tuple(self.ids)).replace(",)", ")")
+        return str(tuple(self.ids)).replace(',)', ')')
 
     @property
     def feature_ids(self) -> list[int]:
         """Return a list of :class:`.Feature` ID's"""
         records = self.db.select_where(
-            query="DISTINCT interaction_feature",
+            query='DISTINCT interaction_feature',
             table=self.table,
-            key=f"interaction_id IN {self.str_ids}",
+            key=f'interaction_id IN {self.str_ids}',
             multiple=True,
         )
-        return [r for r, in records]
+        return [r for (r,) in records]
 
     @property
     def classic_fingerprint(self) -> dict:
@@ -276,7 +274,7 @@ class InteractionSet:
         return self.get_classic_fingerprint()
 
     @property
-    def df(self) -> "pandas.DataFrame":
+    def df(self) -> 'pandas.DataFrame':
         """DataFrame representation of the interactions
 
         :returns: a ``pandas.Dataframe`` of the interactions
@@ -286,7 +284,7 @@ class InteractionSet:
         if self._df is None:
             records = self.db.select_all_where(
                 table=self.table,
-                key=f"interaction_id IN {self.str_ids}",
+                key=f'interaction_id IN {self.str_ids}',
                 multiple=True,
             )
             df = df_from_interaction_records(self.db, records)
@@ -321,6 +319,7 @@ class InteractionSet:
         records = self.db.execute(sql).fetchall()
 
         from collections import defaultdict
+
         from numpy import mean
 
         d = defaultdict(set)
@@ -342,6 +341,7 @@ class InteractionSet:
         records = self.db.execute(sql).fetchall()
 
         from collections import defaultdict
+
         from numpy import mean
 
         d = defaultdict(int)
@@ -365,6 +365,7 @@ class InteractionSet:
         records = self.db.execute(sql).fetchall()
 
         from collections import defaultdict
+
         from numpy import mean
 
         d = defaultdict(set)
@@ -433,8 +434,6 @@ class InteractionSet:
 
         counts = [count for f_id, count in counts]
 
-        from numpy import std
-
         # return -std(counts)
 
         from hirsch import hirsch
@@ -458,12 +457,12 @@ class InteractionSet:
             # print(interaction)
 
             # mrich.var(f'{interaction.family_str}', f'{interaction.distance:.1f}')
-            s = f"{interaction.description}"
+            s = f'{interaction.description}'
 
             if families:
-                s += f" {interaction.feature.family} ~ {interaction.family}"
+                s += f' {interaction.feature.family} ~ {interaction.family}'
 
-            mrich.var(s, f"{interaction.distance:.1f}", "Å")
+            mrich.var(s, f'{interaction.distance:.1f}', 'Å')
 
     def get_classic_fingerprint(self) -> dict:
         """Classic HIPPO fingerprint dictionary, mapping protein :class:`.Feature` ID's to the number of corresponding ligand features (from any :class:`.Pose`)"""
@@ -484,7 +483,7 @@ class InteractionSet:
         commit: bool = True,
         feature_cache: dict | None = None,
         # table: str = 'interaction',
-    ) -> "InteractionSet":
+    ) -> 'InteractionSet':
         """Resolve into predicted key interactions. In place modification.
 
         :param debug: Increased verbosity for debugging (Default value = False)
@@ -575,7 +574,7 @@ class InteractionSet:
         """
 
         records = self.db.execute(sql).fetchall()
-        ids = [a for a, in records]
+        ids = [a for (a,) in records]
         keep_list += ids
 
         ### hydrophobic
@@ -597,26 +596,25 @@ class InteractionSet:
         lumped_hydrophobic_in_lumped_lumped = {}
 
         for interaction in subset:
-
             feature = feature_cache[interaction.feature_id]
 
             families = (feature.family, interaction.family)
 
-            if families == ("LumpedHydrophobe", "Hydrophobe"):
+            if families == ('LumpedHydrophobe', 'Hydrophobe'):
                 for name in feature.atom_names.split():
                     key = (name, interaction.atom_ids[0])
                     if key not in hydrophobic_interactions_in_lumped:
                         hydrophobic_interactions_in_lumped[key] = []
                     hydrophobic_interactions_in_lumped[key].append(interaction.id)
 
-            elif families == ("Hydrophobe", "LumpedHydrophobe"):
+            elif families == ('Hydrophobe', 'LumpedHydrophobe'):
                 for atom_id in interaction.atom_ids:
                     key = (feature.atom_names, atom_id)
                     if key not in hydrophobic_interactions_in_lumped:
                         hydrophobic_interactions_in_lumped[key] = []
                     hydrophobic_interactions_in_lumped[key].append(interaction.id)
 
-            elif families == ("LumpedHydrophobe", "LumpedHydrophobe"):
+            elif families == ('LumpedHydrophobe', 'LumpedHydrophobe'):
                 for name in feature.atom_names.split():
                     for atom_id in interaction.atom_ids:
                         key = (name, atom_id)
@@ -635,19 +633,17 @@ class InteractionSet:
         # modify keep list by those covered in lumped
 
         for interaction in subset:
-
             feature = feature_cache[interaction.feature_id]
 
             families = (feature.family, interaction.family)
 
-            if families == ("Hydrophobe", "Hydrophobe"):
+            if families == ('Hydrophobe', 'Hydrophobe'):
                 key = (feature.atom_names, interaction.atom_ids[0])
 
                 if key in hydrophobic_interactions_in_lumped:
                     keep_hydrophobic_ids -= set([interaction.id])
 
-            elif families == ("LumpedHydrophobe", "Hydrophobe"):
-
+            elif families == ('LumpedHydrophobe', 'Hydrophobe'):
                 key = feature.atom_names
 
                 if key in lumped_hydrophobic_in_lumped_lumped:
@@ -656,12 +652,10 @@ class InteractionSet:
                     if atom_id in value:
                         keep_hydrophobic_ids -= set([interaction.id])
 
-            elif families == ("Hydrophobe", "LumpedHydrophobe"):
-
+            elif families == ('Hydrophobe', 'LumpedHydrophobe'):
                 key = tuple(interaction.atom_ids)
 
                 if key in rev_hydrophobic_in_lumped_lumped:
-
                     atom_name = feature.atom_names
                     value = rev_hydrophobic_in_lumped_lumped[key]
 
@@ -676,7 +670,7 @@ class InteractionSet:
         cull_iset = InteractionSet(self.db, cull_list)
         self.db.delete_where(
             table=table,
-            key=f"interaction_id IN {cull_iset.str_ids}",
+            key=f'interaction_id IN {cull_iset.str_ids}',
             commit=commit,
         )
         self._indices = sorted(list(set(keep_list)))
@@ -703,7 +697,7 @@ class InteractionSet:
         cull_iset = InteractionSet(self.db, cull_list)
         self.db.delete_where(
             table=table,
-            key=f"interaction_id IN {cull_iset.str_ids}",
+            key=f'interaction_id IN {cull_iset.str_ids}',
             commit=commit,
         )
         self._indices = sorted(list(set(keep_list) - cull_list))
@@ -721,15 +715,15 @@ class InteractionSet:
 
     def __str__(self) -> str:
         """Unformatted command-line representation"""
-        return "{" f"I × {len(self)}" "}"
+        return f'{{I × {len(self)}}}'
 
     def __repr__(self) -> str:
         """ANSI formatted command-line representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich formatted command-line representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __iter__(self):
         """Iterate through interactions in this set"""
@@ -737,7 +731,7 @@ class InteractionSet:
             self.db.get_interaction(id=i, table=self.table) for i in self.indices
         )
 
-    def __getitem__(self, key) -> "Interaction | InteractionSet":
+    def __getitem__(self, key) -> 'Interaction | InteractionSet':
         """Get interaction or subsets thereof from this set"""
         match key:
             case int():
@@ -753,17 +747,17 @@ class InteractionSet:
 
 
 def df_from_interaction_records(
-    db: "Database",
+    db: 'Database',
     records: list[tuple],
-) -> "pandas.DataFrame":
+) -> 'pandas.DataFrame':
     """Construct a dataframe from the 'interaction' table records"""
 
     import json
+
     from pandas import DataFrame
 
     data = []
     for record in records:
-
         (
             id,
             feature_id,
@@ -782,32 +776,32 @@ def df_from_interaction_records(
 
         d = dict(id=id)
 
-        d["feature_id"] = feature_id
-        d["pose_id"] = pose_id
-        d["target_id"] = feature.target
+        d['feature_id'] = feature_id
+        d['pose_id'] = pose_id
+        d['target_id'] = feature.target
 
         # d['type'] = INTERACTION_TYPES[(feature.family, family)]
-        d["type"] = type
+        d['type'] = type
 
-        d["prot_family"] = feature.family
-        d["lig_family"] = family
+        d['prot_family'] = feature.family
+        d['lig_family'] = family
 
-        d["residue_name"] = feature.residue_name
-        d["residue_number"] = feature.residue_number
-        d["chain_name"] = feature.chain_name
+        d['residue_name'] = feature.residue_name
+        d['residue_number'] = feature.residue_number
+        d['chain_name'] = feature.chain_name
 
-        d["distance"] = distance
-        d["angle"] = angle
-        d["energy"] = energy
+        d['distance'] = distance
+        d['angle'] = angle
+        d['energy'] = energy
 
-        d["prot_coord"] = json.loads(prot_coord)
-        d["lig_coord"] = json.loads(lig_coord)
+        d['prot_coord'] = json.loads(prot_coord)
+        d['lig_coord'] = json.loads(lig_coord)
 
-        d["prot_atoms"] = feature.atom_names
-        d["lig_atoms"] = atom_ids
+        d['prot_atoms'] = feature.atom_names
+        d['lig_atoms'] = atom_ids
 
-        d["backbone"] = feature.backbone
-        d["sidechain"] = feature.sidechain
+        d['backbone'] = feature.backbone
+        d['sidechain'] = feature.sidechain
 
         data.append(d)
 

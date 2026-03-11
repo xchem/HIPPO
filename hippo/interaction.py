@@ -15,7 +15,7 @@ class Interaction:
 
     def __init__(
         self,
-        db: "Database",
+        db: 'Database',
         id: int,
         feature_id: int,
         pose_id: int,
@@ -27,7 +27,7 @@ class Interaction:
         distance: float,
         angle: float,
         energy: float | None,
-        table: str = "interaction",
+        table: str = 'interaction',
     ) -> None:
         """Interaction initialisation"""
 
@@ -66,7 +66,7 @@ class Interaction:
         return self._table
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
@@ -81,7 +81,7 @@ class Interaction:
         return self._pose_id
 
     @property
-    def pose(self) -> "Pose":
+    def pose(self) -> 'Pose':
         """Returns the associated :class:`.Pose`'s object"""
         if not self._pose:
             self._pose = self.db.get_pose(id=self.pose_id)
@@ -93,7 +93,7 @@ class Interaction:
         return self._feature_id
 
     @property
-    def feature(self) -> "Feature":
+    def feature(self) -> 'Feature':
         """Returns the associated :class:`.Feature`'s object"""
         if not self._feature:
             self._feature = self.db.get_feature(id=self.feature_id)
@@ -142,7 +142,7 @@ class Interaction:
     @property
     def family_str(self) -> str:
         """String of the two feature families"""
-        return f"{repr(self.feature)} ~ {self.family}"
+        return f'{repr(self.feature)} ~ {self.family}'
 
     @property
     def type(self) -> str:
@@ -154,9 +154,9 @@ class Interaction:
     @property
     def description(self) -> str:
         """One line description of this interaction"""
-        s = f"{self.type} [{self.feature.chain_res_name_number_str}] {self.distance:.1f} Å"
+        s = f'{self.type} [{self.feature.chain_res_name_number_str}] {self.distance:.1f} Å'
         if self.angle:
-            s += f", {self.angle:.1f} degrees"
+            s += f', {self.angle:.1f} degrees'
         return s
 
     ### METHODS
@@ -164,28 +164,28 @@ class Interaction:
     def summary(self) -> None:
         """Print a summary of this interaction's properties"""
 
-        mrich.header(f"Interaction {self.id}")
+        mrich.header(f'Interaction {self.id}')
 
-        mrich.var("feature", self.feature)
-        mrich.var("pose", self.pose)
-        mrich.var("family", self.family)
-        mrich.var("atom_ids", self.atom_ids)
-        mrich.var("prot_coord", self.prot_coord)
-        mrich.var("lig_coord", self.lig_coord)
-        mrich.var("distance", self.distance)
-        mrich.var("angle", self.angle)
-        mrich.var("energy", self.energy)
+        mrich.var('feature', self.feature)
+        mrich.var('pose', self.pose)
+        mrich.var('family', self.family)
+        mrich.var('atom_ids', self.atom_ids)
+        mrich.var('prot_coord', self.prot_coord)
+        mrich.var('lig_coord', self.lig_coord)
+        mrich.var('distance', self.distance)
+        mrich.var('angle', self.angle)
+        mrich.var('energy', self.energy)
 
     ### DUNDERS
 
     def __str__(self) -> str:
         """Plain string representation"""
-        return f"I{self.id}"
+        return f'I{self.id}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'

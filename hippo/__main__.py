@@ -2,7 +2,6 @@
 
 import mrich
 from typer import Typer
-from pathlib import Path
 
 app = Typer()
 
@@ -11,12 +10,12 @@ def setup_animal(
     database: str,
     backup: bool = True,
     update_legacy: bool = False,
-) -> "HIPPO":
+) -> 'HIPPO':
     """Setup the :class:`.HIPPO` object and optionally perform a database backup"""
 
     from .animal import HIPPO
 
-    animal = HIPPO("CLI", database, update_legacy=update_legacy)
+    animal = HIPPO('CLI', database, update_legacy=update_legacy)
     if backup:
         animal.db.backup()
     return animal
@@ -25,25 +24,25 @@ def setup_animal(
 @app.command()
 def backup(database: str):
     """Backup database file"""
-    mrich.h1("hippo.backup")
+    mrich.h1('hippo.backup')
 
-    mrich.h3("Params")
-    mrich.var("database", database)
+    mrich.h3('Params')
+    mrich.var('database', database)
 
     from hippo.db import backup
 
     backup(database)
-    mrich.success("Successfully backed up")
+    mrich.success('Successfully backed up')
 
 
 @app.command()
 def update_legacy(database: str, backup: bool = True):
     """Update legacy database format"""
 
-    mrich.h1("hippo.update_legacy")
+    mrich.h1('hippo.update_legacy')
 
-    mrich.h3("Params")
-    mrich.var("database", database)
+    mrich.h3('Params')
+    mrich.var('database', database)
 
     if backup:
         from hippo.db import backup
@@ -51,7 +50,7 @@ def update_legacy(database: str, backup: bool = True):
         backup(database)
 
     animal = setup_animal(database, backup=False, update_legacy=True)
-    mrich.success("Successfully updated database format")
+    mrich.success('Successfully updated database format')
 
 
 @app.command()
@@ -61,27 +60,27 @@ def calculate_scaffolds(
 ):
     """Calculate scaffold/superstructure relationships for all compounds"""
 
-    mrich.h1("hippo.calculate_scaffolds")
+    mrich.h1('hippo.calculate_scaffolds')
 
-    mrich.h3("Params")
-    mrich.var("database", database)
-    mrich.var("backup", backup)
+    mrich.h3('Params')
+    mrich.var('database', database)
+    mrich.var('backup', backup)
 
-    mrich.h3("Animal")
+    mrich.h3('Animal')
     animal = setup_animal(database=database, backup=backup)
 
-    mrich.h3("State Before")
-    mrich.var("scaffolds", animal.scaffolds)
-    mrich.var("elabs", animal.elabs)
+    mrich.h3('State Before')
+    mrich.var('scaffolds', animal.scaffolds)
+    mrich.var('elabs', animal.elabs)
 
-    mrich.h3("Calculation")
+    mrich.h3('Calculation')
     animal.db.calculate_all_scaffolds()
 
-    mrich.h3("State After")
-    mrich.var("scaffolds", animal.scaffolds)
-    mrich.var("elabs", animal.elabs)
+    mrich.h3('State After')
+    mrich.var('scaffolds', animal.scaffolds)
+    mrich.var('elabs', animal.elabs)
 
-    mrich.success("Completed")
+    mrich.success('Completed')
 
 
 @app.command()
@@ -94,42 +93,40 @@ def calculate_interactions(
 ) -> None:
     """Calculate interactions for all poses"""
 
-    mrich.h1("hippo.calculate_interactions")
+    mrich.h1('hippo.calculate_interactions')
 
-    mrich.h3("Params")
-    mrich.var("database", database)
-    mrich.var("backup", backup)
+    mrich.h3('Params')
+    mrich.var('database', database)
+    mrich.var('backup', backup)
 
-    mrich.h3("Animal")
+    mrich.h3('Animal')
     animal = setup_animal(database=database, backup=backup)
 
-    mrich.h3("State Before")
-    mrich.var("#total poses", animal.num_poses)
-    mrich.var("#fingerprinted", animal.poses.num_fingerprinted)
+    mrich.h3('State Before')
+    mrich.var('#total poses', animal.num_poses)
+    mrich.var('#fingerprinted', animal.poses.num_fingerprinted)
 
-    mrich.h3("Calculation")
+    mrich.h3('Calculation')
 
     n_tasks = 1
 
     if not force:
         pose_ids = animal.db.select_id_where(
-            table="pose", key="pose_fingerprint != 1", multiple=True
+            table='pose', key='pose_fingerprint != 1', multiple=True
         )
     else:
-        pose_ids = animal.db.execte("SELECT pose_id FROM pose").fetchall()
+        pose_ids = animal.db.execte('SELECT pose_id FROM pose').fetchall()
 
-    pose_ids = [i for i, in pose_ids]
+    pose_ids = [i for (i,) in pose_ids]
 
-    mrich.var("#poses", len(pose_ids))
+    mrich.var('#poses', len(pose_ids))
 
     if n_tasks == 1:
-
         poses = animal.poses[pose_ids]
 
         n = len(poses)
         for i, pose in mrich.track(enumerate(poses), total=n):
-
-            mrich.set_progress_prefix(f"{i}/{n}")
+            mrich.set_progress_prefix(f'{i}/{n}')
 
             try:
                 if prolif:
@@ -139,21 +136,20 @@ def calculate_interactions(
 
             except Exception as e:
                 mrich.error(e)
-                mrich.error("Could not fingerprint pose")
+                mrich.error('Could not fingerprint pose')
                 continue
 
     else:
-
         from joblib import Parallel, delayed
 
         poses = animal.db.get_poses(ids=pose_ids)
 
         if prolif:
             raise NotImplementedError(
-                "ProLIF fingerprint calculation does not support in-memory resolution"
+                'ProLIF fingerprint calculation does not support in-memory resolution'
             )
 
-        def calculate_interactions(pose: "Pose") -> None:
+        def calculate_interactions(pose: 'Pose') -> None:
             """Joblib wrapper for the calculation"""
             pose.calculate_interactions(force=force)
 
@@ -163,10 +159,10 @@ def calculate_interactions(
 
         Parallel(verbose=100, n_jobs=n_tasks)(task for task in tasks)
 
-    mrich.h3("State After")
-    mrich.var("#fingerprinted", animal.poses.num_fingerprinted)
+    mrich.h3('State After')
+    mrich.var('#fingerprinted', animal.poses.num_fingerprinted)
 
-    mrich.success("Completed")
+    mrich.success('Completed')
 
 
 @app.command()
@@ -175,13 +171,13 @@ def verify() -> None:
 
     import os
 
-    file_path = "_test.sqlite"
+    file_path = '_test.sqlite'
 
     try:
         animal = setup_animal(file_path, backup=False)
-        c = animal.register_compound(smiles="COc1ccc2sc(N)nc2c1")
+        c = animal.register_compound(smiles='COc1ccc2sc(N)nc2c1')
         c.mol
-        mrich.success("HIPPO/rdkit/chemicalite installations are compatible")
+        mrich.success('HIPPO/rdkit/chemicalite installations are compatible')
     except Exception as e:
         mrich.error(e)
 
@@ -195,10 +191,10 @@ def tag_summary(
 ) -> None:
     """Print a table of statistics for all tags in the database"""
 
-    mrich.h1("hippo.tag_summary")
+    mrich.h1('hippo.tag_summary')
 
-    mrich.h3("Params")
-    mrich.var("database", database)
+    mrich.h3('Params')
+    mrich.var('database', database)
 
     animal = setup_animal(database=database, backup=False)
     animal.tags.summary()
@@ -218,17 +214,17 @@ def add_hits(
 ):
     """Load hits from Fragalysis / XCA data package"""
 
-    mrich.h1("hippo.tag_summary")
+    mrich.h1('hippo.tag_summary')
 
-    mrich.h3("Params")
-    mrich.var("database", database)
-    mrich.var("target_name", target_name)
-    mrich.var("metadata_csv", metadata_csv)
-    mrich.var("aligned_directory", aligned_directory)
-    mrich.var("tags", tags)
-    mrich.var("skip", skip)
-    mrich.var("debug", debug)
-    mrich.var("load_pose_mols", load_pose_mols)
+    mrich.h3('Params')
+    mrich.var('database', database)
+    mrich.var('target_name', target_name)
+    mrich.var('metadata_csv', metadata_csv)
+    mrich.var('aligned_directory', aligned_directory)
+    mrich.var('tags', tags)
+    mrich.var('skip', skip)
+    mrich.var('debug', debug)
+    mrich.var('load_pose_mols', load_pose_mols)
 
     animal = setup_animal(database=database, backup=False)
 
@@ -248,5 +244,5 @@ def main() -> None:
     app()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -1,20 +1,20 @@
 """Classes for generating random recipes/selections"""
 
-import mrich
-
 import json
 from pathlib import Path
 
-from .tools import dt_hash
-from .recipe import Recipe
+import mrich
+
 from .cset import CompoundSet, IngredientSet
+from .recipe import Recipe
+from .tools import dt_hash
 
 
 class RRGMixin:
     """Mixin class for shared properties"""
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Get the linked HIPPO Database object"""
         return self._db
 
@@ -31,7 +31,7 @@ class RRGMixin:
     @property
     def suppliers_str(self) -> str:
         """SQL formatted tuple of suppliers"""
-        return str(tuple(self.suppliers)).replace(",)", ")")
+        return str(tuple(self.suppliers)).replace(',)', ')')
 
     @property
     def suppliers(self) -> list[str]:
@@ -57,15 +57,15 @@ class RRGMixin:
         """ANSI Formatted string representation"""
         import mcol
 
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
-    def __call__(self, *args, **kwargs) -> "Recipe":
+    def __call__(self, *args, **kwargs) -> 'Recipe':
         """Generate Recipe"""
         return self.generate(*args, **kwargs)
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
 
 class RandomRecipeGenerator(RRGMixin):
@@ -78,12 +78,12 @@ class RandomRecipeGenerator(RRGMixin):
         max_lead_time=None,
         suppliers: list | None = None,
         start_with: Recipe | CompoundSet | IngredientSet | None = None,
-        route_pool: "RouteSet | None" = None,
+        route_pool: 'RouteSet | None' = None,
         out_key: str | None = None,
     ):
         """RandomRecipeGenerator initialisation"""
 
-        mrich.debug("RandomRecipeGenerator.__init__()")
+        mrich.debug('RandomRecipeGenerator.__init__()')
 
         if not start_with:
             start_with = Recipe(db)
@@ -94,30 +94,30 @@ class RandomRecipeGenerator(RRGMixin):
         self._suppliers = suppliers
         self._starting_recipe = start_with
 
-        mrich.var("database", self.db_path)
-        mrich.var("max_lead_time", self.max_lead_time)
-        mrich.var("suppliers", self.suppliers)
+        mrich.var('database', self.db_path)
+        mrich.var('max_lead_time', self.max_lead_time)
+        mrich.var('suppliers', self.suppliers)
 
         # Database set up
         self._db = db
 
         if not out_key:
-            out_key = str(self.db_path.name).removesuffix(".sqlite")
-        mrich.var("out_key", out_key)
+            out_key = str(self.db_path.name).removesuffix('.sqlite')
+        mrich.var('out_key', out_key)
 
         parent_dir = Path(out_key).parent
         if not parent_dir.exists():
             parent_dir.mkdir(parents=True)
 
         # JSON I/O set up
-        self._data_path = Path(f"{out_key}_rgen.json")
+        self._data_path = Path(f'{out_key}_rgen.json')
         if self.data_path.exists():
-            mrich.warning(f"Will overwrite existing rgen data file: {self.data_path}")
+            mrich.warning(f'Will overwrite existing rgen data file: {self.data_path}')
 
         # Recipe I/O set up
-        path = Path(f"{out_key}_recipes")
+        path = Path(f'{out_key}_recipes')
         if not path.exists():
-            mrich.writing(f"{path}/")
+            mrich.writing(f'{path}/')
             path.mkdir()
         self._recipe_dir = path
 
@@ -126,10 +126,10 @@ class RandomRecipeGenerator(RRGMixin):
             route_pool = route_pool.prune_unavailable(suppliers=suppliers)
             self._route_pool = route_pool
         else:
-            mrich.debug("Solving route pool...")
+            mrich.debug('Solving route pool...')
             self._route_pool = self.get_route_pool()
 
-        assert len(self._route_pool), "Route pool is empty!"
+        assert len(self._route_pool), 'Route pool is empty!'
 
         # dump data
         self.dump_data()
@@ -137,28 +137,28 @@ class RandomRecipeGenerator(RRGMixin):
     ### FACTORIES
 
     @classmethod
-    def from_json(cls, db: "Database", path: "Path | str"):
+    def from_json(cls, db: 'Database', path: 'Path | str'):
         """Construct the RandomRecipeGenerator from a JSON file"""
 
-        data = json.load(open(path, "rt"))
+        data = json.load(open(path))
 
         self = cls.__new__(cls)
 
-        self._db_path = Path(data["db_path"])
-        self._recipe_dir = Path(data["recipe_dir"])
-        self._max_lead_time = data["max_lead_time"]
-        self._suppliers = data["suppliers"]
+        self._db_path = Path(data['db_path'])
+        self._recipe_dir = Path(data['recipe_dir'])
+        self._max_lead_time = data['max_lead_time']
+        self._suppliers = data['suppliers']
 
         self._starting_recipe = Recipe.from_json(
             db=db,
             path=None,
-            data=data["starting_recipe"],
+            data=data['starting_recipe'],
             allow_db_mismatch=True,
         )
 
-        mrich.var("database", self.db_path)
-        mrich.var("max_lead_time", self.max_lead_time)
-        mrich.var("suppliers", self.suppliers)
+        mrich.var('database', self.db_path)
+        mrich.var('max_lead_time', self.max_lead_time)
+        mrich.var('suppliers', self.suppliers)
 
         self._db = db
 
@@ -168,7 +168,7 @@ class RandomRecipeGenerator(RRGMixin):
         # Route pool
         from .recipe import RouteSet
 
-        self._route_pool = RouteSet.from_json(path=None, data=data["route_pool"], db=db)
+        self._route_pool = RouteSet.from_json(path=None, data=data['route_pool'], db=db)
 
         return self
 
@@ -197,8 +197,8 @@ class RandomRecipeGenerator(RRGMixin):
 
 		"""
 
-        if "route" not in self.db.table_names:
-            mrich.error("route table not in Database")
+        if 'route' not in self.db.table_names:
+            mrich.error('route table not in Database')
             raise NotImplementedError
 
         assert self.suppliers_str
@@ -209,18 +209,18 @@ class RandomRecipeGenerator(RRGMixin):
 
         sql = f"""
 		WITH possible_reactants AS (
-			SELECT quote_compound, COUNT(CASE WHEN quote_supplier IN {self.suppliers_str} THEN 1 END) AS [count_valid] 
+			SELECT quote_compound, COUNT(CASE WHEN quote_supplier IN {self.suppliers_str} THEN 1 END) AS [count_valid]
             FROM {self.db.SQL_SCHEMA_PREFIX}quote
 			GROUP BY quote_compound
 		),
 
 		route_reactants AS (
-			SELECT route_id, route_product, 
+			SELECT route_id, route_product,
             COUNT(
-                CASE 
-                    WHEN count_valid = 0 THEN 1 
-                    WHEN count_valid IS NULL THEN 1 
-                END) 
+                CASE
+                    WHEN count_valid = 0 THEN 1
+                    WHEN count_valid IS NULL THEN 1
+                END)
             AS [count_unavailable] FROM {self.db.SQL_SCHEMA_PREFIX}route
 			INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component ON component_route = route_id
 			LEFT JOIN possible_reactants ON quote_compound = component_ref
@@ -234,7 +234,7 @@ class RandomRecipeGenerator(RRGMixin):
 
         route_ids = self.db.execute(sql).fetchall()
 
-        route_ids = [i for i, in route_ids]
+        route_ids = [i for (i,) in route_ids]
 
         if mini_test:
             route_ids = route_ids[:100]
@@ -250,20 +250,20 @@ class RandomRecipeGenerator(RRGMixin):
 
         data = {}
 
-        data["db_path"] = str(self.db_path.resolve())
-        data["recipe_dir"] = str(self.recipe_dir.resolve())
-        data["max_lead_time"] = self.max_lead_time
-        data["suppliers"] = self.suppliers
-        data["starting_recipe"] = self.starting_recipe.get_dict(serialise_price=True)
-        data["route_pool"] = self.route_pool.get_dict()
+        data['db_path'] = str(self.db_path.resolve())
+        data['recipe_dir'] = str(self.recipe_dir.resolve())
+        data['max_lead_time'] = self.max_lead_time
+        data['suppliers'] = self.suppliers
+        data['starting_recipe'] = self.starting_recipe.get_dict(serialise_price=True)
+        data['route_pool'] = self.route_pool.get_dict()
 
         mrich.writing(self.data_path)
-        json.dump(data, open(self.data_path, "wt"), indent=4)
+        json.dump(data, open(self.data_path, 'w'), indent=4)
 
     def generate(
         self,
         budget: float = 10000,
-        currency: str = "EUR",
+        currency: str = 'EUR',
         max_products: int = 1000,
         max_reactions: int = 1000,
         debug: bool = False,
@@ -287,7 +287,7 @@ class RandomRecipeGenerator(RRGMixin):
 
         # construct filename
 
-        out_file = self.recipe_dir / f"Recipe_{dt_hash()}.json"
+        out_file = self.recipe_dir / f'Recipe_{dt_hash()}.json'
 
         from .price import Price
 
@@ -305,28 +305,27 @@ class RandomRecipeGenerator(RRGMixin):
         # get the RouteSet
         pool = self.route_pool.copy()
 
-        assert len(pool), "Route pool is empty!"
+        assert len(pool), 'Route pool is empty!'
 
         if shuffle:
-            mrich.debug("Shuffling Route pool")
+            mrich.debug('Shuffling Route pool')
             pool.shuffle()
 
         old_recipe = recipe.copy()
 
-        mrich.var("route pool", len(pool))
-        mrich.var("max_iter", max_iter)
+        mrich.var('route pool', len(pool))
+        mrich.var('max_iter', max_iter)
 
-        for i in mrich.track(range(max_iter), prefix="Generating Recipe..."):
-
+        for i in mrich.track(range(max_iter), prefix='Generating Recipe...'):
             if debug:
-                mrich.title(f"Iteration {i}")
+                mrich.title(f'Iteration {i}')
 
             price = recipe.price
-            mrich.set_progress_field("price", str(price))
-            mrich.set_progress_field("#products", len(recipe.products))
+            mrich.set_progress_field('price', str(price))
+            mrich.set_progress_field('#products', len(recipe.products))
 
             if debug:
-                mrich.var("price", price)
+                mrich.var('price', price)
 
             # pop a route
             if balance_clusters:
@@ -337,35 +336,35 @@ class RandomRecipeGenerator(RRGMixin):
                 candidate_route = pool.pop()
 
             if debug:
-                mrich.var("candidate_route", candidate_route)
+                mrich.var('candidate_route', candidate_route)
             if debug:
-                mrich.var("candidate_route.reactants", candidate_route.reactants.ids)
+                mrich.var('candidate_route.reactants', candidate_route.reactants.ids)
 
             if candidate_route.product in recipe.products:
                 continue
 
             # add the route to the recipe
             if debug:
-                mrich.var("#recipe.reactants", len(recipe.reactants))
+                mrich.var('#recipe.reactants', len(recipe.reactants))
             recipe += candidate_route
             if debug:
-                mrich.var("#recipe.reactants", len(recipe.reactants))
+                mrich.var('#recipe.reactants', len(recipe.reactants))
 
             # calculate the new price
             try:
                 new_price = recipe.price
             except AssertionError:
                 mrich.error(
-                    f"Something went wrong while calculating the price after adding {candidate_route=} to recipe"
+                    f'Something went wrong while calculating the price after adding {candidate_route=} to recipe'
                 )
                 raise
 
             if debug:
-                mrich.var("new price", new_price)
+                mrich.var('new price', new_price)
 
             # Break if product pool depleted
             if not len(pool):
-                stop_reason = "Product pool depleted"
+                stop_reason = 'Product pool depleted'
                 mrich.success(stop_reason)
                 break
 
@@ -375,12 +374,12 @@ class RandomRecipeGenerator(RRGMixin):
                 continue
 
             if len(recipe.reactions) > max_reactions:
-                stop_reason = "Max #reactions exceeded"
+                stop_reason = 'Max #reactions exceeded'
                 mrich.success(stop_reason)
                 break
 
             if len(recipe.products) > max_products:
-                stop_reason = "Max #products exceeded"
+                stop_reason = 'Max #products exceeded'
                 mrich.success(stop_reason)
                 break
 
@@ -388,28 +387,28 @@ class RandomRecipeGenerator(RRGMixin):
             old_recipe = recipe.copy()
 
         else:
-            stop_reason = "Max #iterations reached"
+            stop_reason = 'Max #iterations reached'
             mrich.warning(stop_reason)
 
         ### recalculate the products to see if any extra can be had for free?
 
-        mrich.success(f"Completed after {i} iterations")
+        mrich.success(f'Completed after {i} iterations')
 
         metadict = {
-            "rgen_data_path": str(self.data_path.resolve()),
-            "rgen_db_path": str(self.db_path.resolve()),
-            "rgen_recipe_dir": str(self.recipe_dir.resolve()),
-            "rgen_max_lead_time": self.max_lead_time,
-            "rgen_suppliers": self.suppliers,
-            "gen_budget": budget.amount,
-            "gen_currency": budget.currency,
-            "gen_max_products": max_products,
-            "gen_max_reactions": max_reactions,
-            "gen_max_iter": max_iter,
-            "gen_shuffle": shuffle,
-            "gen_iterations": i,
-            "gen_stop_reason": stop_reason,
-            "gen_recipe_path": str(out_file.resolve()),
+            'rgen_data_path': str(self.data_path.resolve()),
+            'rgen_db_path': str(self.db_path.resolve()),
+            'rgen_recipe_dir': str(self.recipe_dir.resolve()),
+            'rgen_max_lead_time': self.max_lead_time,
+            'rgen_suppliers': self.suppliers,
+            'gen_budget': budget.amount,
+            'gen_currency': budget.currency,
+            'gen_max_products': max_products,
+            'gen_max_reactions': max_reactions,
+            'gen_max_iter': max_iter,
+            'gen_shuffle': shuffle,
+            'gen_iterations': i,
+            'gen_stop_reason': stop_reason,
+            'gen_recipe_path': str(out_file.resolve()),
         }
 
         # write the Recipe JSON
@@ -421,7 +420,7 @@ class RandomRecipeGenerator(RRGMixin):
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return f"RandomRecipeGenerator(recipe_dir={self.recipe_dir})"
+        return f'RandomRecipeGenerator(recipe_dir={self.recipe_dir})'
 
 
 class RandomSelectionGenerator(RRGMixin):
@@ -440,7 +439,7 @@ class RandomSelectionGenerator(RRGMixin):
     ):
         """RandomSelectionGenerator initialisation"""
 
-        mrich.debug("RandomRecipeGenerator.__init__()")
+        mrich.debug('RandomRecipeGenerator.__init__()')
 
         # Static parameters
         self._db_path = db.path
@@ -449,28 +448,28 @@ class RandomSelectionGenerator(RRGMixin):
         self._quoted_only = quoted_only
         self._db = db
 
-        mrich.var("database", self.db_path)
-        mrich.var("suppliers", self.suppliers)
-        mrich.var("amount per compound", self.amount, unit="mg")
-        mrich.var("quoted_only", self.quoted_only)
+        mrich.var('database', self.db_path)
+        mrich.var('suppliers', self.suppliers)
+        mrich.var('amount per compound', self.amount, unit='mg')
+        mrich.var('quoted_only', self.quoted_only)
 
         self.get_starting_recipe(start_with)
-        mrich.var("starting recipe", self.starting_recipe)
+        mrich.var('starting recipe', self.starting_recipe)
 
         # JSON I/O set up
-        self._data_path = Path(str(self.db_path.name).replace(".sqlite", "_sgen.json"))
+        self._data_path = Path(str(self.db_path.name).replace('.sqlite', '_sgen.json'))
         if self.data_path.exists():
-            mrich.warning(f"Will overwrite existing rgen data file: {self.data_path}")
+            mrich.warning(f'Will overwrite existing rgen data file: {self.data_path}')
 
         # Recipe I/O set up
-        path = Path(str(self.db_path.name).replace(".sqlite", "_selections"))
-        mrich.writing(f"{path}/")
+        path = Path(str(self.db_path.name).replace('.sqlite', '_selections'))
+        mrich.writing(f'{path}/')
         path.mkdir(exist_ok=True)
         self._recipe_dir = path
 
-        with mrich.spinner("Getting compound pool"):
+        with mrich.spinner('Getting compound pool'):
             self.get_compound_pool(compounds)
-        mrich.var("compound pool", self.compound_pool)
+        mrich.var('compound pool', self.compound_pool)
 
         # dump data
         self.dump_data()
@@ -479,31 +478,31 @@ class RandomSelectionGenerator(RRGMixin):
 
     @classmethod
     def from_json(
-        cls, db: "Database", path: "Path | str"
-    ) -> "RandomSelectionGenerator":
+        cls, db: 'Database', path: 'Path | str'
+    ) -> 'RandomSelectionGenerator':
         """Construct the RandomRecipeGenerator from a JSON file"""
 
-        data = json.load(open(path, "rt"))
+        data = json.load(open(path))
 
         self = cls.__new__(cls)
 
-        self._db_path = Path(data["db_path"])
-        self._recipe_dir = Path(data["recipe_dir"])
+        self._db_path = Path(data['db_path'])
+        self._recipe_dir = Path(data['recipe_dir'])
         # self._max_lead_time = data["max_lead_time"]
-        self._suppliers = data["suppliers"]
-        self._amount = data["amount"]
+        self._suppliers = data['suppliers']
+        self._amount = data['amount']
 
         self._starting_recipe = Recipe.from_json(
             db=db,
             path=None,
-            data=data["starting_recipe"],
+            data=data['starting_recipe'],
             allow_db_mismatch=True,
         )
 
-        mrich.var("database", self.db_path)
-        mrich.var("suppliers", self.suppliers)
-        mrich.var("amount", self.amount)
-        mrich.var("starting_recipe", self.starting_recipe)
+        mrich.var('database', self.db_path)
+        mrich.var('suppliers', self.suppliers)
+        mrich.var('amount', self.amount)
+        mrich.var('starting_recipe', self.starting_recipe)
 
         self._db = db
 
@@ -512,9 +511,9 @@ class RandomSelectionGenerator(RRGMixin):
 
         # Route pool
         self._compound_pool = IngredientSet.from_json(
-            path=None, data=data["compound_pool"]["data"], db=db
+            path=None, data=data['compound_pool']['data'], db=db
         )
-        mrich.var("compound_pool", self.compound_pool)
+        mrich.var('compound_pool', self.compound_pool)
 
         return self
 
@@ -531,20 +530,20 @@ class RandomSelectionGenerator(RRGMixin):
         return self._quoted_only
 
     @property
-    def compound_pool(self) -> "CompoundTable | CompoundSet":
+    def compound_pool(self) -> 'CompoundTable | CompoundSet':
         """The pool of compounds that will be chosen from"""
         return self._compound_pool
 
     ### METHODS
 
     def get_starting_recipe(
-        self, start_with: "Recipe | CompoundSet | IngredientSet"
+        self, start_with: 'Recipe | CompoundSet | IngredientSet'
     ) -> Recipe:
         """Process start_with into Recipe object"""
 
         if isinstance(start_with, Recipe):
-            if start_with.type != "NOCHEM":
-                raise NotImplementedError("Only NOCHEM recipes are supported")
+            if start_with.type != 'NOCHEM':
+                raise NotImplementedError('Only NOCHEM recipes are supported')
             self._starting_recipe = start_with
             return self._starting_recipe
 
@@ -563,28 +562,27 @@ class RandomSelectionGenerator(RRGMixin):
 
     def get_compound_pool(
         self, compounds: CompoundSet | None
-    ) -> "CompoundTable | CompoundSet":
+    ) -> 'CompoundTable | CompoundSet':
         """Get pool of compounds to select from"""
 
         if self.suppliers:
             raise NotImplementedError
 
         if compounds is None:
-
             # all compounds
             if not self.quoted_only:
                 ids = self.db.select(
-                    table="compound", query="compound_id", multiple=True
+                    table='compound', query='compound_id', multiple=True
                 )
                 self._compound_pool = IngredientSet.from_compounds(
-                    db=self.db, ids=[i for i, in ids], amount=self.amount
+                    db=self.db, ids=[i for (i,) in ids], amount=self.amount
                 )
                 return self._compound_pool
 
             # get all compounds that have a quote
 
             sql = f"""
-            SELECT quote_id, quote_compound, quote_amount, quote_supplier, MIN(quote_price) 
+            SELECT quote_id, quote_compound, quote_amount, quote_supplier, MIN(quote_price)
             FROM {self.db.SQL_SCHEMA_PREFIX}quote
             WHERE quote_amount >= {self.amount}
             GROUP BY quote_compound
@@ -609,7 +607,6 @@ class RandomSelectionGenerator(RRGMixin):
             )
 
         else:
-
             # ignore quoting
             if not self.quoted_only:
                 self._compound_pool = IngredientSet.from_compounds(
@@ -620,7 +617,7 @@ class RandomSelectionGenerator(RRGMixin):
             # get all compounds that have a quote
 
             sql = f"""
-            SELECT quote_id, quote_compound, quote_amount, quote_supplier, MIN(quote_price) 
+            SELECT quote_id, quote_compound, quote_amount, quote_supplier, MIN(quote_price)
             FROM {self.db.SQL_SCHEMA_PREFIX}quote
             WHERE quote_amount >= {self.amount}
             AND quote_compound IN {compounds.str_ids}
@@ -650,21 +647,21 @@ class RandomSelectionGenerator(RRGMixin):
 
         data = {}
 
-        data["db_path"] = str(self.db_path.resolve())
-        data["recipe_dir"] = str(self.recipe_dir.resolve())
+        data['db_path'] = str(self.db_path.resolve())
+        data['recipe_dir'] = str(self.recipe_dir.resolve())
         # data["max_lead_time"] = self.max_lead_time
-        data["amount"] = self.amount
-        data["suppliers"] = self.suppliers
-        data["starting_recipe"] = self.starting_recipe.get_dict(serialise_price=True)
-        data["compound_pool"] = self.compound_pool.get_dict()
+        data['amount'] = self.amount
+        data['suppliers'] = self.suppliers
+        data['starting_recipe'] = self.starting_recipe.get_dict(serialise_price=True)
+        data['compound_pool'] = self.compound_pool.get_dict()
 
         mrich.writing(self.data_path)
-        json.dump(data, open(self.data_path, "wt"), indent=4)
+        json.dump(data, open(self.data_path, 'w'), indent=4)
 
     def generate(
         self,
         budget: float = 10000,
-        currency: str = "EUR",
+        currency: str = 'EUR',
         max_iter: int | None = None,
         max_compounds: int = 1000,
         debug: bool = False,
@@ -682,7 +679,7 @@ class RandomSelectionGenerator(RRGMixin):
 
         # construct filename
 
-        out_file = self.recipe_dir / f"Recipe_{dt_hash()}.json"
+        out_file = self.recipe_dir / f'Recipe_{dt_hash()}.json'
 
         from .price import Price
 
@@ -695,10 +692,10 @@ class RandomSelectionGenerator(RRGMixin):
         # get the RouteSet
         pool = self.compound_pool.copy()
 
-        assert len(pool), "Route pool is empty!"
+        assert len(pool), 'Route pool is empty!'
 
         if shuffle:
-            mrich.debug("Shuffling Route pool")
+            mrich.debug('Shuffling Route pool')
             pool.shuffle()
 
         old_recipe = recipe.copy()
@@ -706,21 +703,20 @@ class RandomSelectionGenerator(RRGMixin):
         if not max_iter:
             max_iter = max_compounds * 3
 
-        mrich.var("compound pool", pool)
-        mrich.var("max_compounds", max_compounds)
-        mrich.var("max_iter", max_iter)
+        mrich.var('compound pool', pool)
+        mrich.var('max_compounds', max_compounds)
+        mrich.var('max_iter', max_iter)
 
-        for i in mrich.track(range(max_iter), prefix="Generating Recipe..."):
-
+        for i in mrich.track(range(max_iter), prefix='Generating Recipe...'):
             if debug:
-                mrich.title(f"Iteration {i}")
+                mrich.title(f'Iteration {i}')
 
             price = recipe.price
-            mrich.set_progress_field("price", str(price))
-            mrich.set_progress_field("#compounds", len(recipe.compounds))
+            mrich.set_progress_field('price', str(price))
+            mrich.set_progress_field('#compounds', len(recipe.compounds))
 
             if debug:
-                mrich.var("price", price)
+                mrich.var('price', price)
 
             #     # pop a route
             #     if balance_clusters:
@@ -731,7 +727,7 @@ class RandomSelectionGenerator(RRGMixin):
             candidate = pool.pop()
 
             if debug:
-                mrich.var("candidate", candidate)
+                mrich.var('candidate', candidate)
 
             if candidate in recipe.compounds:
                 continue
@@ -744,17 +740,17 @@ class RandomSelectionGenerator(RRGMixin):
                 new_price = recipe.price
             except AssertionError:
                 mrich.error(
-                    f"Something went wrong while calculating the price after adding {candidate_route=} to recipe"
+                    f'Something went wrong while calculating the price after adding {candidate_route=} to recipe'
                 )
                 raise
 
             if debug:
-                mrich.var("#compounds", recipe.num_compounds)
-                mrich.var("new price", new_price)
+                mrich.var('#compounds', recipe.num_compounds)
+                mrich.var('new price', new_price)
 
             # Break if product pool depleted
             if not len(pool):
-                stop_reason = "Compound pool depleted"
+                stop_reason = 'Compound pool depleted'
                 mrich.success(stop_reason)
                 break
 
@@ -764,7 +760,7 @@ class RandomSelectionGenerator(RRGMixin):
                 continue
 
             if len(recipe.compounds) > max_compounds:
-                stop_reason = "Max #compounds exceeded"
+                stop_reason = 'Max #compounds exceeded'
                 mrich.success(stop_reason)
                 break
 
@@ -772,26 +768,26 @@ class RandomSelectionGenerator(RRGMixin):
             old_recipe = recipe.copy()
 
         else:
-            stop_reason = "Max #iterations reached"
+            stop_reason = 'Max #iterations reached'
             mrich.warning(stop_reason)
 
         ### recalculate the products to see if any extra can be had for free?
 
-        mrich.success(f"Completed after {i} iterations")
+        mrich.success(f'Completed after {i} iterations')
 
         metadict = {
-            "rgen_data_path": str(self.data_path.resolve()),
-            "rgen_db_path": str(self.db_path.resolve()),
-            "rgen_recipe_dir": str(self.recipe_dir.resolve()),
-            "rgen_suppliers": self.suppliers,
-            "rgen_amount": self.amount,
-            "gen_budget": budget.amount,
-            "gen_currency": budget.currency,
-            "gen_max_compounds": max_compounds,
-            "gen_shuffle": shuffle,
-            "gen_iterations": i,
-            "gen_stop_reason": stop_reason,
-            "gen_recipe_path": str(out_file.resolve()),
+            'rgen_data_path': str(self.data_path.resolve()),
+            'rgen_db_path': str(self.db_path.resolve()),
+            'rgen_recipe_dir': str(self.recipe_dir.resolve()),
+            'rgen_suppliers': self.suppliers,
+            'rgen_amount': self.amount,
+            'gen_budget': budget.amount,
+            'gen_currency': budget.currency,
+            'gen_max_compounds': max_compounds,
+            'gen_shuffle': shuffle,
+            'gen_iterations': i,
+            'gen_stop_reason': stop_reason,
+            'gen_recipe_path': str(out_file.resolve()),
         }
 
         # write the Recipe JSON
@@ -803,4 +799,4 @@ class RandomSelectionGenerator(RRGMixin):
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return f"RandomSelectionGenerator(recipe_dir={self.recipe_dir})"
+        return f'RandomSelectionGenerator(recipe_dir={self.recipe_dir})'

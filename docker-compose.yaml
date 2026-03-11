@@ -2,11 +2,11 @@
 # Dev environment for local HIPPO development.
 # Needs two containers, backend with HIPPO and dependencies installed, and database
 
-# database container is built from images/postgres/Dockerfile:
-# sudo docker build --no-cache  -t hippo-pg:latest .
+# database container is built from images/xchem-designdb/Dockerfile:
+# sudo docker build --no-cache  -t xchem_designdb:latest .
 
 # Backend from ./Dockerfile
-# sudo docker build --no-cache . -t hippo-backend:latest
+# sudo docker build --no-cache . -t hippo_backend:latest
 
 # Then bring the containers up with:
 # sudo docker-compose up
@@ -27,9 +27,9 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data      
+      - postgres_data:/var/lib/postgresql/data
     env_file:
-      - .env       
+      - .env
     environment:
       POSTGRES_DB: ${DB_NAME:-designdb}
       POSTGRES_USER: ${DB_USER}
@@ -49,7 +49,7 @@ services:
 
 
   backend:
-    image: hippo-backend
+    image: hippo_backend:latest
     container_name: hippo_backend
     build:
       context: .
@@ -61,7 +61,7 @@ services:
     ports:
     - "8888:8888"
     networks:
-      - app_network    
+      - app_network
     depends_on:
       database:
         condition: service_healthy

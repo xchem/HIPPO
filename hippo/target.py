@@ -17,7 +17,7 @@ class Target:
 
     def __init__(
         self,
-        db: "Database",
+        db: 'Database',
         id: int,
         name: str,
     ) -> None:
@@ -30,7 +30,7 @@ class Target:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
@@ -49,31 +49,30 @@ class Target:
         """Returns the target's feature ID's"""
 
         records = self.db.select_where(
-            query="feature_id",
-            table="feature",
-            key="target",
+            query='feature_id',
+            table='feature',
+            key='target',
             value=self.id,
             none=False,
             multiple=True,
-            sort="feature_chain_name, feature_residue_number",
+            sort='feature_chain_name, feature_residue_number',
         )
 
         if not records:
             return None
 
-        return [v for v, in records]
+        return [v for (v,) in records]
 
     @property
-    def features(self) -> list["Feature"]:
+    def features(self) -> list['Feature']:
         """Returns the target's features"""
         if feature_ids := self.feature_ids:
-
             from .feature import Feature
 
-            feature_ids = str(tuple(feature_ids)).replace(",)", ")")
+            feature_ids = str(tuple(feature_ids)).replace(',)', ')')
 
             records = self.db.select_all_where(
-                table="feature", key=f"feature_id IN {feature_ids}", multiple=True
+                table='feature', key=f'feature_id IN {feature_ids}', multiple=True
             )
 
             return [Feature(*record) for record in records]
@@ -81,17 +80,17 @@ class Target:
         return None
 
     @property
-    def subsites(self) -> "list[Subsite]":
+    def subsites(self) -> 'list[Subsite]':
         """List of :class:`.Subsite` objects on this target"""
 
         from .subsite import Subsite
 
         records = self.db.select_where(
-            table="subsite",
-            key="target",
+            table='subsite',
+            key='target',
             value=self.id,
             multiple=True,
-            query="subsite_id, subsite_name",
+            query='subsite_id, subsite_name',
         )
 
         if not records:
@@ -109,11 +108,11 @@ class Target:
 
     def calculate_features(
         self,
-        protein: "mp.System",
+        protein: 'mp.System',
         reference_id: int | None = None,
         force: bool = False,
         debug: bool = False,
-    ) -> list["Feature"]:
+    ) -> list['Feature']:
         """Calculate features from a protein system
 
         :param protein: `molparse.System` object, likely from :meth:`.Pose.protein_system`
@@ -125,14 +124,13 @@ class Target:
             return self._feature_cache[reference_id]
 
         else:
-
             if debug:
-                mrich.debug("protein.get_protein_features()")
+                mrich.debug('protein.get_protein_features()')
 
             features = protein.get_protein_features()
 
             if debug:
-                mrich.debug("inserting features...")
+                mrich.debug('inserting features...')
 
             records = [
                 dict(
@@ -163,8 +161,8 @@ class Target:
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'

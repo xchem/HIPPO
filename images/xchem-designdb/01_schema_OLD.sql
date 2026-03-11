@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS designdb.pose_method (
 
 CREATE TABLE IF NOT EXISTS designdb.compound (
     compound_pk BIGSERIAL PRIMARY KEY,
-    compound_inchikey TEXT, -- Maybe insert by the codebase or jupyter. Do we need to write this by code or can be calculated by the cartridge? 
+    compound_inchikey TEXT, -- Maybe insert by the codebase or jupyter. Do we need to write this by code or can be calculated by the cartridge?
     compound_alias TEXT, -- Maybe insert by the codebase.
     compound_smiles TEXT, -- Inseret by the codebase. Is this 2d flat smiles without any stereochemistry? LR - Yes 2D. Looks like designdb function sanitise_smiles does remove stereochemistry - will this be a problem when a user wants to register a design with defined stereochemistry?
     compound_base BIGINT REFERENCES designdb.compound (compound_pk) ON DELETE SET NULL, -- Not populated by code
@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS designdb.subsite (
 CREATE TABLE IF NOT EXISTS designdb.component (
     component_pk BIGSERIAL PRIMARY KEY,
     component_route BIGINT REFERENCES designdb.route (route_pk) ON DELETE RESTRICT, -- Insert by codebase/notebook, Synderilla
-    component_type INTEGER, -- Insert by codebase/notebook, Synderilla-- 
+    component_type INTEGER, -- Insert by codebase/notebook, Synderilla--
     component_ref INTEGER, -- Insert by codebase/notebook, Synderilla
     component_amount REAL, -- Insert by codebase/notebook, Synderilla
     created_on TIMESTAMPTZ DEFAULT now(),

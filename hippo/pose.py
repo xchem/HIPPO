@@ -1,31 +1,28 @@
 """Classes for working with poses"""
 
-import mcol
-import mrich
-from mrich import print
-
-
-import pickle
-import numpy as np
-from rdkit import Chem
 from pathlib import Path
+
+import mcol
+import molparse as mp
+import mrich
+import numpy as np
+from molparse.rdkit.features import (
+    COMPLEMENTARY_FEATURES,
+    FEATURE_FAMILIES,
+    INTERACTION_TYPES,
+)
+from mrich import print
+from rdkit import Chem
 
 from .tags import TagSet
 
-import molparse as mp
-from molparse.rdkit.features import (
-    FEATURE_FAMILIES,
-    COMPLEMENTARY_FEATURES,
-    INTERACTION_TYPES,
-)
-
 INTERACTION_CUTOFF = {
-    "Hydrophobic": 4.5,
-    "Hydrogen Bond": 3.5,
-    "Electrostatic": 4.5,
-    "π-stacking": 6.0,
-    "π-cation": 4.5,
-    "Sulfur-Sulfur": 4.0,  # https://pubs.acs.org/doi/full/10.1021/acs.cgd.5b01058
+    'Hydrophobic': 4.5,
+    'Hydrogen Bond': 3.5,
+    'Electrostatic': 4.5,
+    'π-stacking': 6.0,
+    'π-cation': 4.5,
+    'Sulfur-Sulfur': 4.0,  # https://pubs.acs.org/doi/full/10.1021/acs.cgd.5b01058
 }
 
 PI_STACK_MIN_CUTOFF = 3.8
@@ -43,11 +40,11 @@ class Pose:
 
     """
 
-    _table = "pose"
+    _table = 'pose'
 
     def __init__(
         self,
-        db: "Database",
+        db: 'Database',
         id: int,
         inchikey: str | None,
         alias: str | None,
@@ -86,7 +83,7 @@ class Pose:
         if fingerprint is None:
             self._has_fingerprint = False
         elif not isinstance(fingerprint, int):
-            mrich.warning("Legacy fingerprint data format")
+            mrich.warning('Legacy fingerprint data format')
             self.has_fingerprint = False
         else:
             self.has_fingerprint = bool(fingerprint)
@@ -111,7 +108,7 @@ class Pose:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
@@ -145,14 +142,14 @@ class Pose:
         """Set the pose's alias"""
         assert isinstance(n, str)
         self._alias = n
-        self.db.update(table="pose", id=self.id, key="pose_alias", value=n)
+        self.db.update(table='pose', id=self.id, key='pose_alias', value=n)
 
     @inchikey.setter
     def inchikey(self, n) -> None:
         """Set the pose's inchikey"""
         assert isinstance(n, str)
         self._inchikey = n
-        self.db.update(table="pose", id=self.id, key="pose_inchikey", value=n)
+        self.db.update(table='pose', id=self.id, key='pose_inchikey', value=n)
 
     @property
     def smiles(self) -> str:
@@ -166,15 +163,15 @@ class Pose:
                 self._smiles = mol_to_smiles(mol)
                 self.inchikey = MolToInchiKey(mol)
                 self.db.update(
-                    table="pose", id=self.id, key="pose_smiles", value=self._smiles
+                    table='pose', id=self.id, key='pose_smiles', value=self._smiles
                 )
             except InvalidMolError:
-                mrich.warning(f"Taking smiles from {self.compound}")
+                mrich.warning(f'Taking smiles from {self.compound}')
                 self._smiles = self.compound.smiles
         return self._smiles
 
     @property
-    def target(self) -> "Target":
+    def target(self) -> 'Target':
         """Returns the pose's associated target"""
         if isinstance(self._target, int):
             self._target = self.db.get_target(id=self._target)
@@ -186,7 +183,7 @@ class Pose:
         return self._compound_id
 
     @property
-    def compound(self) -> "Compound":
+    def compound(self) -> 'Compound':
         """Returns the pose's associated compound"""
         return self.get_compound()
 
@@ -196,7 +193,7 @@ class Pose:
         return self._path
 
     @property
-    def reference(self) -> "Pose":
+    def reference(self) -> 'Pose':
         """Returns the pose's protein reference (another pose)"""
         if isinstance(self._reference, int):
             self._reference = self.db.get_pose(id=self._reference)
@@ -211,19 +208,17 @@ class Pose:
     def reference(self, p):
         """Set the pose's reference"""
         if not isinstance(p, int):
-            assert p._table == "pose"
+            assert p._table == 'pose'
             p = p.id
         self._reference = p
         self._reference_id = p
-        self.db.update(table="pose", id=self.id, key="pose_reference", value=p)
+        self.db.update(table='pose', id=self.id, key='pose_reference', value=p)
 
     @property
-    def mol(self) -> "rdkit.Chem.Mol":
+    def mol(self) -> 'rdkit.Chem.Mol':
         """Returns a pose's rdkit.Chem.Mol"""
         if not self._mol and self.path:
-
-            if self.path.endswith(".pdb"):
-
+            if self.path.endswith('.pdb'):
                 mrich.reading(self.path)
 
                 # mrich.reading(self.path)
@@ -231,22 +226,21 @@ class Pose:
 
                 self.protein_system = sys.protein_system
 
-                sdf_path = list(Path(self.path).parent.glob("*_ligand.sdf"))
+                sdf_path = list(Path(self.path).parent.glob('*_ligand.sdf'))
 
                 if len(sdf_path) == 1:
-
                     supplier = Chem.SDMolSupplier(sdf_path[0])
                     mols = [mol for mol in supplier if mol is not None]
 
                     if len(mols) > 1:
-                        mrich.warning(f"Multiple molecules in SDF {self}")
+                        mrich.warning(f'Multiple molecules in SDF {self}')
 
                     self.mol = mols[0]
                     return self._mol
 
                 # look for ligand mol from Fragalysis
                 mol_path = list(
-                    Path(self.path).parent.glob("*_ligand.mol")
+                    Path(self.path).parent.glob('*_ligand.mol')
                 )  # str(Path(self.path).name).replace('.pdb','_ligand.mol')
 
                 if len(mol_path) == 1:
@@ -258,20 +252,19 @@ class Pose:
                     mol = MolFromMolFile(str(self._mol_path))
 
                 elif len(mol_path) == 0:
-
-                    lig_residues = sys["rLIG"]
+                    lig_residues = sys['rLIG']
 
                     if not lig_residues:
-                        lig_residues = [r for r in sys.residues if r.type == "LIG"]
+                        lig_residues = [r for r in sys.residues if r.type == 'LIG']
 
                     if len(lig_residues) > 1:
-                        mrich.warning(f"Multiple ligands in PDB {self}")
+                        mrich.warning(f'Multiple ligands in PDB {self}')
 
                     lig_res = lig_residues[0]
 
                     if not (mol := lig_res.rdkit_mol):
                         mrich.error(
-                            f"[{self}] Error computing RDKit Mol from PDB={self.path}"
+                            f'[{self}] Error computing RDKit Mol from PDB={self.path}'
                         )
 
                         print(lig_res.pdb_block)
@@ -282,8 +275,8 @@ class Pose:
 
                     # clean up bond orders
                     from rdkit.Chem.AllChem import (
-                        MolFromSmiles,
                         AssignBondOrdersFromTemplate,
+                        MolFromSmiles,
                     )
 
                     template = MolFromSmiles(self.compound.smiles)
@@ -291,24 +284,23 @@ class Pose:
                         mol = AssignBondOrdersFromTemplate(template, mol)
                     except Exception as e:
                         mrich.error(
-                            f"Exception occured during AssignBondOrdersFromTemplate for {self}.mol"
+                            f'Exception occured during AssignBondOrdersFromTemplate for {self}.mol'
                         )
-                        print(f"template_smiles={self.compound.smiles}")
-                        print(f"pdbblock={print(lig_res.pdb_block)}")
+                        print(f'template_smiles={self.compound.smiles}')
+                        print(f'pdbblock={print(lig_res.pdb_block)}')
                         mrich.error(e)
                         mol = lig_res.rdkit_mol
 
                 else:
-
                     path = Path(self.path)
                     parent_dir = path.parent
                     mol_path = parent_dir / path.name.replace(
-                        "_hippo.pdb", ".pdb"
-                    ).replace(".pdb", "_ligand.mol")
+                        '_hippo.pdb', '.pdb'
+                    ).replace('.pdb', '_ligand.mol')
 
                     if not mol_path.exists():
                         mrich.warning(
-                            f"There are multiple *_ligand.mol files in {Path(self.path).parent}"
+                            f'There are multiple *_ligand.mol files in {Path(self.path).parent}'
                         )
                         raise FileNotFoundError(mol_path)
 
@@ -318,8 +310,7 @@ class Pose:
 
                 self.mol = mol
 
-            elif self.path.endswith(".mol"):
-
+            elif self.path.endswith('.mol'):
                 mrich.reading(self.path)
 
                 # mrich.reading(self.path)
@@ -327,7 +318,7 @@ class Pose:
 
                 if not mol:
                     mrich.error(
-                        f"[{self}] Error computing RDKit Mol from .mol={self.path}"
+                        f'[{self}] Error computing RDKit Mol from .mol={self.path}'
                     )
 
                     raise InvalidMolError
@@ -335,11 +326,10 @@ class Pose:
                 self.mol = mol
 
             else:
-
                 raise NotImplementedError
 
             if not mol:
-                mrich.error(f"Could not parse {self}.path={self.path}")
+                mrich.error(f'Could not parse {self}.path={self.path}')
 
         return self._mol
 
@@ -353,7 +343,7 @@ class Pose:
         self.db.update_pose_mol(pose_id=self.id, mol=self._mol)
 
     @property
-    def protonated_mol(self) -> "rdkit.Chem.Mol":
+    def protonated_mol(self) -> 'rdkit.Chem.Mol':
         """Guess hydrogen positions"""
         from rdkit.Chem import AllChem
 
@@ -362,15 +352,15 @@ class Pose:
         try:
             protonated_mol = AllChem.ConstrainedEmbed(protonated_mol, mol)
         except Exception as e:
-            mrich.error("Error while embedding protonated molecule")
+            mrich.error('Error while embedding protonated molecule')
             mrich.error(e)
             return mol
         return protonated_mol
 
     @property
-    def protein_system(self) -> "molparse.System":
+    def protein_system(self) -> 'molparse.System':
         """Returns the pose's protein molparse.System"""
-        if self._protein_system is None and self.path.endswith(".pdb"):
+        if self._protein_system is None and self.path.endswith('.pdb'):
             # mrich.debug(f'getting pose protein system {self}')
             self.protein_system = mp.parse(self.path, verbosity=False).protein_system
         return self._protein_system
@@ -381,20 +371,19 @@ class Pose:
         self._protein_system = a
 
     @property
-    def complex_system(self) -> "molparse.System":
+    def complex_system(self) -> 'molparse.System':
         """Get molparse.System representation of the protein-ligand complex"""
 
         if self.has_complex_pdb_path:
             return mp.parse(self.path, verbosity=False)
 
         elif self.reference:
-
             # construct from .mol and reference
 
             system = self.reference.protein_system.copy()
 
             system.name = (
-                f"{self.target.name}_{self.reference.name}_{self.compound.name}"
+                f'{self.target.name}_{self.reference.name}_{self.compound.name}'
             )
 
             from molparse.rdkit import mol_to_AtomGroup
@@ -407,19 +396,18 @@ class Pose:
             return system
 
         else:
-
             raise NotImplementedError
 
     @property
     def has_complex_pdb_path(self) -> bool:
         """Does this pose have a PDB file?"""
-        return self.path.endswith(".pdb")
+        return self.path.endswith('.pdb')
 
     @property
-    def metadata(self) -> "MetaData":
+    def metadata(self) -> 'MetaData':
         """Returns the pose's metadata"""
         if self._metadata is None:
-            self._metadata = self.db.get_metadata(table="pose", id=self.id)
+            self._metadata = self.db.get_metadata(table='pose', id=self.id)
         return self._metadata
 
     @property
@@ -432,24 +420,24 @@ class Pose:
         self.set_has_fingerprint(fp)
 
     @property
-    def tags(self) -> "TagSet":
+    def tags(self) -> 'TagSet':
         """Returns the pose's tags"""
         if not self._tags:
             self._tags = self.get_tags()
         return self._tags
 
     @property
-    def inspirations(self) -> "PoseSet":
+    def inspirations(self) -> 'PoseSet':
         """Returns the pose's inspirations"""
         return self.get_inspirations()
 
     @property
-    def derivatives(self) -> "PoseSet":
+    def derivatives(self) -> 'PoseSet':
         """Returns the pose's derivatives"""
         return self.get_derivatives()
 
     @property
-    def features(self) -> "list[molparse.rdkit.Feature]":
+    def features(self) -> 'list[molparse.rdkit.Feature]':
         """Returns the pose's features"""
         return mp.rdkit.features_from_mol(self.mol)
 
@@ -468,7 +456,7 @@ class Pose:
         """Number of heavy atoms"""
         if not self._num_heavy_atoms:
             self._num_heavy_atoms = self.db.get_compound_computed_property(
-                "num_heavy_atoms", self.compound_id
+                'num_heavy_atoms', self.compound_id
             )
         return self._num_heavy_atoms
 
@@ -490,10 +478,9 @@ class Pose:
         """Calculate the number of atoms added relative to its inspirations"""
 
         if self._num_atoms_added_wrt_inspirations is None or self._db_changed:
-
             sql = f"""
             WITH inspirations AS (
-                SELECT SUM({self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(compound_mol)) AS sum, inspiration_derivative 
+                SELECT SUM({self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(compound_mol)) AS sum, inspiration_derivative
                 FROM {self.db.SQL_SCHEMA_PREFIX}inspiration
                 INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose ON inspiration_original = pose_id
                 INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound ON pose_compound = compound_id
@@ -523,14 +510,14 @@ class Pose:
         """Get the scaffold :class:`.Compound` IDs"""
         if self._scaffold_ids is None:
             records = self.db.select_where(
-                table="scaffold",
-                query="scaffold_base",
-                key="superstructure",
+                table='scaffold',
+                query='scaffold_base',
+                key='superstructure',
                 value=self.compound_id,
                 multiple=True,
-                none="quiet",
+                none='quiet',
             )
-            records = [i for i, in records]
+            records = [i for (i,) in records]
             self._scaffold_ids = records
         return self._scaffold_ids
 
@@ -550,7 +537,7 @@ class Pose:
         return self._inspiration_score
 
     @property
-    def interactions(self) -> "InteractionSet":
+    def interactions(self) -> 'InteractionSet':
         """Get a :class:`.InteractionSet` for this :class:`.Pose`"""
         if not self._interactions:
             from .iset import InteractionSet
@@ -564,18 +551,18 @@ class Pose:
         return self.interactions.classic_fingerprint
 
     @property
-    def subsites(self) -> "list[SubsiteTag]":
+    def subsites(self) -> 'list[SubsiteTag]':
         """Get member :class:`.SubsiteTag`"""
 
         from .subsite import SubsiteTag
 
         records = self.db.select_where(
-            table="subsite_tag",
-            key="pose",
+            table='subsite_tag',
+            key='pose',
             value=self.id,
             multiple=True,
-            query="subsite_tag_id, subsite_tag_ref",
-            none="quiet",
+            query='subsite_tag_id, subsite_tag_ref',
+            none='quiet',
         )
 
         if not records:
@@ -598,33 +585,33 @@ class Pose:
         return False
 
     @property
-    def mol_path(self) -> "Path":
+    def mol_path(self) -> 'Path':
         """Get Path to molecule file"""
         path = Path(self.path)
-        if path.name.endswith(".pdb"):
-            mol_path = path.parent / path.name.replace("_hippo.pdb", ".pdb").replace(
-                ".pdb", "_ligand.mol"
+        if path.name.endswith('.pdb'):
+            mol_path = path.parent / path.name.replace('_hippo.pdb', '.pdb').replace(
+                '.pdb', '_ligand.mol'
             )
             if not mol_path.exists():
                 mol_path = path.parent / path.name.replace(
-                    "_hippo.pdb", ".pdb"
-                ).replace(".pdb", "_ligand.sdf")
+                    '_hippo.pdb', '.pdb'
+                ).replace('.pdb', '_ligand.sdf')
                 if not mol_path.exists():
-                    mrich.error("Could not find ligand mol/sdf:", mol_path)
+                    mrich.error('Could not find ligand mol/sdf:', mol_path)
                     return None
             return mol_path
-        elif path.name.endswith(".mol"):
+        elif path.name.endswith('.mol'):
             return path
         else:
             raise NotImplementedError
 
     @property
-    def apo_path(self) -> "Path":
+    def apo_path(self) -> 'Path':
         """Get path to apo protein file"""
         path = Path(self.path)
-        if path.name.endswith(".pdb"):
-            apo_path = path.parent / path.name.replace("_hippo.pdb", ".pdb").replace(
-                ".pdb", "_apo-desolv.pdb"
+        if path.name.endswith('.pdb'):
+            apo_path = path.parent / path.name.replace('_hippo.pdb', '.pdb').replace(
+                '.pdb', '_apo-desolv.pdb'
             )
             if not apo_path.exists():
                 return None
@@ -659,64 +646,64 @@ class Pose:
         )
 
         if debug:
-            mrich.var("energy_score", self.energy_score)
-            mrich.var("distance_score", self.distance_score)
+            mrich.var('energy_score', self.energy_score)
+            mrich.var('distance_score', self.distance_score)
 
             for inspiration in self.inspirations:
                 mrich.var(
-                    f"{inspiration} SuCOS",
+                    f'{inspiration} SuCOS',
                     MuCOS_score(inspiration.mol, self.mol, print_scores=debug),
                 )
 
-            mrich.var(f"multi SuCOS", multi_sucos)
+            mrich.var('multi SuCOS', multi_sucos)
 
         return multi_sucos
 
-    def get_compound(self) -> "Compound":
+    def get_compound(self) -> 'Compound':
         """Get the :class:`.Compound` that this pose is a conformer of"""
         return self.db.get_compound(id=self._compound_id)
 
-    def get_tags(self) -> "TagSet":
+    def get_tags(self) -> 'TagSet':
         """Get this Pose's tags"""
         tags = self.db.select_where(
-            query="tag_name",
-            table="tag",
-            key="pose",
+            query='tag_name',
+            table='tag',
+            key='pose',
             value=self.id,
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
         return TagSet(self, {t[0] for t in tags})
 
     def get_inspiration_ids(self) -> list[int]:
         """Get the :class:`.Pose` IDs of this pose's inspirations"""
         inspirations = self.db.select_where(
-            query="inspiration_original",
-            table="inspiration",
-            key="derivative",
+            query='inspiration_original',
+            table='inspiration',
+            key='derivative',
             value=self.id,
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
         if not inspirations:
             return None
-        return set([v for v, in inspirations])
+        return set([v for (v,) in inspirations])
 
     def get_derivative_ids(self) -> list[int]:
         """Get the :class:`.Pose` IDs of this pose's derivatives"""
         derivatives = self.db.select_where(
-            query="inspiration_derivative",
-            table="inspiration",
-            key="original",
+            query='inspiration_derivative',
+            table='inspiration',
+            key='original',
             value=self.id,
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
         if not derivatives:
             return None
-        return set([v for v, in derivatives])
+        return set([v for (v,) in derivatives])
 
-    def get_inspirations(self) -> "PoseSet":
+    def get_inspirations(self) -> 'PoseSet':
         """Get a :class:`.PoseSet` of this pose's inspirations"""
         if not (inspirations := self.get_inspiration_ids()):
             return None
@@ -725,7 +712,7 @@ class Pose:
 
         return PoseSet(self.db, indices=inspirations)
 
-    def get_derivatives(self) -> "PoseSet":
+    def get_derivatives(self) -> 'PoseSet':
         """Get a :class:`.PoseSet` of this pose's derivatives"""
         if not (derivatives := self.get_derivative_ids()):
             return None
@@ -745,7 +732,7 @@ class Pose:
         sanitise_null_metadata_values: bool = False,
         skip_metadata: list[str] | None = None,
         sanitise_tag_list_separator: str | None = None,
-        sanitise_metadata_list_separator: str | None = ";",
+        sanitise_metadata_list_separator: str | None = ';',
         tags: bool = True,
     ) -> dict:
         """Returns a dictionary representing this Pose. Arguments:
@@ -763,15 +750,15 @@ class Pose:
         skip_metadata = skip_metadata or []
 
         serialisable_fields = [
-            "id",
-            "inchikey",
-            "alias",
-            "name",
-            "smiles",
-            "path",
-            "distance_score",
-            "energy_score",
-            "inspiration_score",
+            'id',
+            'inchikey',
+            'alias',
+            'name',
+            'smiles',
+            'path',
+            'distance_score',
+            'energy_score',
+            'inspiration_score',
         ]
 
         data = {}
@@ -780,50 +767,49 @@ class Pose:
 
         if duplicate_name:
             assert isinstance(duplicate_name, str)
-            data[duplicate_name] = data["name"]
+            data[duplicate_name] = data['name']
 
         if mol:
             try:
-                data["mol"] = self.mol
+                data['mol'] = self.mol
             except InvalidMolError:
-                data["mol"] = None
+                data['mol'] = None
 
-        data["compound"] = self.compound.name
-        data["compound_id"] = self.compound.id
-        data["target"] = self.target.name
+        data['compound'] = self.compound.name
+        data['compound_id'] = self.compound.id
+        data['target'] = self.target.name
 
         if tags:
-            data["tags"] = self.tags
+            data['tags'] = self.tags
             if sanitise_tag_list_separator:
-                data["tags"] = sanitise_tag_list_separator.join(data["tags"])
+                data['tags'] = sanitise_tag_list_separator.join(data['tags'])
 
-        if inspirations == "names":
+        if inspirations == 'names':
             if not self.inspirations:
-                data["inspirations"] = None
+                data['inspirations'] = None
             else:
-                data["inspirations"] = ",".join([p.name for p in self.inspirations])
+                data['inspirations'] = ','.join([p.name for p in self.inspirations])
         elif inspirations:
-            data["inspirations"] = self.inspirations
+            data['inspirations'] = self.inspirations
 
-        if subsites == "names":
+        if subsites == 'names':
             if not (sites := self.subsites):
-                data["subsites"] = None
+                data['subsites'] = None
             else:
-                data["subsites"] = ",".join([p.name for p in sites])
+                data['subsites'] = ','.join([p.name for p in sites])
         elif subsites:
-            data["subsites"] = self.subsites
+            data['subsites'] = self.subsites
 
-        if reference == "name":
+        if reference == 'name':
             if not self.reference:
-                data["reference"] = ""
+                data['reference'] = ''
             else:
-                data["reference"] = self.reference.name
+                data['reference'] = self.reference.name
         elif reference:
-            data["reference"] = self.reference
+            data['reference'] = self.reference
 
         if metadata and (metadict := self.metadata):
             for key in metadict:
-
                 value = metadict[key]
 
                 if key in skip_metadata:
@@ -837,7 +823,6 @@ class Pose:
                     value = None
 
                 elif sanitise_metadata_list_separator and isinstance(value, list):
-
                     new_values = []
 
                     for v in value:
@@ -859,7 +844,7 @@ class Pose:
 
         return data
 
-    def add_subsite(self, name: str, commit: bool = True) -> "SubsiteTag":
+    def add_subsite(self, name: str, commit: bool = True) -> 'SubsiteTag':
         """Tag this pose with a protein subsite
 
         :param name: the name of the subsite
@@ -945,11 +930,10 @@ class Pose:
             ### IN-MEMORY DB
 
             if in_memory_db:
-
                 from .db import Database
 
                 temp_db = Database(
-                    ":memory:",
+                    ':memory:',
                     animal=None,
                     create_blank=False,
                     check_legacy=False,
@@ -965,34 +949,34 @@ class Pose:
 
             ### create temporary table
 
-            if "temp_interaction" in temp_db.table_names:
-                self.db.execute("DROP TABLE temp_interaction")
+            if 'temp_interaction' in temp_db.table_names:
+                self.db.execute('DROP TABLE temp_interaction')
 
-            temp_db.create_table_interaction(table="temp_interaction", debug=False)
+            temp_db.create_table_interaction(table='temp_interaction', debug=False)
 
             ### load the ligand structure
 
             if debug:
-                mrich.debug("path", self.path)
+                mrich.debug('path', self.path)
 
-            if self.path.endswith(".pdb"):
+            if self.path.endswith('.pdb'):
                 from molparse import parse
 
                 protein_system = self.protein_system
                 if not self.protein_system:
                     protein_system = parse(self.path, verbosity=False).protein_system
 
-            elif self.path.endswith(".mol") and self.reference:
+            elif self.path.endswith('.mol') and self.reference:
                 protein_system = self.reference.protein_system
 
             else:
-                mrich.debug("Unsupported: Pose.calculate_interactions()")
-                raise NotImplementedError(f"{self}, {self.reference=}, {self.path=}")
+                mrich.debug('Unsupported: Pose.calculate_interactions()')
+                raise NotImplementedError(f'{self}, {self.reference=}, {self.path=}')
 
             assert protein_system
 
             if not self.mol:
-                mrich.error(f"Could not read molecule for {self}")
+                mrich.error(f'Could not read molecule for {self}')
                 return
 
             ### get features
@@ -1000,14 +984,14 @@ class Pose:
             comp_features = self.features
 
             if debug:
-                mrich.debug("Getting protein features...")
+                mrich.debug('Getting protein features...')
 
             protein_features = self.target.calculate_features(
                 protein_system, reference_id=self.reference_id
             )
 
             if debug:
-                print("ligand features", comp_features)
+                print('ligand features', comp_features)
 
             ### organise ligand features by family
             comp_features_by_family = {}
@@ -1024,7 +1008,6 @@ class Pose:
 
             # loop over protein features
             for prot_feature in protein_features:
-
                 # skip chains that aren't present
                 if prot_feature.chain_name not in chains:
                     continue
@@ -1033,7 +1016,7 @@ class Pose:
 
                 prot_residue = protein_system.get_chain(
                     prot_feature.chain_name
-                ).residues[f"n{prot_feature.residue_number}"]
+                ).residues[f'n{prot_feature.residue_number}']
 
                 if not prot_residue:
                     continue
@@ -1045,14 +1028,14 @@ class Pose:
                         for cf in comp_features
                     ):
                         mutation_warnings.add(
-                            f"{prot_residue.name} {prot_residue.number} -> {prot_feature.residue_name} {prot_feature.residue_number}"
+                            f'{prot_residue.name} {prot_residue.number} -> {prot_feature.residue_name} {prot_feature.residue_number}'
                         )
                         mutation_count += 1
                     continue
 
                 ### calculate protein coordinate
                 prot_atoms = []
-                for atom_name in prot_feature.atom_names.split(" "):
+                for atom_name in prot_feature.atom_names.split(' '):
                     atom = prot_residue.get_atom(atom_name, verbosity=0)
                     if atom:
                         prot_atoms.append(atom)
@@ -1073,7 +1056,6 @@ class Pose:
                 # print(prot_family, complementary_families)
 
                 for complementary_family in complementary_families:
-
                     interaction_type = INTERACTION_TYPES[
                         (prot_family, complementary_family)
                     ]
@@ -1083,7 +1065,6 @@ class Pose:
                     ]
 
                     for lig_feature in complementary_comp_features:
-
                         distance = np.linalg.norm(lig_feature - prot_coord)
                         angle = None
 
@@ -1095,15 +1076,14 @@ class Pose:
                             continue
 
                         # special rules for aromatics
-                        if interaction_type.startswith("π"):
+                        if interaction_type.startswith('π'):
                             lig_coords = [
                                 self.mol.GetConformer().GetAtomPosition(i - 1)
                                 for i in lig_feature.atom_numbers
                             ]
 
                         # special rules for pi-stacking
-                        if interaction_type == "π-stacking":
-
+                        if interaction_type == 'π-stacking':
                             # calculate minimum distance
                             min_distance = None
                             for lig_coord in lig_coords:
@@ -1116,7 +1096,7 @@ class Pose:
                             if min_distance > PI_STACK_MIN_CUTOFF + distance_padding:
                                 if debug:
                                     print(
-                                        f"skipping {prot_feature} due to pi-stack min_distance"
+                                        f'skipping {prot_feature} due to pi-stack min_distance'
                                     )
                                     print(
                                         prot_feature.residue_name,
@@ -1144,10 +1124,9 @@ class Pose:
                                 continue
 
                         # special rules for pi-cation
-                        elif interaction_type == "π-cation":
-
+                        elif interaction_type == 'π-cation':
                             # construct vectors
-                            if prot_family == "Aromatic":
+                            if prot_family == 'Aromatic':
                                 aromatic_norm = norm(prot_coords)
                                 cation_vec = lig_feature.position - prot_coord
                             else:
@@ -1165,7 +1144,7 @@ class Pose:
                                 continue
 
                         if debug:
-                            print("Prot:", prot_feature, "Lig:", lig_feature)
+                            print('Prot:', prot_feature, 'Lig:', lig_feature)
 
                         # insert into the Database
                         temp_db.insert_interaction(
@@ -1180,12 +1159,12 @@ class Pose:
                             angle=angle,
                             energy=None,
                             commit=False,
-                            table="temp_interaction",
+                            table='temp_interaction',
                         )
 
             if mutation_warnings:
                 mrich.warning(
-                    f"Skipped {mutation_count} protein features because the residue was mutated:"
+                    f'Skipped {mutation_count} protein features because the residue was mutated:'
                 )
                 for mutation in mutation_warnings:
                     mrich.warning(mutation)
@@ -1195,13 +1174,13 @@ class Pose:
                 from .iset import InteractionSet
 
                 interactions = InteractionSet.from_pose(
-                    self, table="temp_interaction", db=temp_db
+                    self, table='temp_interaction', db=temp_db
                 )
 
-                feature_ids = str(tuple(interactions.feature_ids)).replace(",)", ")")
+                feature_ids = str(tuple(interactions.feature_ids)).replace(',)', ')')
 
                 records = self.db.select_all_where(
-                    table="feature", key=f"feature_id IN {feature_ids}", multiple=True
+                    table='feature', key=f'feature_id IN {feature_ids}', multiple=True
                 )
 
                 feature_cache = {
@@ -1221,7 +1200,7 @@ class Pose:
 
             ### transfer interactions from temporary table
             self.db.delete_where(
-                table="interaction", key="pose", value=self.id, commit=commit
+                table='interaction', key='pose', value=self.id, commit=commit
             )
 
             if in_memory_db:
@@ -1237,7 +1216,7 @@ class Pose:
                 temp_db.close(debug=False)
 
         elif debug:
-            mrich.warning(f"{self} is already fingerprinted, no new calculation")
+            mrich.warning(f'{self} is already fingerprinted, no new calculation')
 
     def calculate_prolif_interactions(
         self,
@@ -1248,28 +1227,27 @@ class Pose:
         clear_existing: bool = True,
         debug: bool = False,
         resolve: bool = True,
-    ) -> "prolif.Fingerprint":
+    ) -> 'prolif.Fingerprint':
         """Use ProLIF to populate the interactions table"""
 
         if not self.has_fingerprint or force:
-
             ### clear old interactions
 
             if clear_existing:
                 self.db.delete_where(
-                    table="interaction", key="pose", value=self.id, commit=False
+                    table='interaction', key='pose', value=self.id, commit=False
                 )
                 self.set_has_fingerprint(False, commit=False)
 
             ### create temporary table
 
-            table = "temp_interaction"
+            table = 'temp_interaction'
 
-            if "temp_interaction" in self.db.table_names:
-                mrich.warning("Deleting existing temp_interaction table")
-                self.db.execute("DROP TABLE temp_interaction")
+            if 'temp_interaction' in self.db.table_names:
+                mrich.warning('Deleting existing temp_interaction table')
+                self.db.execute('DROP TABLE temp_interaction')
 
-            self.db.create_table_interaction(table="temp_interaction", debug=False)
+            self.db.create_table_interaction(table='temp_interaction', debug=False)
 
             if not clear_existing:
                 self.db.copy_interactions_to_temp(pose_id=self.id)
@@ -1277,13 +1255,15 @@ class Pose:
             # clear cached InteractionSet
             self._interactions = None
 
-            import prolif as plf
-            from tempfile import NamedTemporaryFile
-            from .prolif import parse_prolif_interactions
-            from MDAnalysis import Universe
             import logging
+            from tempfile import NamedTemporaryFile
 
-            mdanalysis_logger = logging.getLogger("MDAnalysis")
+            import prolif as plf
+            from MDAnalysis import Universe
+
+            from .prolif import parse_prolif_interactions
+
+            mdanalysis_logger = logging.getLogger('MDAnalysis')
             mdanalysis_logger.setLevel(logging.WARNING)
 
             ## prepare inputs
@@ -1291,9 +1271,9 @@ class Pose:
             # decide if MDA is needed
             unprotonated_sys = self.protein_system
             residue_names = set(r.name for r in unprotonated_sys.residues)
-            nonstandard = ["HID", "HIE", "HSE", "HSD", "HSP"]
+            nonstandard = ['HID', 'HIE', 'HSE', 'HSD', 'HSP']
             if any(r in residue_names for r in nonstandard):
-                mrich.debug("Using MDA")
+                mrich.debug('Using MDA')
                 use_mda = True
 
             # protonated protein
@@ -1304,11 +1284,11 @@ class Pose:
                     )
 
                     if use_mda:
-                        with mrich.loading("Creating MDAnalysis.Universe"):
+                        with mrich.loading('Creating MDAnalysis.Universe'):
                             universe = Universe(protein_file.name)
                             protein_mol = plf.Molecule.from_mda(universe)
                     else:
-                        with mrich.loading("Creating protein rdkit.Chem.Mol"):
+                        with mrich.loading('Creating protein rdkit.Chem.Mol'):
                             rdkit_prot = Chem.MolFromPDBFile(
                                 protein_file.name, removeHs=False
                             )
@@ -1318,19 +1298,19 @@ class Pose:
 
                 except Exception as e:
                     mrich.warning(
-                        f"Could not create satisfactory protein molecule, attempts = {i+1}/{max_retry}"
+                        f'Could not create satisfactory protein molecule, attempts = {i + 1}/{max_retry}'
                     )
                     mrich.warning(e)
                     use_mda = True
                     continue
             else:
                 mrich.error(
-                    f"Tried {max_retry} times to create protein molecule and failed"
+                    f'Tried {max_retry} times to create protein molecule and failed'
                 )
                 return None
 
             # ligand
-            ligand_file = NamedTemporaryFile(mode="w+t", suffix=".sdf")
+            ligand_file = NamedTemporaryFile(mode='w+t', suffix='.sdf')
             writer = Chem.SDWriter(ligand_file.name)
             writer.write(self.protonated_mol)
             writer.close()
@@ -1349,7 +1329,7 @@ class Pose:
             if resolve:
                 from .iset import InteractionSet
 
-                interactions = InteractionSet.from_pose(self, table="temp_interaction")
+                interactions = InteractionSet.from_pose(self, table='temp_interaction')
                 interactions.resolve(debug=debug)
 
             self.db.copy_temp_interactions()
@@ -1357,7 +1337,7 @@ class Pose:
 
             ### delete temporary table
 
-            self.db.execute("DROP TABLE temp_interaction")
+            self.db.execute('DROP TABLE temp_interaction')
 
             ## close files
             protein_file.close()
@@ -1372,8 +1352,7 @@ class Pose:
     ) -> dict:
         """Calculate the pose's interaction fingerprint"""
 
-        if self.path.endswith(".pdb"):
-
+        if self.path.endswith('.pdb'):
             import molparse as mp
 
             protein_system = self.protein_system
@@ -1381,15 +1360,13 @@ class Pose:
                 # mrich.reading(self.path)
                 protein_system = mp.parse(self.path, verbosity=False).protein_system
 
-        elif self.path.endswith(".mol") and self.reference:
-
+        elif self.path.endswith('.mol') and self.reference:
             # mrich.debug('fingerprint from .mol and reference pose')
             protein_system = self.reference.protein_system
 
         else:
-
-            mrich.debug("Unsupported: Pose.calculate_fingerprint()")
-            raise NotImplementedError(f"{self.reference=}, {self.path=}")
+            mrich.debug('Unsupported: Pose.calculate_fingerprint()')
+            raise NotImplementedError(f'{self.reference=}, {self.path=}')
 
         assert protein_system
 
@@ -1413,14 +1390,13 @@ class Pose:
         chains = protein_system.chain_names
 
         for prot_feature in protein_features:
-
             if prot_feature.chain_name not in chains:
                 continue
 
             prot_family = prot_feature.family
 
             prot_residue = protein_system.get_chain(prot_feature.chain_name).residues[
-                f"n{prot_feature.residue_number}"
+                f'n{prot_feature.residue_number}'
             ]
 
             if not prot_residue:
@@ -1430,11 +1406,11 @@ class Pose:
             #   mrich.debug(repr(prot_feature))
 
             if prot_residue.name != prot_feature.residue_name:
-                mrich.warning(f"Feature {repr(prot_feature)}")
+                mrich.warning(f'Feature {repr(prot_feature)}')
                 continue
 
             prot_atoms = [
-                prot_residue.get_atom(a) for a in prot_feature.atom_names.split(" ")
+                prot_residue.get_atom(a) for a in prot_feature.atom_names.split(' ')
             ]
 
             prot_coords = [a.np_pos for a in prot_atoms if a is not None]
@@ -1445,7 +1421,7 @@ class Pose:
 
             complementary_comp_features = comp_features_by_family[complementary_family]
 
-            cutoff = FEATURE_PAIR_CUTOFFS[f"{prot_family} {complementary_family}"]
+            cutoff = FEATURE_PAIR_CUTOFFS[f'{prot_family} {complementary_family}']
 
             valid_features = [
                 f
@@ -1456,7 +1432,7 @@ class Pose:
             if valid_features:
                 if debug:
                     mrich.debug(
-                        f"PROT: {prot_feature.residue_name} {prot_feature.residue_number} {prot_feature.atom_names}, LIG: #{len(valid_features)} {[f for f in valid_features]}"
+                        f'PROT: {prot_feature.residue_name} {prot_feature.residue_number} {prot_feature.atom_names}, LIG: #{len(valid_features)} {[f for f in valid_features]}'
                     )
                 fingerprint[prot_feature.id] = len(valid_features)
 
@@ -1499,9 +1475,9 @@ class Pose:
 
     def render(
         self,
-        protein="cartoon",
-        ligand="stick",
-        protein_color="spectrum",
+        protein='cartoon',
+        ligand='stick',
+        protein_color='spectrum',
         interactions: bool = True,
         file: str | None = None,
     ) -> None:
@@ -1517,7 +1493,7 @@ class Pose:
 
         sys = self.complex_system
 
-        def make_view(width="640px", height="480px"):
+        def make_view(width='640px', height='480px'):
             """Create py3Dmol view"""
 
             view = render(
@@ -1531,12 +1507,12 @@ class Pose:
 
             if interactions:
                 COLORS = {
-                    "Hydrophobic": "green",
-                    "Hydrogen Bond": "blue",
-                    "π-stacking": "purple",
-                    "π-cation": "pink",
-                    "Electrostatic": "red",
-                    "Sulfur-Sulfur": "yellow",
+                    'Hydrophobic': 'green',
+                    'Hydrogen Bond': 'blue',
+                    'π-stacking': 'purple',
+                    'π-cation': 'pink',
+                    'Electrostatic': 'red',
+                    'Sulfur-Sulfur': 'yellow',
                 }
 
                 iset = self.interactions
@@ -1549,44 +1525,43 @@ class Pose:
                 residues = set()
 
                 for i, row in df.iterrows():
-
-                    prot_coord = row["prot_coord"]
-                    lig_coord = row["lig_coord"]
-                    type = row["type"]
-                    color = COLORS.get(type, "black")
+                    prot_coord = row['prot_coord']
+                    lig_coord = row['lig_coord']
+                    type = row['type']
+                    color = COLORS.get(type, 'black')
 
                     view.addCylinder(
                         {
-                            "start": {
-                                "x": prot_coord[0],
-                                "y": prot_coord[1],
-                                "z": prot_coord[2],
+                            'start': {
+                                'x': prot_coord[0],
+                                'y': prot_coord[1],
+                                'z': prot_coord[2],
                             },
-                            "end": {
-                                "x": lig_coord[0],
-                                "y": lig_coord[1],
-                                "z": lig_coord[2],
+                            'end': {
+                                'x': lig_coord[0],
+                                'y': lig_coord[1],
+                                'z': lig_coord[2],
                             },
                             # 'radius': radius,
-                            "color": color,
+                            'color': color,
                         }
                     )
 
-                    residues.add((row["residue_name"], row["residue_number"]))
+                    residues.add((row['residue_name'], row['residue_number']))
 
                 for res_name, res_num in residues:
-                    res = sys.residues[f"{res_name} n{res_num}"]
-                    view.addModel(res.pdb_block, "pdb")
-                    view.setStyle({"model": -1}, {ligand: {}})
+                    res = sys.residues[f'{res_name} n{res_num}']
+                    view.addModel(res.pdb_block, 'pdb')
+                    view.setStyle({'model': -1}, {ligand: {}})
 
             return view
 
         if file:
-            view = make_view(width="100%", height="100%")
+            view = make_view(width='100%', height='100%')
             html = view._make_html()
 
             mrich.writing(file)
-            with open(file, "w") as f:
+            with open(file, 'w') as f:
                 f.write(html)
 
         view = make_view()
@@ -1594,8 +1569,8 @@ class Pose:
 
     def grid(self) -> None:
         """Draw a grid of this pose with its inspirations"""
-        from molparse.rdkit import draw_grid
         from IPython.display import display
+        from molparse.rdkit import draw_grid
 
         mols = [self.compound.mol]
         labels = [self.plain_repr()]
@@ -1614,29 +1589,29 @@ class Pose:
 
         """
         if self.alias:
-            mrich.header(f"{str(self)}: {self.alias}")
+            mrich.header(f'{str(self)}: {self.alias}')
         else:
-            mrich.header(f"{str(self)}: {self.inchikey}")
-        mrich.var("inchikey", self.inchikey)
-        mrich.var("alias", self.alias)
-        mrich.var("smiles", self.smiles)
-        mrich.var("compound", self.compound)
-        mrich.var("path", self.path)
-        mrich.var("target", self.target)
-        mrich.var("reference", self.reference)
+            mrich.header(f'{str(self)}: {self.inchikey}')
+        mrich.var('inchikey', self.inchikey)
+        mrich.var('alias', self.alias)
+        mrich.var('smiles', self.smiles)
+        mrich.var('compound', self.compound)
+        mrich.var('path', self.path)
+        mrich.var('target', self.target)
+        mrich.var('reference', self.reference)
         if tags:
-            mrich.var("tags", self.tags)
+            mrich.var('tags', self.tags)
         if subsites:
-            mrich.var("subsites", self.subsites)
-        mrich.var("num_heavy_atoms", self.num_heavy_atoms)
-        mrich.var("distance_score", self.distance_score)
-        mrich.var("energy_score", self.energy_score)
-        mrich.var("inspiration_score", self.inspiration_score)
+            mrich.var('subsites', self.subsites)
+        mrich.var('num_heavy_atoms', self.num_heavy_atoms)
+        mrich.var('distance_score', self.distance_score)
+        mrich.var('energy_score', self.energy_score)
+        mrich.var('inspiration_score', self.inspiration_score)
         if inspirations := self.inspirations:
-            mrich.var("inspirations", self.inspirations.names)
-            mrich.var("num_atoms_added", self.num_atoms_added)
+            mrich.var('inspirations', self.inspirations.names)
+            mrich.var('num_atoms_added', self.num_atoms_added)
         if metadata:
-            mrich.var("metadata", str(self.metadata))
+            mrich.var('metadata', str(self.metadata))
 
     def showcase(self) -> None:
         """Print and render this pose as if you were using :meth:`.PoseSet.interactive`"""
@@ -1646,7 +1621,7 @@ class Pose:
         self.draw()
         from pprint import pprint
 
-        mrich.title("Metadata:")
+        mrich.title('Metadata:')
         pprint(self.metadata)
 
     def plain_repr(self) -> str:
@@ -1654,13 +1629,13 @@ class Pose:
         if self.name:
             return f'{self.compound}->{self}: "{self.name}"'
         else:
-            return f"{self.compound}->{self}"
+            return f'{self.compound}->{self}'
 
     def plot3d(
         self,
         features: bool = False,
         **kwargs,
-    ) -> "plotly.graph_objects.Figure":
+    ) -> 'plotly.graph_objects.Figure':
         """Use Molparse/Plotly to create a 3d figure of this pose
 
         :param features: include the features in the figure
@@ -1684,9 +1659,9 @@ class Pose:
         assert isinstance(fp, bool)
         self._has_fingerprint = fp
         self.db.update(
-            table="pose",
+            table='pose',
             id=self.id,
-            key=f"pose_fingerprint",
+            key='pose_fingerprint',
             value=int(fp),
             commit=commit,
         )
@@ -1695,30 +1670,30 @@ class Pose:
         """Run a posebusters ligand check on this pose's molecule"""
 
         # use syndirella implementation
-        from syndirella.slipper import intra_geometry, flatness
+        from syndirella.slipper import flatness, intra_geometry
 
         geometries: Dict = intra_geometry.check_geometry(self.mol, threshold_clash=0.4)
         flat_results: Dict = flatness.check_flatness(self.mol)
 
-        if not geometries["results"]["bond_lengths_within_bounds"]:
+        if not geometries['results']['bond_lengths_within_bounds']:
             if debug:
-                mrich.debug(self, "did not pass bond length checks.")
+                mrich.debug(self, 'did not pass bond length checks.')
             return False
-        if not geometries["results"]["bond_angles_within_bounds"]:
+        if not geometries['results']['bond_angles_within_bounds']:
             if debug:
-                mrich.debug(self, "did not pass bond angle checks.")
+                mrich.debug(self, 'did not pass bond angle checks.')
             return False
-        if not geometries["results"]["no_internal_clash"]:
+        if not geometries['results']['no_internal_clash']:
             if debug:
-                mrich.debug(self, "did not pass internal clash checks.")
+                mrich.debug(self, 'did not pass internal clash checks.')
             return False
-        if not flat_results["results"]["flatness_passes"]:
+        if not flat_results['results']['flatness_passes']:
             if debug:
-                mrich.debug(self, "did not pass flatness checks.")
+                mrich.debug(self, 'did not pass flatness checks.')
             return False
         return True
 
-    def to_syndirella(self, out_key: "str | Path") -> "DataFrame":
+    def to_syndirella(self, out_key: 'str | Path') -> 'DataFrame':
         """Create syndirella inputs. See :meth:`.PoseSet.to_syndirella`"""
         from .pset import PoseSet
 
@@ -1730,17 +1705,17 @@ class Pose:
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return f"P{self.id}"
+        return f'P{self.id}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self.plain_repr()}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self.plain_repr()}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Formatted string representation"""
-        return f"[bold underline]{self.plain_repr()}"
+        return f'[bold underline]{self.plain_repr()}'
 
-    def __eq__(self, other: "Pose") -> bool:
+    def __eq__(self, other: 'Pose') -> bool:
         """Compare this pose with another instance"""
 
         if isinstance(other, int):
@@ -1750,8 +1725,8 @@ class Pose:
 
     def __add__(
         self,
-        other: "Pose | PoseSet",
-    ) -> "PoseSet":
+        other: 'Pose | PoseSet',
+    ) -> 'PoseSet':
         """Add a :class:`.PoseSet` to this pose"""
         from .pset import PoseSet
 

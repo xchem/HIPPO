@@ -1,13 +1,12 @@
 """Functions to generate standard HIPPO plots"""
 
-import mrich
-import molparse as mp
-
 import functools
+
+import molparse as mp
+import mrich
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-
 
 """
 
@@ -24,7 +23,7 @@ def hippo_graph(func):
     """HIPPO graph decorator"""
 
     @functools.wraps(func)
-    def wrapper(animal, *args, logo="top right", **kwargs):
+    def wrapper(animal, *args, logo='top right', **kwargs):
         """
 
         :param animal:
@@ -35,7 +34,7 @@ def hippo_graph(func):
         """
 
         wrapper_kwargs = {}
-        wrapper_keys = ["show", "html", "pdf", "png"]
+        wrapper_keys = ['show', 'html', 'pdf', 'png']
         for key in wrapper_keys:
             wrapper_kwargs[key] = kwargs.pop(key, None)
 
@@ -44,25 +43,25 @@ def hippo_graph(func):
         if not isinstance(fig, go.Figure):
             return fig
 
-        if wrapper_kwargs["show"]:
+        if wrapper_kwargs['show']:
             fig.show()
 
-        if wrapper_kwargs["html"]:
-            file = wrapper_kwargs["html"]
-            if not file.endswith(".html"):
-                file = f"{file}.html"
+        if wrapper_kwargs['html']:
+            file = wrapper_kwargs['html']
+            if not file.endswith('.html'):
+                file = f'{file}.html'
             mp.write(file, fig)
 
-        if wrapper_kwargs["pdf"]:
-            file = wrapper_kwargs["pdf"]
-            if not file.endswith(".pdf"):
-                file = f"{file}.pdf"
+        if wrapper_kwargs['pdf']:
+            file = wrapper_kwargs['pdf']
+            if not file.endswith('.pdf'):
+                file = f'{file}.pdf'
             mp.write(file, fig)
 
-        if wrapper_kwargs["png"]:
-            file = wrapper_kwargs["png"]
-            if not file.endswith(".png"):
-                file = f"{file}.png"
+        if wrapper_kwargs['png']:
+            file = wrapper_kwargs['png']
+            if not file.endswith('.png'):
+                file = f'{file}.png'
             mp.write(file, fig)
 
         if not fig.layout.images and logo:
@@ -76,7 +75,7 @@ def hippo_graph(func):
 @hippo_graph
 def plot_tag_statistics(
     animal,
-    color="type",
+    color='type',
     subtitle=None,
     log_y=False,
     show_compounds=True,
@@ -104,43 +103,42 @@ def plot_tag_statistics(
     plot_data = []
 
     for tag in animal.tags.unique:
-
         if tag in skip:
             continue
 
         if show_compounds:
             num_compounds = len(compounds.get_by_tag(tag=tag))
             if num_compounds:
-                data = dict(tag=tag, number=num_compounds, type="compounds")
+                data = dict(tag=tag, number=num_compounds, type='compounds')
                 plot_data.append(data)
 
         if show_poses:
             num_poses = len(poses.get_by_tag(tag=tag))
             if num_poses:
-                data = dict(tag=tag, number=num_poses, type="poses")
+                data = dict(tag=tag, number=num_poses, type='poses')
                 plot_data.append(data)
 
     from pandas import DataFrame
 
     df = DataFrame(plot_data)
 
-    df.sort_values(by="tag", inplace=True)
+    df.sort_values(by='tag', inplace=True)
 
-    fig = px.bar(df, x="tag", y="number", color=color, log_y=log_y)
+    fig = px.bar(df, x='tag', y='number', color=color, log_y=log_y)
 
     if not title:
-        title = "Tag Statistics"
+        title = 'Tag Statistics'
 
         if subtitle:
-            title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+            title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
         else:
-            title = f"<b>{animal.name}</b>: {title}"
+            title = f'<b>{animal.name}</b>: {title}'
 
     fig.update_layout(
-        title=title, title_automargin=False, title_yref="container", barmode="group"
+        title=title, title_automargin=False, title_yref='container', barmode='group'
     )
 
-    fig.update_layout(xaxis_title="Tag", yaxis_title="#")
+    fig.update_layout(xaxis_title='Tag', yaxis_title='#')
 
     return fig
 
@@ -175,41 +173,41 @@ def plot_interaction_histogram(
 
         data = dict(str=key, count=count)
 
-        data["family"] = feature_metadata[key]["family"]
-        data["res_name"] = feature_metadata[key]["res_name"]
-        data["res_number"] = feature_metadata[key]["res_number"]
-        data["res_chain"] = feature_metadata[key]["res_chain"]
-        data["atom_numbers"] = feature_metadata[key]["atom_numbers"]
+        data['family'] = feature_metadata[key]['family']
+        data['res_name'] = feature_metadata[key]['res_name']
+        data['res_number'] = feature_metadata[key]['res_number']
+        data['res_chain'] = feature_metadata[key]['res_chain']
+        data['atom_numbers'] = feature_metadata[key]['atom_numbers']
 
-        data["res_name_number_chain_str"] = (
-            f"{feature_metadata[key]['res_name']} {feature_metadata[key]['res_number']} {feature_metadata[key]['res_chain']}"
+        data['res_name_number_chain_str'] = (
+            f'{feature_metadata[key]["res_name"]} {feature_metadata[key]["res_number"]} {feature_metadata[key]["res_chain"]}'
         )
 
         plot_data.append(data)
 
     plot_df = pd.DataFrame(plot_data)
-    plot_df.sort_values(["res_chain", "res_number", "family"], inplace=True)
+    plot_df.sort_values(['res_chain', 'res_number', 'family'], inplace=True)
     plot_df
 
     fig = px.bar(
         plot_df,
-        x="res_name_number_chain_str",
-        y="count",
-        color="family",
+        x='res_name_number_chain_str',
+        y='count',
+        color='family',
         hover_data=plot_df.columns,
     )
 
-    title = "Leveraged protein features"
+    title = 'Leveraged protein features'
 
     if subtitle:
-        title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+        title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
     else:
-        title = f"<b>{animal.name}</b>: {title}"
+        title = f'<b>{animal.name}</b>: {title}'
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
-    fig.update_layout(xaxis_title="Residue")
-    fig.update_layout(yaxis_title="#Interactions")
+    fig.update_layout(xaxis_title='Residue')
+    fig.update_layout(yaxis_title='#Interactions')
 
     return fig
 
@@ -220,7 +218,7 @@ def plot_interaction_punchcard(
     poses=None,
     subtitle=None,
     opacity=1.0,
-    group: str = "pose_name",
+    group: str = 'pose_name',
     ignore_chains=False,
 ):
     """
@@ -235,6 +233,7 @@ def plot_interaction_punchcard(
     """
 
     import plotly
+
     from .pset import PoseTable
 
     poses = poses or animal.poses
@@ -244,73 +243,73 @@ def plot_interaction_punchcard(
     else:
         iset = poses.interactions
 
-    mrich.var("#poses", len(poses))
-    mrich.var("#interactions", len(iset))
+    mrich.var('#poses', len(poses))
+    mrich.var('#interactions', len(iset))
 
     plot_data = iset.df
 
     name_lookup = poses.id_name_dict
 
     names = []
-    for pose_id in plot_data["pose_id"].values:
+    for pose_id in plot_data['pose_id'].values:
         names.append(name_lookup[pose_id])
-    plot_data["pose_name"] = names
+    plot_data['pose_name'] = names
 
     if ignore_chains:
-        x = "res_name_number"
-        plot_data[x] = plot_data[["residue_name", "residue_number"]].agg(
-            lambda x: " ".join([str(i) for i in x]), axis=1
+        x = 'res_name_number'
+        plot_data[x] = plot_data[['residue_name', 'residue_number']].agg(
+            lambda x: ' '.join([str(i) for i in x]), axis=1
         )
-        plot_data = plot_data.sort_values([group, x, "residue_number"])
+        plot_data = plot_data.sort_values([group, x, 'residue_number'])
         sort_key = lambda x: x[1]
     else:
-        x = "chain_res_name_number_str"
-        plot_data[x] = plot_data[["chain_name", "residue_name", "residue_number"]].agg(
-            lambda x: " ".join([str(i) for i in x]), axis=1
+        x = 'chain_res_name_number_str'
+        plot_data[x] = plot_data[['chain_name', 'residue_name', 'residue_number']].agg(
+            lambda x: ' '.join([str(i) for i in x]), axis=1
         )
         sort_key = lambda x: (x[2], x[1])
 
-    title = "Interaction Punch-Card"
+    title = 'Interaction Punch-Card'
 
     if subtitle:
-        title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+        title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
     else:
-        title = f"<b>{animal.name}</b>: {title}"
+        title = f'<b>{animal.name}</b>: {title}'
 
     fig = px.scatter(
         plot_data,
         x=x,
-        y="type",
-        marginal_x="histogram",
-        marginal_y="histogram",
+        y='type',
+        marginal_x='histogram',
+        marginal_y='histogram',
         hover_data=plot_data.columns,
         color=group,
         title=title,
     )
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
-    fig.update_layout(xaxis_title="Residue", yaxis_title="Feature Family")
+    fig.update_layout(xaxis_title='Residue', yaxis_title='Feature Family')
 
     # x-axis sorting
-    categoryarray = plot_data[[x, "residue_number", "chain_name"]].agg(tuple, axis=1)
+    categoryarray = plot_data[[x, 'residue_number', 'chain_name']].agg(tuple, axis=1)
     categoryarray = sorted([v for v in categoryarray.values], key=sort_key)
     categoryarray = [v[0] for v in categoryarray]
 
     # sort axes
-    fig.update_xaxes(categoryorder="array", categoryarray=categoryarray)
-    fig.update_yaxes(categoryorder="category descending")
+    fig.update_xaxes(categoryorder='array', categoryarray=categoryarray)
+    fig.update_yaxes(categoryorder='category descending')
 
     for trace in fig.data:
         if type(trace) == plotly.graph_objs._histogram.Histogram:
             trace.opacity = 1
             trace.xbins.size = 1
         else:
-            trace["marker"]["size"] = 10
-            trace["marker"]["opacity"] = opacity
+            trace['marker']['size'] = 10
+            trace['marker']['opacity'] = opacity
 
-    fig.update_layout(barmode="stack")
-    fig.update_layout(scattermode="group", scattergap=0.75)
+    fig.update_layout(barmode='stack')
+    fig.update_layout(scattermode='group', scattergap=0.75)
 
     return add_punchcard_logo(fig)
 
@@ -320,10 +319,10 @@ def plot_interaction_punchcard_by_tags(
     animal,
     tags: dict[str, str] | list[str],
     permitted_residues: dict[str, list[int]] | None = None,
-    yaxis_title: str = "Tag",
+    yaxis_title: str = 'Tag',
     subtitle=None,
     opacity=0.7,
-    group="type",
+    group='type',
     marginal_histogram_x: bool = True,
     # marginal_histogram_y: bool = False,
     sizeref=0.08,
@@ -345,8 +344,8 @@ def plot_interaction_punchcard_by_tags(
 
     """
 
-    import plotly
     import numpy as np
+    import plotly
 
     if isinstance(tags, list):
         tags = {v: v for v in tags}
@@ -360,111 +359,108 @@ def plot_interaction_punchcard_by_tags(
 
         name_lookup = poses.id_name_dict
 
-        with mrich.loading("Getting interactions dataframe"):
+        with mrich.loading('Getting interactions dataframe'):
             df = poses.interactions.df
 
-        df["tag"] = tag
-        df["group_name"] = group_name
-        df["pose_name"] = [name_lookup[pose_id] for pose_id in df["pose_id"].values]
+        df['tag'] = tag
+        df['group_name'] = group_name
+        df['pose_name'] = [name_lookup[pose_id] for pose_id in df['pose_id'].values]
 
         if group_name in permitted_residues:
-            subset = df[df["residue_number"].isin(permitted_residues[group_name])]
+            subset = df[df['residue_number'].isin(permitted_residues[group_name])]
             diff = len(df) - len(subset)
             if diff:
                 mrich.warning(
-                    "Skipping",
+                    'Skipping',
                     diff,
-                    "markers due unpermitted residue numbers for: ",
+                    'markers due unpermitted residue numbers for: ',
                     group_name,
                 )
                 df = subset
 
         dfs.append(df)
 
-    mrich.debug("Concatenating dataframes")
+    mrich.debug('Concatenating dataframes')
     plot_data = pd.concat(dfs, ignore_index=True)
 
     ### add permitted residues
 
     if permitted_residues and ignore_chains:
-
         permitted_df = []
         for group_name, ids in permitted_residues.items():
-
-            unique_combinations = plot_data[plot_data["group_name"] == group_name][
-                ["residue_name", "residue_number"]
+            unique_combinations = plot_data[plot_data['group_name'] == group_name][
+                ['residue_name', 'residue_number']
             ].drop_duplicates()
 
             for resid in ids:
-
                 try:
                     resname = unique_combinations[
-                        unique_combinations["residue_number"] == resid
-                    ]["residue_name"].values[0]
+                        unique_combinations['residue_number'] == resid
+                    ]['residue_name'].values[0]
                 except IndexError:
                     continue
 
                 # if plot_data[['residue_name', 'residue_number']]
 
                 permitted_df.append(
-                    dict(res_name_number=f"{resname} {resid}", group_name=group_name)
+                    dict(res_name_number=f'{resname} {resid}', group_name=group_name)
                 )
 
         permitted_df = pd.DataFrame(permitted_df)
 
-    mrich.debug("Building plot_data")
+    mrich.debug('Building plot_data')
     if backbone_only:
-        plot_data = plot_data[plot_data["backbone"] == True]
+        plot_data = plot_data[plot_data['backbone'] == True]
     if sidechain_only:
-        plot_data = plot_data[plot_data["sidechain"] == True]
+        plot_data = plot_data[plot_data['sidechain'] == True]
 
     if ignore_chains:
-        x = "res_name_number"
-        plot_data[x] = plot_data[["residue_name", "residue_number"]].agg(
-            lambda x: " ".join([str(i) for i in x]), axis=1
+        x = 'res_name_number'
+        plot_data[x] = plot_data[['residue_name', 'residue_number']].agg(
+            lambda x: ' '.join([str(i) for i in x]), axis=1
         )
-        plot_data = plot_data.sort_values([group, x, "residue_number"])
+        plot_data = plot_data.sort_values([group, x, 'residue_number'])
         sort_key = lambda x: x[1]
     else:
-        x = "chain_res_name_number_str"
-        plot_data[x] = plot_data[["chain_name", "residue_name", "residue_number"]].agg(
-            lambda x: " ".join([str(i) for i in x]), axis=1
+        x = 'chain_res_name_number_str'
+        plot_data[x] = plot_data[['chain_name', 'residue_name', 'residue_number']].agg(
+            lambda x: ' '.join([str(i) for i in x]), axis=1
         )
         sort_key = lambda x: (x[2], x[1])
 
     if counts:
-        mrich.debug("Summing by residue")
+        mrich.debug('Summing by residue')
         orig_data = plot_data.copy()
 
         if ignore_chains:
             plot_data = (
-                plot_data.groupby(["group_name", "type", x, "residue_number"])
+                plot_data.groupby(['group_name', 'type', x, 'residue_number'])
                 .size()
-                .reset_index(name="count")
+                .reset_index(name='count')
             )
         else:
             plot_data = (
                 plot_data.groupby(
-                    ["group_name", "type", x, "residue_number", "chain_name"]
+                    ['group_name', 'type', x, 'residue_number', 'chain_name']
                 )
                 .size()
-                .reset_index(name="count")
+                .reset_index(name='count')
             )
 
-        plot_data["size"] = np.sqrt(plot_data["count"])
+        plot_data['size'] = np.sqrt(plot_data['count'])
 
     # add a size reference
 
-    type_str = "Size"
+    type_str = 'Size'
     sizes = [1, 50, 100, 250]
 
     dicts = []
-    for group_name, size in zip(tags.keys(), sizes):
+    for group_name, size in zip(tags.keys(), sizes, strict=False):
         dicts.append(
             dict(
                 group_name=group_name,
-                type="type_str",
-                res_name_number="",
+                type='type_str',
+                res_name_number='',
                 residue_number=999,
                 count=size,
                 size=np.sqrt(size),
@@ -474,55 +470,54 @@ def plot_interaction_punchcard_by_tags(
 
     plot_data = pd.concat([plot_data, pd.DataFrame(dicts)])
 
-    mrich.debug("Making scatter plot")
+    mrich.debug('Making scatter plot')
     fig = px.scatter(
         plot_data,
         x=x,
-        y="group_name",
+        y='group_name',
         hover_data=plot_data.columns,
         color=group,
-        size="size" if counts else None,
-        text="text",
+        size='size' if counts else None,
+        text='text',
         # color_discrete_sequence=px.colors.qualitative.Dark2
     )
 
-    fig.update_traces(textposition="middle right")
+    fig.update_traces(textposition='middle right')
 
     if return_plot_data:
         data_snapshot1 = plot_data.copy()
 
     # fig.update_layout(title=title, title_automargin=False, title_yref="container")
 
-    fig.update_layout(xaxis_title="Residue", yaxis_title=yaxis_title)
+    fig.update_layout(xaxis_title='Residue', yaxis_title=yaxis_title)
 
     # x-axis sorting
     if ignore_chains:
-        categoryarray = plot_data[[x, "residue_number"]].agg(tuple, axis=1)
+        categoryarray = plot_data[[x, 'residue_number']].agg(tuple, axis=1)
     else:
-        categoryarray = plot_data[[x, "residue_number", "chain_name"]].agg(
+        categoryarray = plot_data[[x, 'residue_number', 'chain_name']].agg(
             tuple, axis=1
         )
     categoryarray = sorted([v for v in categoryarray.values], key=sort_key)
     categoryarray = [v[0] for v in categoryarray]
 
     # sort axes
-    fig.update_xaxes(categoryorder="array", categoryarray=categoryarray)
+    fig.update_xaxes(categoryorder='array', categoryarray=categoryarray)
 
     for trace in fig.data:
         if type(trace) == plotly.graph_objs._histogram.Histogram:
             trace.opacity = 1
             trace.xbins.size = 1
         else:
-            trace["marker"]["opacity"] = opacity
+            trace['marker']['opacity'] = opacity
 
     if marginal_histogram_x:
-
         from plotly.subplots import make_subplots
 
         subplot_fig = make_subplots(
             rows=2,
             cols=1,
-            specs=[[{"type": "histogram"}], [{"type": "scatter"}]],
+            specs=[[{'type': 'histogram'}], [{'type': 'scatter'}]],
             shared_xaxes=True,
             shared_yaxes=False,
             vertical_spacing=0.02,
@@ -531,7 +526,7 @@ def plot_interaction_punchcard_by_tags(
 
         # add in scatter traces
         for trace in fig.data:
-            trace.yaxis = "y2"
+            trace.yaxis = 'y2'
             trace.showlegend = False
             trace.marker.sizeref = sizeref
             trace.marker.line.width = 0
@@ -539,17 +534,17 @@ def plot_interaction_punchcard_by_tags(
 
         # aggregate data for histogram plot
         plot_data = (
-            orig_data.groupby(["type", x, "residue_number"])
+            orig_data.groupby(['type', x, 'residue_number'])
             .size()
-            .reset_index(name="count")
+            .reset_index(name='count')
         )
 
         # generate histogram
-        fig2 = px.histogram(plot_data, x=x, y="count", color="type")
+        fig2 = px.histogram(plot_data, x=x, y='count', color='type')
 
         # add in histogram traces
         for trace in fig2.data:
-            trace.yaxis = "y1"
+            trace.yaxis = 'y1'
             subplot_fig.add_trace(trace)
 
         # if permitted_residues and ignore_chains:
@@ -567,31 +562,31 @@ def plot_interaction_punchcard_by_tags(
 
         # clean up the axes
         subplot_fig.update_layout(
-            xaxis=dict(anchor="y2", visible=True, showticklabels=True, side="bottom"),
+            xaxis=dict(anchor='y2', visible=True, showticklabels=True, side='bottom'),
             # xaxis2=dict(visible=True, showticklabels=True, side="bottom"),
             yaxis2=dict(
-                anchor="x",
-                overlaying="x",
-                side="top",
-                categoryorder="category descending",
+                anchor='x',
+                overlaying='x',
+                side='top',
+                categoryorder='category descending',
             ),  # Secondary y-axis for x marginal
         )
 
         # x-axis sorting
         if ignore_chains:
-            categoryarray = plot_data[[x, "residue_number"]].agg(tuple, axis=1)
+            categoryarray = plot_data[[x, 'residue_number']].agg(tuple, axis=1)
         else:
             raise NotImplementedError
         categoryarray = sorted([v for v in categoryarray.values], key=sort_key)
         categoryarray = [v[0] for v in categoryarray]
-        subplot_fig.update_xaxes(categoryorder="array", categoryarray=categoryarray)
+        subplot_fig.update_xaxes(categoryorder='array', categoryarray=categoryarray)
 
         # y-axis sorting
         categoryarray = list(reversed(tags.keys()))
-        subplot_fig.update_yaxes(categoryorder="array", categoryarray=categoryarray)
+        subplot_fig.update_yaxes(categoryorder='array', categoryarray=categoryarray)
 
         # stack histogram bars on top of each other
-        subplot_fig.update_layout(barmode="stack")
+        subplot_fig.update_layout(barmode='stack')
 
         subplot_fig.update_layout(
             margin=dict(l=20, r=20, t=20, b=20),
@@ -633,7 +628,7 @@ def plot_residue_interactions(
     if not poses:
         poses = animal.poses
 
-    mrich.var("#poses", len(poses))
+    mrich.var('#poses', len(poses))
 
     from .iset import InteractionSet
 
@@ -643,7 +638,7 @@ def plot_residue_interactions(
 
     # return iset
 
-    mrich.var("#interactions", len(iset))
+    mrich.var('#interactions', len(iset))
 
     plot_data = iset.df
 
@@ -653,38 +648,38 @@ def plot_residue_interactions(
     # print(name_lookup)
 
     names = []
-    for pose_id in plot_data["pose_id"].values:
+    for pose_id in plot_data['pose_id'].values:
         names.append(name_lookup[int(pose_id)])
-    plot_data["pose_name"] = names
+    plot_data['pose_name'] = names
 
-    fig = px.histogram(plot_data, x="pose_name", color="type")
+    fig = px.histogram(plot_data, x='pose_name', color='type')
 
     # return plot_data[plot_data['pose_name'] == ' x1762b']
 
-    fig.update_xaxes(categoryorder="total descending")
+    fig.update_xaxes(categoryorder='total descending')
 
     # set customdata from x-axis labels
     for trace in fig.data:
-        trace["customdata"] = trace["x"]
+        trace['customdata'] = trace['x']
 
     if not subtitle:
-        subtitle = f"#Poses={len(poses)}"
+        subtitle = f'#Poses={len(poses)}'
 
     residue_name = animal.db.get_feature(
-        id=plot_data["feature_id"].values[0]
+        id=plot_data['feature_id'].values[0]
     ).residue_name
 
-    title = f"Interactions w/ {residue_name} {residue_number}"
+    title = f'Interactions w/ {residue_name} {residue_number}'
 
     if chain:
-        title += f" {chain}"
+        title += f' {chain}'
 
-    title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+    title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
-    fig.update_xaxes(title="Pose")
-    fig.update_yaxes(title="#Interactions")
+    fig.update_xaxes(title='Pose')
+    fig.update_yaxes(title='#Interactions')
 
     return fig
 
@@ -692,7 +687,7 @@ def plot_residue_interactions(
 @hippo_graph
 # def plot_building_blocks(animal, subtitle=None, cset='elabs', color='name_is_smiles'):
 def plot_reactant_amounts(
-    animal, subtitle=None, color="has_price_picker", named_only=False, most_common=None
+    animal, subtitle=None, color='has_price_picker', named_only=False, most_common=None
 ):
     """
 
@@ -710,37 +705,37 @@ def plot_reactant_amounts(
 
     bbs = animal.building_blocks
 
-    mrich.debug("making plot_data")
+    mrich.debug('making plot_data')
     plot_data = []
     for bb in bbs:
         d = bb.dict
         # if most_common and d['amount'] is not None:
 
-        if not named_only or not d["name_is_smiles"]:
+        if not named_only or not d['name_is_smiles']:
             plot_data.append(d)
 
     if most_common:
-        mrich.debug("sorting")
-        plot_data = sorted(plot_data, key=lambda x: x["amount"], reverse=True)[
+        mrich.debug('sorting')
+        plot_data = sorted(plot_data, key=lambda x: x['amount'], reverse=True)[
             :most_used_number
         ]
 
     fig = px.bar(
-        plot_data, x="name", y="amount", color=color, hover_data=plot_data[0].keys()
+        plot_data, x='name', y='amount', color=color, hover_data=plot_data[0].keys()
     )
     # fig = px.bar(plot_data, x='smiles', y='amount', color=color)
 
-    title = "Building Blocks"
+    title = 'Building Blocks'
 
     if not subtitle:
         # subtitle = f'"{cset.name}": #BBs={len(bbs)}'
-        subtitle = f"#BBs={len(bbs)}"
+        subtitle = f'#BBs={len(bbs)}'
 
-    title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+    title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
-    fig.update_layout(xaxis_title="Reactant", yaxis_title="#Reactions")
+    fig.update_layout(xaxis_title='Reactant', yaxis_title='#Reactions')
 
     return fig
 
@@ -765,35 +760,35 @@ def plot_reactant_price(animal, subtitle=None, amount=20):
     plot_data = []
     for bb in bbs:
         d = bb.dict
-        if not d["has_price_picker"]:
+        if not d['has_price_picker']:
             continue
 
-        d[f"price_{amount}mg"] = bb.get_price(amount)
-        d[f"min_amount"] = bb.price_picker.min_amount
+        d[f'price_{amount}mg'] = bb.get_price(amount)
+        d['min_amount'] = bb.price_picker.min_amount
 
         plot_data.append(d)
 
     # fig = px.bar(plot_data, x='name', y=f'price_{amount}mg', color='lead_time', log_y=True, hover_data=plot_data[0].keys())
     fig = px.histogram(
         plot_data,
-        x=f"price_{amount}mg",
-        color="lead_time",
+        x=f'price_{amount}mg',
+        color='lead_time',
         hover_data=plot_data[0].keys(),
     )
     # fig = px.bar(plot_data, x='smiles', y='amount', color=color)
 
-    title = "Reactant Pricing"
+    title = 'Reactant Pricing'
 
     if not subtitle:
         # subtitle = f'"{cset.name}": #BBs={len(bbs)}'
-        subtitle = f"#BBs={len(bbs)}"
+        subtitle = f'#BBs={len(bbs)}'
 
-    title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+    title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
     fig.update_layout(
-        yaxis_title="Number of reactants", xaxis_title=f"Price for {amount}mg [$USD]"
+        yaxis_title='Number of reactants', xaxis_title=f'Price for {amount}mg [$USD]'
     )
 
     return fig
@@ -819,37 +814,37 @@ def plot_reactants_2d(animal, subtitle=None, amount=20):
     plot_data = []
     for bb in bbs:
         d = bb.dict
-        if not d["has_price_picker"]:
+        if not d['has_price_picker']:
             continue
 
-        d[f"price_{amount}mg"] = bb.get_price(amount)
-        d[f"min_amount"] = bb.price_picker.min_amount
+        d[f'price_{amount}mg'] = bb.get_price(amount)
+        d['min_amount'] = bb.price_picker.min_amount
 
         plot_data.append(d)
 
     fig = px.scatter(
         plot_data,
-        y="amount",
-        x=f"price_{amount}mg",
-        color="name",
+        y='amount',
+        x=f'price_{amount}mg',
+        color='name',
         hover_data=plot_data[0].keys(),
     )
     # fig = px.bar(plot_data, x='smiles', y='amount', color=color)
 
-    title = "Building Blocks"
+    title = 'Building Blocks'
 
     if not subtitle:
         # subtitle = f'"{cset.name}": #BBs={len(bbs)}'
-        subtitle = f"#BBs={len(bbs)}"
+        subtitle = f'#BBs={len(bbs)}'
 
-    title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+    title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
-    fig.update_layout(scattermode="group", scattergap=0.75)
+    fig.update_layout(scattermode='group', scattergap=0.75)
 
     fig.update_layout(
-        yaxis_title="Quantity [mg]", xaxis_title=f"Price for {amount}mg [$USD]"
+        yaxis_title='Quantity [mg]', xaxis_title=f'Price for {amount}mg [$USD]'
     )
 
     return fig
@@ -857,7 +852,7 @@ def plot_reactants_2d(animal, subtitle=None, amount=20):
 
 @hippo_graph
 # def plot_building_blocks(animal, subtitle=None, cset='elabs', color='name_is_smiles'):
-def plot_building_blocks(animal, subtitle=None, color="name_is_smiles"):
+def plot_building_blocks(animal, subtitle=None, color='name_is_smiles'):
     """
 
     :param animal:
@@ -876,26 +871,26 @@ def plot_building_blocks(animal, subtitle=None, color="name_is_smiles"):
     for bb in bbs:
         plot_data.append(bb.dict)
 
-    fig = px.scatter(plot_data, x="name", y="max", color="amount")
+    fig = px.scatter(plot_data, x='name', y='max', color='amount')
     # fig = px.bar(plot_data, x='smiles', y='amount', color=color)
 
-    title = "Building Blocks"
+    title = 'Building Blocks'
 
     if not subtitle:
         # subtitle = f'"{cset.name}": #BBs={len(bbs)}'
-        subtitle = f"#BBs={len(bbs)}"
+        subtitle = f'#BBs={len(bbs)}'
 
-    title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+    title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
-    fig.update_layout(xaxis_title="Reactant", yaxis_title="Quantity")
+    fig.update_layout(xaxis_title='Reactant', yaxis_title='Quantity')
 
     return fig
 
 
 @hippo_graph
-def plot_synthetic_routes(animal, subtitle=None, cset="elabs", color="num_reactants"):
+def plot_synthetic_routes(animal, subtitle=None, cset='elabs', color='num_reactants'):
     """
 
     :param animal:
@@ -912,18 +907,18 @@ def plot_synthetic_routes(animal, subtitle=None, cset="elabs", color="num_reacta
         plot_data.append(reax.dict)
 
     # fig = px.bar(plot_data, x='name', y='amount', color=color)
-    fig = px.histogram(plot_data, x="type", color=color)
+    fig = px.histogram(plot_data, x='type', color=color)
 
-    title = "Synthetic Routes"
+    title = 'Synthetic Routes'
 
     if not subtitle:
         subtitle = f'"{cset.name}": #compounds={len(cset)}'
 
-    title = f"<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>"
+    title = f'<b>{animal.name}</b>: {title}<br><sup><i>{subtitle}</i></sup>'
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
-    fig.update_layout(xaxis_title="Compound", yaxis_title="#Routes")
+    fig.update_layout(xaxis_title='Compound', yaxis_title='#Routes')
 
     return fig
 
@@ -950,40 +945,40 @@ def plot_numbers(animal, subtitle=None):
     # cset = animal.compound_sets[cset]
 
     plot_data = [
-        dict(category="Experimental Hits", number=len(animal.hits), type="compound"),
-        dict(category="Experimental Hits", number=len(animal.hits.poses), type="poses"),
-        dict(category="Base compounds", number=len(animal.scaffolds), type="compound"),
+        dict(category='Experimental Hits', number=len(animal.hits), type='compound'),
+        dict(category='Experimental Hits', number=len(animal.hits.poses), type='poses'),
+        dict(category='Base compounds', number=len(animal.scaffolds), type='compound'),
         dict(
-            category="Base compounds", number=len(animal.scaffolds.poses), type="poses"
+            category='Base compounds', number=len(animal.scaffolds.poses), type='poses'
         ),
         dict(
-            category="Syndirella Elaborations",
+            category='Syndirella Elaborations',
             number=len(animal.elabs),
-            type="compound",
+            type='compound',
         ),
         dict(
-            category="Syndirella Elaborations",
+            category='Syndirella Elaborations',
             number=len(animal.elabs.poses),
-            type="poses",
+            type='poses',
         ),
         dict(
-            category="Unique Reactants",
+            category='Unique Reactants',
             number=len(animal.building_blocks),
-            type="compound",
+            type='compound',
         ),
     ]
 
-    fig = px.bar(plot_data, x="category", y="number", log_y=True, color="type")
+    fig = px.bar(plot_data, x='category', y='number', log_y=True, color='type')
 
-    title = "Compounds & Poses"
+    title = 'Compounds & Poses'
 
-    title = f"<b>{animal.name}</b>: {title}<br>"
+    title = f'<b>{animal.name}</b>: {title}<br>'
 
     fig.update_layout(
-        title=title, title_automargin=False, title_yref="container", barmode="group"
+        title=title, title_automargin=False, title_yref='container', barmode='group'
     )
 
-    fig.update_layout(xaxis_title=None, yaxis_title="Log(Quantity)")
+    fig.update_layout(xaxis_title=None, yaxis_title='Log(Quantity)')
 
     return fig
 
@@ -993,7 +988,7 @@ def plot_compound_property(
     animal,
     prop,
     compounds=None,
-    style="bar",
+    style='bar',
     null=None,
     hover_data=None,
     custom_data=None,
@@ -1023,18 +1018,15 @@ def plot_compound_property(
         compounds = animal.compounds
 
     if len(compounds) > 1000:
-        compounds = mrich.track(compounds, prefix="Generating plot data")
+        compounds = mrich.track(compounds, prefix='Generating plot data')
 
     for comp in compounds:
-
         data = comp.dict
 
         for p in prop:
-
             # has attr
 
             if p not in data:
-
                 # get attr
                 if hasattr(comp, p):
                     v = getattr(comp, p)
@@ -1050,20 +1042,18 @@ def plot_compound_property(
         plot_data.append(data)
 
     if len(prop) == 1:
-
-        title = f"Compound {prop[0]}"
+        title = f'Compound {prop[0]}'
 
         fig = px.histogram(plot_data, x=prop[0])
 
-        fig.update_layout(xaxis_title=prop[0], yaxis_title="Quantity")
+        fig.update_layout(xaxis_title=prop[0], yaxis_title='Quantity')
 
     elif len(prop) == 2:
+        hover_data = prop + ['smiles'] + hover_data
 
-        hover_data = prop + ["smiles"] + hover_data
+        title = f'Compound {prop[0]} vs {prop[1]}'
 
-        title = f"Compound {prop[0]} vs {prop[1]}"
-
-        func = eval(f"px.{style}")
+        func = eval(f'px.{style}')
         fig = func(
             plot_data,
             x=prop[0],
@@ -1075,12 +1065,12 @@ def plot_compound_property(
         fig.update_layout(xaxis_title=prop[0], yaxis_title=prop[1])
 
     else:
-        mrich.error("Unsupported")
+        mrich.error('Unsupported')
 
-    title = f"<b>{animal.name}</b>: {title}<br>"
+    title = f'<b>{animal.name}</b>: {title}<br>'
 
     fig.update_layout(
-        title=title, title_automargin=False, title_yref="container", barmode="group"
+        title=title, title_automargin=False, title_yref='container', barmode='group'
     )
 
     return fig
@@ -1091,7 +1081,7 @@ def plot_pose_property(
     animal,
     prop,
     poses=None,
-    style="scatter",
+    style='scatter',
     title=None,
     null=None,
     color=None,
@@ -1121,108 +1111,104 @@ def plot_pose_property(
     """
 
     # fetch these directly from the database
-    if prop in ["energy_score", "distance_score"]:
-
+    if prop in ['energy_score', 'distance_score']:
         p = prop
 
         if not poses:
             # great all poses!
             poses = animal.poses
             n_poses = len(poses)
-            mrich.out(f"Querying database for {n_poses} poses...")
-            field = f"pose_{p}"
-            title = title or f"{p} of all poses"
+            mrich.out(f'Querying database for {n_poses} poses...')
+            field = f'pose_{p}'
+            title = title or f'{p} of all poses'
             query = animal.db.select_where(
-                table="pose", query=field, key=f"{field} is not NULL", multiple=True
+                table='pose', query=field, key=f'{field} is not NULL', multiple=True
             )
 
         else:
-
             # subset of poses
-            assert poses.table == "pose", f"{poses=} is not a set of Pose objects"
+            assert poses.table == 'pose', f'{poses=} is not a set of Pose objects'
             n_poses = len(poses)
-            mrich.out(f"Querying database for {n_poses} poses...")
-            field = f"pose_{p}"
-            title = title or f"{p} of pose subset"
+            mrich.out(f'Querying database for {n_poses} poses...')
+            field = f'pose_{p}'
+            title = title or f'{p} of pose subset'
             query = animal.db.select_where(
-                table="pose",
+                table='pose',
                 query=field,
-                key=f"{field} is not NULL and pose_id in {poses.str_ids}",
+                key=f'{field} is not NULL and pose_id in {poses.str_ids}',
                 multiple=True,
             )
 
-        plot_data = [{p: v} for v, in query]
+        plot_data = [{p: v} for (v,) in query]
 
-        if p == "energy_score":
+        if p == 'energy_score':
             subtitle = (
                 subtitle
-                or f"#poses={n_poses}, energy_score < 0 = {len([None for d in plot_data if d[p] < 0])/n_poses:.1%}"
+                or f'#poses={n_poses}, energy_score < 0 = {len([None for d in plot_data if d[p] < 0]) / n_poses:.1%}'
             )
-        elif p == "distance_score":
+        elif p == 'distance_score':
             subtitle = (
                 subtitle
-                or f"#poses={n_poses}, distance_score < 2 = {len([None for d in plot_data if d[p] < 2])/n_poses:.1%}"
+                or f'#poses={n_poses}, distance_score < 2 = {len([None for d in plot_data if d[p] < 2]) / n_poses:.1%}'
             )
         else:
-            subtitle = subtitle or f"#poses={n_poses}"
+            subtitle = subtitle or f'#poses={n_poses}'
 
         prop = [prop]
 
-    elif prop == ["energy_score", "distance_score"] or prop == [
-        "distance_score",
-        "energy_score",
+    elif prop == ['energy_score', 'distance_score'] or prop == [
+        'distance_score',
+        'energy_score',
     ]:
-
-        query = f"pose_id, pose_distance_score, pose_energy_score"
+        query = 'pose_id, pose_distance_score, pose_energy_score'
 
         # hardcoded errorbars
         distance_score_err = 0.03
         energy_score_err = 6
 
         if color:
-            query += f", {color}"
+            query += f', {color}'
 
         if not poses:
             # great all poses!
             poses = animal.poses
             n_poses = len(poses)
-            mrich.out(f"Querying database for {n_poses} poses...")
-            title = f"distance & energy scores of all poses"
-            query = animal.db.select(table="pose", query=query, multiple=True)
+            mrich.out(f'Querying database for {n_poses} poses...')
+            title = 'distance & energy scores of all poses'
+            query = animal.db.select(table='pose', query=query, multiple=True)
 
         else:
-
             # subset of poses
             n_poses = len(poses)
-            mrich.out(f"Querying database for {n_poses} poses...")
-            title = f"distance & energy scores of pose subset"
+            mrich.out(f'Querying database for {n_poses} poses...')
+            title = 'distance & energy scores of pose subset'
             query = animal.db.select_where(
-                table="pose",
+                table='pose',
                 query=query,
-                key=f"pose_id in {poses.str_ids}",
+                key=f'pose_id in {poses.str_ids}',
                 multiple=True,
             )
 
         plot_data = []
         for q in query:
             d = {
-                "id": q[0],
-                "distance_score": q[1],
-                "energy_score": q[2],
-                "distance_score_err": distance_score_err,
-                "energy_score_err": energy_score_err,
+                'id': q[0],
+                'distance_score': q[1],
+                'energy_score': q[2],
+                'distance_score_err': distance_score_err,
+                'energy_score_err': energy_score_err,
             }
             if color:
                 d[color] = q[-1]
-                if color == "pose_compound":
-                    d[color] = f"C{d[color]}"
+                if color == 'pose_compound':
+                    d[color] = f'C{d[color]}'
 
             plot_data.append(d)
 
-        kwargs["error_x"] = "energy_score_err"
-        kwargs["error_y"] = "distance_score_err"
+        kwargs['error_x'] = 'energy_score_err'
+        kwargs['error_y'] = 'distance_score_err'
 
-        subtitle = subtitle or f"#poses={n_poses}"
+        subtitle = subtitle or f'#poses={n_poses}'
 
     # elif prop == ['num_atoms_added', 'energy_score'] or prop == ['num_atoms_added', 'energy_score']:
     # 	mrich.error('Use animal.plot_pose_risk_vs_placement')
@@ -1251,32 +1237,29 @@ def plot_pose_property(
     # 	subtitle = f'#poses={n_poses}'
 
     else:
-
         if not poses:
             poses = animal.poses
 
-        if prop == "tags":
-
+        if prop == 'tags':
             plot_data = []
 
             for tag in poses.tags:
-
                 num_poses = len(poses.get_by_tag(tag=tag))
                 data = dict(tag=tag, number=num_poses)
                 plot_data.append(data)
 
-            fig = px.bar(plot_data, x="tag", y="number", color=color, log_y=log_y)
+            fig = px.bar(plot_data, x='tag', y='number', color=color, log_y=log_y)
 
-            title = "Tag Statistics"
+            title = 'Tag Statistics'
 
             fig.update_layout(
                 title=title,
                 title_automargin=False,
-                title_yref="container",
-                barmode="group",
+                title_yref='container',
+                barmode='group',
             )
 
-            fig.update_layout(xaxis_title="Tag", yaxis_title="#")
+            fig.update_layout(xaxis_title='Tag', yaxis_title='#')
 
             return fig
 
@@ -1285,7 +1268,7 @@ def plot_pose_property(
 
         plot_data = []
         if len(poses) > 1000:
-            poses = mrich.track(poses, prefix="Generating plot data")
+            poses = mrich.track(poses, prefix='Generating plot data')
 
         for pose in poses:
             if len(prop) > 1:
@@ -1326,31 +1309,27 @@ def plot_pose_property(
     if data_only:
         return plot_data
 
-    hover_data = ["id"]  # , 'alias', 'inchikey'] #, 'tags', 'inspirations']
+    hover_data = ['id']  # , 'alias', 'inchikey'] #, 'tags', 'inspirations']
 
     if len(prop) == 1:
-
-        title = title or f"Pose {prop[0]}"
+        title = title or f'Pose {prop[0]}'
 
         fig = px.histogram(plot_data, x=prop[0], hover_data=None, color=color, **kwargs)
 
-        fig.update_layout(xaxis_title=prop[0], yaxis_title="Quantity")
+        fig.update_layout(xaxis_title=prop[0], yaxis_title='Quantity')
 
     elif len(prop) == 2:
-
-        if style == "histogram":
-
+        if style == 'histogram':
             x = [d[prop[0]] for d in plot_data]
             y = [d[prop[1]] for d in plot_data]
 
             fig = go.Figure(go.Histogram2d(x=x, y=y, **kwargs))
 
         else:
-
             # if style == "bar":
             # style = "scatter"
 
-            func = eval(f"px.{style}")
+            func = eval(f'px.{style}')
             fig = func(
                 plot_data,
                 x=prop[0],
@@ -1361,19 +1340,19 @@ def plot_pose_property(
                 **kwargs,
             )
 
-        title = title or f"Pose {prop[0]} vs {prop[1]}"
+        title = title or f'Pose {prop[0]} vs {prop[1]}'
         fig.update_layout(xaxis_title=prop[0], yaxis_title=prop[1])
 
     else:
-        mrich.error("Unsupported")
+        mrich.error('Unsupported')
 
-    title = title or f"<b>{animal.name}</b>: {title}<br>"
+    title = title or f'<b>{animal.name}</b>: {title}<br>'
 
     if subtitle:
-        title = f"{title}<br><sup><i>{subtitle}</i></sup>"
+        title = f'{title}<br><sup><i>{subtitle}</i></sup>'
 
     fig.update_layout(
-        title=title, title_automargin=False, title_yref="container", barmode="group"
+        title=title, title_automargin=False, title_yref='container', barmode='group'
     )
 
     return fig
@@ -1390,30 +1369,29 @@ def plot_compound_availability(animal, compounds=None, title=None, subtitle=None
 
     """
 
-    from .cset import CompoundTable, CompoundSet
+    from .cset import CompoundSet, CompoundTable
 
     compounds = compounds or animal.compounds
 
     match compounds:
         case CompoundTable():
             pairs = animal.db.select(
-                table="quote",
-                query="DISTINCT quote_supplier, quote_catalogue",
+                table='quote',
+                query='DISTINCT quote_supplier, quote_catalogue',
                 multiple=True,
             )
 
             plot_data = []
             for supplier, catalogue in pairs:
-
                 if catalogue is None:
-                    catalogue = "None"
-                    cat_str = "NULL"
+                    catalogue = 'None'
+                    cat_str = 'NULL'
                 else:
                     cat_str = f'"{catalogue}"'
 
                 (count,) = animal.db.select_where(
-                    table="quote",
-                    query="COUNT(DISTINCT quote_compound)",
+                    table='quote',
+                    query='COUNT(DISTINCT quote_compound)',
                     key=f'quote_supplier IS "{supplier}" AND quote_catalogue IS {cat_str}',
                 )
 
@@ -1422,25 +1400,23 @@ def plot_compound_availability(animal, compounds=None, title=None, subtitle=None
                 )
 
         case CompoundSet():
-
             pairs = animal.db.select(
-                table="quote",
-                query="DISTINCT quote_supplier, quote_catalogue",
+                table='quote',
+                query='DISTINCT quote_supplier, quote_catalogue',
                 multiple=True,
             )
 
             plot_data = []
             for supplier, catalogue in pairs:
-
                 if catalogue is None:
-                    catalogue = "None"
-                    cat_str = "NULL"
+                    catalogue = 'None'
+                    cat_str = 'NULL'
                 else:
                     cat_str = f'"{catalogue}"'
 
                 (count,) = animal.db.select_where(
-                    table="quote",
-                    query="COUNT(DISTINCT quote_compound)",
+                    table='quote',
+                    query='COUNT(DISTINCT quote_compound)',
                     key=f'quote_supplier IS "{supplier}" AND quote_catalogue IS {cat_str} AND quote_compound IN {compounds.str_ids}',
                 )
 
@@ -1454,14 +1430,14 @@ def plot_compound_availability(animal, compounds=None, title=None, subtitle=None
         case _:
             raise NotImplementedError
 
-    fig = px.bar(plot_data, x="catalogue", y="count", color="supplier")
+    fig = px.bar(plot_data, x='catalogue', y='count', color='supplier')
 
-    title = "Compound availability"
+    title = 'Compound availability'
 
-    title = title or f"<b>{animal.name}</b>: Compound availability<br>"
+    title = title or f'<b>{animal.name}</b>: Compound availability<br>'
 
     if subtitle:
-        title = f"{title}<br><sup><i>{subtitle}</i></sup>"
+        title = f'{title}<br><sup><i>{subtitle}</i></sup>'
 
     fig.update_layout(
         title=title
@@ -1482,21 +1458,19 @@ def plot_compound_availability_venn(animal, compounds):
     """
 
     from venn import venn
-    from .cset import CompoundTable, CompoundSet
 
     pairs = animal.db.select(
-        table="quote",
-        query="DISTINCT quote_supplier, quote_catalogue",
+        table='quote',
+        query='DISTINCT quote_supplier, quote_catalogue',
         multiple=True,
     )
 
     plot_data = {}
 
     for supplier, catalogue in pairs:
-
         if catalogue is None:
-            catalogue = "None"
-            cat_str = "NULL"
+            catalogue = 'None'
+            cat_str = 'NULL'
         else:
             cat_str = f'"{catalogue}"'
 
@@ -1504,11 +1478,11 @@ def plot_compound_availability_venn(animal, compounds):
             plot_data[(supplier, catalogue)] = set()
 
         records = animal.db.select_where(
-            table="quote",
-            query="quote_compound",
+            table='quote',
+            query='quote_compound',
             key=f'quote_supplier IS "{supplier}" AND quote_catalogue IS {cat_str} AND quote_compound IN {compounds.str_ids}',
             multiple=True,
-            none="quiet",
+            none='quiet',
         )
 
         if not records:
@@ -1531,7 +1505,7 @@ def plot_compound_price(
     min_amount=1,
     subtitle=None,
     title=None,
-    style="histogram",
+    style='histogram',
     **kwargs,
 ):
     """
@@ -1546,26 +1520,23 @@ def plot_compound_price(
 
     """
 
-    from .cset import CompoundTable, CompoundSet
     import numpy as np
+
+    from .cset import CompoundSet, CompoundTable
 
     compounds = compounds or animal.compounds
 
     match compounds:
         case CompoundTable():
-
-            if style == "scatter":
-
+            if style == 'scatter':
                 sql = f"""
 				SELECT quote_compound, quote_amount, MIN(quote_price), quote_lead_time, compound_smiles, COUNT(DISTINCT reactant_reaction)
-				FROM {animal.db.SQL_SCHEMA_PREFIX}quote 
+				FROM {animal.db.SQL_SCHEMA_PREFIX}quote
 				INNER JOIN compound ON quote.quote_compound = compound.compound_id
 				INNER JOIN reactant ON quote.quote_compound = reactant.reactant_compound
 				WHERE quote_amount >= {min_amount}
 				GROUP BY quote_compound
-				""".format(
-                    min_amount=min_amount
-                )
+				""".format(min_amount=min_amount)
 
                 results = animal.db.execute(sql).fetchall()
 
@@ -1595,9 +1566,9 @@ def plot_compound_price(
 
             else:
                 data = animal.db.select_where(
-                    table="quote",
-                    query="quote_amount, MIN(quote_price)",
-                    key=f"quote_amount >= {min_amount} GROUP BY quote_compound",
+                    table='quote',
+                    query='quote_amount, MIN(quote_price)',
+                    key=f'quote_amount >= {min_amount} GROUP BY quote_compound',
                     multiple=True,
                 )
 
@@ -1608,20 +1579,16 @@ def plot_compound_price(
                     plot_data.append(dict(min_price=price, quoted_amount=amount))
 
         case CompoundSet():
-
-            if style == "scatter":
-
+            if style == 'scatter':
                 sql = f"""
 				SELECT quote_compound, quote_amount, MIN(quote_price), quote_lead_time, compound_smiles, COUNT(DISTINCT reactant_reaction)
-				FROM {animal.db.SQL_SCHEMA_PREFIX}quote 
+				FROM {animal.db.SQL_SCHEMA_PREFIX}quote
 				INNER JOIN {animal.db.SQL_SCHEMA_PREFIX}compound ON quote.quote_compound = compound.compound_id
 				INNER JOIN {animal.db.SQL_SCHEMA_PREFIX}reactant ON quote.quote_compound = reactant.reactant_compound
 				WHERE quote_amount >= {min_amount}
 				AND quote_compound IN {str_ids}
 				GROUP BY quote_compound
-				""".format(
-                    min_amount=min_amount, str_ids=compounds.str_ids
-                )
+				""".format(min_amount=min_amount, str_ids=compounds.str_ids)
 
                 results = animal.db.execute(sql).fetchall()
 
@@ -1651,9 +1618,9 @@ def plot_compound_price(
 
             else:
                 data = animal.db.select_where(
-                    table="quote",
-                    query="quote_amount, MIN(quote_price)",
-                    key=f"quote_amount >= {min_amount} AND quote_compound IN {compounds.str_ids} GROUP BY quote_compound",
+                    table='quote',
+                    query='quote_amount, MIN(quote_price)',
+                    key=f'quote_amount >= {min_amount} AND quote_compound IN {compounds.str_ids} GROUP BY quote_compound',
                     multiple=True,
                 )
 
@@ -1664,39 +1631,38 @@ def plot_compound_price(
                     plot_data.append(dict(min_price=price, quoted_amount=amount))
 
         case _:
-            raise NotImplementedError("CompoundSet not yet supported")
+            raise NotImplementedError('CompoundSet not yet supported')
 
-    plot_data = sorted(plot_data, key=lambda x: x["quoted_amount"])
+    plot_data = sorted(plot_data, key=lambda x: x['quoted_amount'])
 
     match style:
-
-        case "histogram":
+        case 'histogram':
             fig = px.histogram(
-                plot_data, color="quoted_amount", x="min_price", **kwargs
+                plot_data, color='quoted_amount', x='min_price', **kwargs
             )
 
-        case "violin":
-            fig = px.violin(plot_data, color="quoted_amount", x="min_price", **kwargs)
+        case 'violin':
+            fig = px.violin(plot_data, color='quoted_amount', x='min_price', **kwargs)
 
-        case "scatter":
+        case 'scatter':
             fig = px.scatter(
                 plot_data,
-                color="log_price_per_reaction",
-                x="min_price",
-                y="lead_time",
+                color='log_price_per_reaction',
+                x='min_price',
+                y='lead_time',
                 hover_data=plot_data[0].keys(),
                 **kwargs,
             )
 
         case _:
-            raise NotImplementedError(f"{style=}")
+            raise NotImplementedError(f'{style=}')
 
-    subtitle = subtitle or f"#compounds={n_compounds}, {min_amount=} mg"
+    subtitle = subtitle or f'#compounds={n_compounds}, {min_amount=} mg'
 
-    title = title or f"<b>{animal.name}</b>: Compound price<br>"
+    title = title or f'<b>{animal.name}</b>: Compound price<br>'
 
     if subtitle:
-        title = f"{title}<br><sup><i>{subtitle}</i></sup>"
+        title = f'{title}<br><sup><i>{subtitle}</i></sup>'
 
     fig.update_layout(
         title=title
@@ -1723,30 +1689,30 @@ def plot_reaction_funnel(animal, title=None, subtitle=None):
             compounds.num_intermediates,
             compounds.num_products,
         ],
-        category=["Reactants", "Intermediates", "Products"],
+        category=['Reactants', 'Intermediates', 'Products'],
     )
 
-    fig = px.funnel(data, x="category", y="number")
+    fig = px.funnel(data, x='category', y='number')
 
-    title = title or f"<b>{animal.name}</b>: Reaction statistics"
+    title = title or f'<b>{animal.name}</b>: Reaction statistics'
 
     if subtitle:
-        title = f"{title}<br><sup><i>{subtitle}</i></sup>"
+        title = f'{title}<br><sup><i>{subtitle}</i></sup>'
 
-    fig.update_layout(title=title, title_automargin=False, title_yref="container")
+    fig.update_layout(title=title, title_automargin=False, title_yref='container')
 
     return fig
 
 
-HIPPO_LOGO_URL = "https://raw.githubusercontent.com/mwinokan/HIPPO/main/logos/hippo_logo_tightcrop.png"
+HIPPO_LOGO_URL = 'https://raw.githubusercontent.com/mwinokan/HIPPO/main/logos/hippo_logo_tightcrop.png'
 HIPPO_HEAD_URL = (
-    "https://raw.githubusercontent.com/mwinokan/HIPPO/main/logos/hippo_assets-02.png"
+    'https://raw.githubusercontent.com/mwinokan/HIPPO/main/logos/hippo_assets-02.png'
 )
 
 
 def plot_pose_interactions(
-    animal: "HIPPO", pose: "Pose"
-) -> "plotly.graph_objects.Figure":
+    animal: 'HIPPO', pose: 'Pose'
+) -> 'plotly.graph_objects.Figure':
     """3d figure showing the interactions between a :class:`.Pose` and the protein. In a Jupyter notebook this figure may be unusable, instead write it as a HTML file and open it in your browser:
 
     ::
@@ -1773,7 +1739,7 @@ def plot_pose_interactions(
     # get residues
     residues = []
     for resnum, chain in pairs:
-        residues.append(protein.get_chain(chain).residues[f"n{resnum}"])
+        residues.append(protein.get_chain(chain).residues[f'n{resnum}'])
 
     # get ligand
     lig_group = mp.rdkit.mol_to_AtomGroup(pose.mol)
@@ -1796,18 +1762,18 @@ def plot_pose_interactions(
 
 @hippo_graph
 def plot_compound_tsnee(
-    animal: "HIPPO | None" = None,
-    compounds: "CompoundSet | None" = None,
-    df: "pd.DataFrame | None" = None,
+    animal: 'HIPPO | None' = None,
+    compounds: 'CompoundSet | None' = None,
+    df: 'pd.DataFrame | None' = None,
     title: str | None = None,
     subtitle: str | None = None,
     legend: bool = False,
-    symbol: str = "type",
-    sort_by: str = "type",
-    color: str = "cluster",
-    cluster_by: str = "scaffolds",
+    symbol: str = 'type',
+    sort_by: str = 'type',
+    color: str = 'cluster',
+    cluster_by: str = 'scaffolds',
     **kwargs,
-) -> "plotly.graph_objects.Figure":
+) -> 'plotly.graph_objects.Figure':
     """Plot a compound tanimoto similarity plot with principal components determined by pattern binary fingerprint similarity.
 
     :param compounds: compounds to plot
@@ -1822,35 +1788,35 @@ def plot_compound_tsnee(
 
     """
 
-    from .pca import get_cfps
-    from sklearn.decomposition import PCA
     import numpy as np
+    from sklearn.decomposition import PCA
+
+    from .pca import get_cfps
 
     if compounds:
-        mrich.var("#compounds", len(compounds))
+        mrich.var('#compounds', len(compounds))
 
     if df is None:
-        with mrich.loading("Getting Compound DataFrame"):
+        with mrich.loading('Getting Compound DataFrame'):
             df = compounds.get_df(mol=True, scaffolds=True, inchikey=True, alias=True)
             df = df.reset_index()
 
-        df["scaffolds"] = df["scaffolds"].map(
+        df['scaffolds'] = df['scaffolds'].map(
             lambda x: x if not isinstance(x, float) else None
         )
 
     else:
-
         # check dataframe columns
-        if "mol" not in df.columns:
+        if 'mol' not in df.columns:
             mrich.error("'mol' column not in dataframe")
             return None
 
         if cluster_by not in df.columns:
-            mrich.error(f"{cluster_by=} column not in dataframe")
+            mrich.error(f'{cluster_by=} column not in dataframe')
             return None
 
-    with mrich.loading("Getting Compound fingerprints"):
-        df["FP"] = df["mol"].map(get_cfps)
+    with mrich.loading('Getting Compound fingerprints'):
+        df['FP'] = df['mol'].map(get_cfps)
 
     def get_cluster(row):
         """Get cluster"""
@@ -1858,7 +1824,7 @@ def plot_compound_tsnee(
         scaffolds = row[cluster_by]
 
         if not scaffolds:
-            return row["id"]
+            return row['id']
 
         if scaffolds is None:
             mrich.error(row)
@@ -1873,47 +1839,47 @@ def plot_compound_tsnee(
         """Get type"""
 
         if row[cluster_by] is None:
-            return "scaffold"
+            return 'scaffold'
 
-        return "elaboration"
+        return 'elaboration'
 
-    with mrich.loading("Adding columns"):
+    with mrich.loading('Adding columns'):
         df[cluster_by] = df[cluster_by].apply(tuple)
-        df["cluster"] = df.apply(get_cluster, axis=1)
-        df["type"] = df.apply(get_type, axis=1)
+        df['cluster'] = df.apply(get_cluster, axis=1)
+        df['type'] = df.apply(get_type, axis=1)
 
     if sort_by:
         df = df.sort_values(by=sort_by)
 
-    X = np.array([x.fp for x in df["FP"]])
+    X = np.array([x.fp for x in df['FP']])
 
-    with mrich.loading("Computing PCA"):
+    with mrich.loading('Computing PCA'):
         pca = PCA(n_components=2, random_state=0)
         pca_fit = pca.fit_transform(X)
 
-    df["PC1"] = pca_fit.T[0]
-    df["PC2"] = pca_fit.T[1]
+    df['PC1'] = pca_fit.T[0]
+    df['PC2'] = pca_fit.T[1]
 
     hover_data = [
-        "id",
-        "smiles",
-        "alias",
-        "inchikey",
-        "PC1",
-        "PC2",
+        'id',
+        'smiles',
+        'alias',
+        'inchikey',
+        'PC1',
+        'PC2',
         cluster_by,
-        "cluster",
-        "type",
+        'cluster',
+        'type',
     ]
 
-    df["scaffolds"] = df[cluster_by].astype(str)
-    df["cluster"] = df["cluster"].astype(str)
+    df['scaffolds'] = df[cluster_by].astype(str)
+    df['cluster'] = df['cluster'].astype(str)
 
-    with mrich.loading("Creating figure"):
+    with mrich.loading('Creating figure'):
         fig = px.scatter(
             df,
-            x="PC1",
-            y="PC2",
+            x='PC1',
+            y='PC2',
             hover_data=hover_data,
             color=color,
             symbol=symbol,
@@ -1921,12 +1887,12 @@ def plot_compound_tsnee(
             **kwargs,
         )
 
-    subtitle = subtitle or f"#compounds={len(df)}"
+    subtitle = subtitle or f'#compounds={len(df)}'
 
-    title = title or f"{compounds} PCA<br>"
+    title = title or f'{compounds} PCA<br>'
 
     if subtitle:
-        title = f"{title}<br><sup><i>{subtitle}</i></sup>"
+        title = f'{title}<br><sup><i>{subtitle}</i></sup>'
 
     fig.update_layout(title=title)
 
@@ -1936,7 +1902,7 @@ def plot_compound_tsnee(
     return fig
 
 
-def add_hippo_logo(fig, in_plot=True, position="top right"):
+def add_hippo_logo(fig, in_plot=True, position='top right'):
     """
 
     :param fig:
@@ -1945,38 +1911,37 @@ def add_hippo_logo(fig, in_plot=True, position="top right"):
 
     """
 
-    assert fig.layout.title.text, "Figure must have a title to add the HIPPO logo"
+    assert fig.layout.title.text, 'Figure must have a title to add the HIPPO logo'
 
     if in_plot:
-
         sizex = 0.3
         sizey = 0.3
 
-        if "top" in position:
-            yanchor = "top"
+        if 'top' in position:
+            yanchor = 'top'
             y = 0.95
-        elif "bottom" in position:
-            yanchor = "bottom"
+        elif 'bottom' in position:
+            yanchor = 'bottom'
             y = 0.05
         else:
-            yanchor = "middle"
+            yanchor = 'middle'
             y = 0.50
 
-        if "left" in position:
-            xanchor = "left"
+        if 'left' in position:
+            xanchor = 'left'
             x = 0.05
-        elif "right" in position:
-            xanchor = "right"
+        elif 'right' in position:
+            xanchor = 'right'
             x = 0.95
         else:
-            xanchor = "center"
+            xanchor = 'center'
             x = 0.50
 
         fig.add_layout_image(
             dict(
                 source=HIPPO_LOGO_URL,
-                xref="paper",
-                yref="paper",
+                xref='paper',
+                yref='paper',
                 # layer='below',
                 x=x,
                 y=y,
@@ -1993,34 +1958,32 @@ def add_hippo_logo(fig, in_plot=True, position="top right"):
     fig.layout.margin.t = None
 
     if has_legend:
-
         fig.add_layout_image(
             dict(
-                source="",
-                xref="paper",
-                yref="paper",
+                source='',
+                xref='paper',
+                yref='paper',
                 x=1,
                 y=1.05,
                 sizex=0.4,
                 sizey=0.4,
-                xanchor="left",
-                yanchor="bottom",
+                xanchor='left',
+                yanchor='bottom',
             )
         )
 
     else:
-
         fig.add_layout_image(
             dict(
                 source=HIPPO_LOGO_URL,
-                xref="paper",
-                yref="paper",
+                xref='paper',
+                yref='paper',
                 x=1,
                 y=1.05,
                 sizex=0.3,
                 sizey=0.3,
-                xanchor="right",
-                yanchor="bottom",
+                xanchor='right',
+                yanchor='bottom',
             )
         )
 
@@ -2033,14 +1996,14 @@ def add_punchcard_logo(fig):
     fig.add_layout_image(
         dict(
             source=HIPPO_HEAD_URL,
-            xref="paper",
-            yref="paper",
+            xref='paper',
+            yref='paper',
             x=1,
             y=1,
             sizex=0.25,
             sizey=0.25,
-            xanchor="right",
-            yanchor="top",
+            xanchor='right',
+            yanchor='top',
         )
     )
 

@@ -1,20 +1,20 @@
 """Generic tools for use in the HIPPO package"""
 
 import re
-import numpy as np
-from molparse.rdkit import mol_from_smiles
-from rdkit.Chem.inchi import MolToInchiKey
-from rdkit.Chem import MolFromSmiles, MolToSmiles, AddHs, RemoveHs
-import mcol
 from datetime import datetime
 from string import ascii_uppercase
 
+import mcol
 import mrich
+import numpy as np
+from molparse.rdkit import mol_from_smiles
+from rdkit.Chem import AddHs, MolFromSmiles, MolToSmiles, RemoveHs
+from rdkit.Chem.inchi import MolToInchiKey
 
 
 def strip_sql(sql) -> str:
     """Reduce unecessary whitespace in SQL"""
-    return re.sub(r"\s+", " ", sql).strip()
+    return re.sub(r'\s+', ' ', sql).strip()
 
 
 def df_row_to_dict(df_row) -> dict:
@@ -23,13 +23,12 @@ def df_row_to_dict(df_row) -> dict:
     :param df_row: pandas dataframe row / series
     """
 
-    assert len(df_row) == 1, f"{len(df_row)=}"
+    assert len(df_row) == 1, f'{len(df_row)=}'
 
     data = {}
 
     for col in df_row.columns:
-
-        if col == "Unnamed: 0":
+        if col == 'Unnamed: 0':
             continue
 
         value = df_row[col].values[0]
@@ -43,24 +42,24 @@ def df_row_to_dict(df_row) -> dict:
 
 
 def remove_other_ligands(
-    sys: "molparse.System", residue_number: int, chain: str
-) -> "molparse.System":
+    sys: 'molparse.System', residue_number: int, chain: str
+) -> 'molparse.System':
     """Remove ligands other than the specified one"""
 
-    ligand_residues = [r.number for r in sys["rLIG"] if r.number != residue_number]
+    ligand_residues = [r.number for r in sys['rLIG'] if r.number != residue_number]
 
     # if ligand_residues:
     for c in sys.chains:
         if c.name != chain:
-            c.remove_residues(names=["LIG"], verbosity=0)
+            c.remove_residues(names=['LIG'], verbosity=0)
         elif ligand_residues:
             c.remove_residues(numbers=ligand_residues, verbosity=0)
 
     # print([r.name_number_str for r in sys['rLIG']])
 
-    assert (
-        len([r.name_number_str for r in sys["rLIG"]]) == 1
-    ), f"{sys.name} {[r.name_number_str for r in sys['rLIG']]}"
+    assert len([r.name_number_str for r in sys['rLIG']]) == 1, (
+        f'{sys.name} {[r.name_number_str for r in sys["rLIG"]]}'
+    )
 
     return sys
 
@@ -94,22 +93,22 @@ def remove_isotopes_from_smiles(smiles: str) -> str:
 def smiles_has_isotope(smiles: str, regex=True) -> bool:
     """Does provided smiles string contain isotopes?"""
     if regex:
-        return re.search(r"([\[][0-9]+[A-Z]+\])", smiles)
+        return re.search(r'([\[][0-9]+[A-Z]+\])', smiles)
     else:
         mol = MolFromSmiles(smiles)
         return any(atom.GetIsotope() for atom in mol.GetAtoms())
 
 
 REPLACE = {
-    "[STB]": "[S]",
+    '[STB]': '[S]',
 }
 
 
 def sanitise_smiles(
     s: str,
     verbosity: bool = False,
-    sanitisation_failed: str = "error",
-    radical: str = "error",
+    sanitisation_failed: str = 'error',
+    radical: str = 'error',
 ) -> str:
     """Sanitise smiles by:
 
@@ -126,23 +125,23 @@ def sanitise_smiles(
     :returns: SMILES string
     """
 
-    assert isinstance(s, str), f"non-string smiles={s}"
+    assert isinstance(s, str), f'non-string smiles={s}'
 
     orig_smiles = s
 
     # if multiple molecules take the largest
-    if "." in s:
-        s = sorted(s.split("."), key=lambda x: len(x))[-1]
+    if '.' in s:
+        s = sorted(s.split('.'), key=lambda x: len(x))[-1]
 
     # flatten the smiles
     stereo_smiles = s
-    smiles = s.replace("@", "")
-    smiles = smiles.replace("/", "")
-    smiles = smiles.replace("\\", "")
+    smiles = s.replace('@', '')
+    smiles = smiles.replace('/', '')
+    smiles = smiles.replace('\\', '')
 
     # remove isotopic stuff
     if smiles_has_isotope(smiles):
-        mrich.warning(f"Isotope(s) in SMILES: {smiles}")
+        mrich.warning(f'Isotope(s) in SMILES: {smiles}')
         smiles = remove_isotopes_from_smiles(smiles)
 
     # replace specific sequences
@@ -154,10 +153,10 @@ def sanitise_smiles(
     mol = MolFromSmiles(smiles)
     if mol:
         smiles = MolToSmiles(mol, True)
-    elif sanitisation_failed == "error":
+    elif sanitisation_failed == 'error':
         raise SanitisationError
-    elif sanitisation_failed == "warning":
-        mrich.warning(f"sanitisation failed for {smiles=}")
+    elif sanitisation_failed == 'warning':
+        mrich.warning(f'sanitisation failed for {smiles=}')
 
     # check radicals
     reconstruct = False
@@ -165,53 +164,51 @@ def sanitise_smiles(
         if not atom.GetNumRadicalElectrons():
             continue
 
-        if radical == "warning":
-            mrich.warning(f"Radical atom in {smiles=}")
-        elif radical == "error":
-            raise SanitisationError(f"Radical atom in {smiles=}")
-        elif radical == "remove":
-            mrich.warning(f"Removed radical atom")
+        if radical == 'warning':
+            mrich.warning(f'Radical atom in {smiles=}')
+        elif radical == 'error':
+            raise SanitisationError(f'Radical atom in {smiles=}')
+        elif radical == 'remove':
+            mrich.warning('Removed radical atom')
             atom.SetNumRadicalElectrons(0)
             smiles = MolToSmiles(mol, True)
             reconstruct = True
             # atom.SetFormalCharge(0)
         else:
-            raise NotImplementedError(f"Unknown option {radical=}")
+            raise NotImplementedError(f'Unknown option {radical=}')
 
     if reconstruct:
         mol = AddHs(mol)
         mol = RemoveHs(mol, implicitOnly=True)
         smiles = MolToSmiles(mol, True)
-        mrich.warning(f"New {smiles=}")
+        mrich.warning(f'New {smiles=}')
 
     if verbosity:
-
         if smiles != orig_smiles:
-
             annotated_smiles_str = orig_smiles.replace(
-                ".", f"{mcol.error}{mcol.underline}.{mcol.clear}{mcol.warning}"
+                '.', f'{mcol.error}{mcol.underline}.{mcol.clear}{mcol.warning}'
             )
             annotated_smiles_str = annotated_smiles_str.replace(
-                "@", f"{mcol.error}{mcol.underline}@{mcol.clear}{mcol.warning}"
+                '@', f'{mcol.error}{mcol.underline}@{mcol.clear}{mcol.warning}'
             )
 
-            mrich.warning(f"SMILES was changed: {annotated_smiles_str} --> {smiles}")
+            mrich.warning(f'SMILES was changed: {annotated_smiles_str} --> {smiles}')
 
     return smiles
 
 
-def sanitise_mol(m: "rdkit.Chem.Mol") -> "rdkit.Chem.Mol":
+def sanitise_mol(m: 'rdkit.Chem.Mol') -> 'rdkit.Chem.Mol':
     """Sanitise by RDKit round-trip"""
-    from rdkit.Chem import MolToMolBlock, MolFromMolBlock
+    from rdkit.Chem import MolFromMolBlock, MolToMolBlock
 
     return MolFromMolBlock(MolToMolBlock(m))
 
 
-def pose_gap(a: "Pose", b: "Pose") -> float:
+def pose_gap(a: 'Pose', b: 'Pose') -> float:
     """Calculate minimum distance between two :class:`.Pose` objects"""
 
-    from numpy.linalg import norm
     from molparse.rdkit import mol_to_AtomGroup
+    from numpy.linalg import norm
 
     min_dist = None
 
@@ -227,7 +224,7 @@ def pose_gap(a: "Pose", b: "Pose") -> float:
     return min_dist
 
 
-ALPHANUMERIC_CHARS = "0123456789" + ascii_uppercase
+ALPHANUMERIC_CHARS = '0123456789' + ascii_uppercase
 
 
 def number_to_base(n: int, b: int) -> int:
@@ -252,8 +249,8 @@ def dt_hash() -> str:
         + dt.second * 10
         + dt.microsecond / 10000
     )
-    timehash = "".join([ALPHANUMERIC_CHARS[v] for v in number_to_base(x, 36)])
-    return f"{timehash:>07}"
+    timehash = ''.join([ALPHANUMERIC_CHARS[v] for v in number_to_base(x, 36)])
+    return f'{timehash:>07}'
 
 
 class SanitisationError(Exception):

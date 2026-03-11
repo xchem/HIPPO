@@ -13,9 +13,9 @@ class Subsite:
 
     """
 
-    _table = "subsite"
+    _table = 'subsite'
 
-    def __init__(self, db: "Database", id: int, target_id: int, name: str) -> None:
+    def __init__(self, db: 'Database', id: int, target_id: int, name: str) -> None:
         """Subsite initialisation"""
 
         self._db = db
@@ -28,7 +28,7 @@ class Subsite:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
@@ -43,7 +43,7 @@ class Subsite:
         return self._table
 
     @property
-    def target(self) -> "Target":
+    def target(self) -> 'Target':
         """Returns the associated protein :class:`.Target`"""
         if self._target is None:
             self._target = self.db.get_target(id=self.target_id)
@@ -60,28 +60,28 @@ class Subsite:
         return self._name
 
     @property
-    def metadata(self) -> "MetaData":
+    def metadata(self) -> 'MetaData':
         """Returns the SubsiteTag's metadata"""
         if self._metadata is None:
-            self._metadata = self.db.get_metadata(table="subsite", id=self.id)
+            self._metadata = self.db.get_metadata(table='subsite', id=self.id)
         return self._metadata
 
     @property
-    def poses(self) -> "PoseSet | None":
+    def poses(self) -> 'PoseSet | None':
         """Return all poses in this subsite"""
         from .pset import PoseSet
 
         indices = self.db.select_where(
-            table="subsite_tag",
-            query="subsite_tag_pose",
+            table='subsite_tag',
+            query='subsite_tag_pose',
             multiple=True,
-            key="ref",
+            key='ref',
             value=self.id,
         )
-        indices = [i for i, in indices]
+        indices = [i for (i,) in indices]
         if not indices:
             return None
-        return PoseSet(self.db, indices, name=f"poses in {self}")
+        return PoseSet(self.db, indices, name=f'poses in {self}')
 
     ### METHODS
 
@@ -89,15 +89,15 @@ class Subsite:
 
     def __str__(self):
         """Unformatted string representation"""
-        return f"S{self.id}: {self.target.name}->{self.name}"
+        return f'S{self.id}: {self.target.name}->{self.name}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
 
 class SubsiteTag:
@@ -110,9 +110,9 @@ class SubsiteTag:
 
     """
 
-    _table = "subsite_tag"
+    _table = 'subsite_tag'
 
-    def __init__(self, db: "Database", id: int, subsite_id: int, pose_id: int):
+    def __init__(self, db: 'Database', id: int, subsite_id: int, pose_id: int):
         """SubsiteTag initialisation"""
 
         self._db = db
@@ -128,7 +128,7 @@ class SubsiteTag:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
@@ -158,10 +158,10 @@ class SubsiteTag:
         return self._name
 
     @property
-    def metadata(self) -> "MetaData":
+    def metadata(self) -> 'MetaData':
         """Returns the SubsiteTag's metadata"""
         if self._metadata is None:
-            self._metadata = self.db.get_metadata(table="subsite_tag", id=self.id)
+            self._metadata = self.db.get_metadata(table='subsite_tag', id=self.id)
         return self._metadata
 
     ### DUNDERS

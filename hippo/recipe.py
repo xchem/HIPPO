@@ -3,8 +3,6 @@
 import mcol
 import mrich
 
-from dataclasses import dataclass, field
-
 from .compound import Ingredient
 
 
@@ -15,13 +13,13 @@ class Recipe:
 
     def __init__(
         self,
-        db: "Database",
+        db: 'Database',
         *,
-        products: "IngredientSet | None" = None,
-        reactants: "IngredientSet | None" = None,
-        intermediates: "IngredientSet | None" = None,
-        reactions: "ReactionSet | None" = None,
-        compounds: "IngredientSet | None" = None,
+        products: 'IngredientSet | None' = None,
+        reactants: 'IngredientSet | None' = None,
+        intermediates: 'IngredientSet | None' = None,
+        reactions: 'ReactionSet | None' = None,
+        compounds: 'IngredientSet | None' = None,
     ) -> None:
         """Recipe initialisation"""
 
@@ -76,15 +74,15 @@ class Recipe:
         *,
         debug: bool = False,
         pick_cheapest: bool = True,
-        permitted_reactions: "ReactionSet | None" = None,
+        permitted_reactions: 'ReactionSet | None' = None,
         quoted_only: bool = False,
         supplier: None | str = None,
-        unavailable_reaction: str = "error",
+        unavailable_reaction: str = 'error',
         reaction_checking_cache: dict[int, bool] = None,
         reaction_reactant_cache: dict[int, bool] = None,
         inner: bool = False,
         get_ingredient_quotes: bool = True,
-    ) -> "Recipe | list[Recipe]":
+    ) -> 'Recipe | list[Recipe]':
         """Create a :class:`.Recipe` from a :class:`.Reaction` and its upstream dependencies
 
         :param reaction: reaction to create recipe from
@@ -109,10 +107,10 @@ class Recipe:
 
         if debug:
             mrich.debug(
-                f"Recipe.from_reaction(R{reaction.id}, {amount=}, {pick_cheapest=})"
+                f'Recipe.from_reaction(R{reaction.id}, {amount=}, {pick_cheapest=})'
             )
-            mrich.debug(f"{reaction.product.id=}")
-            mrich.debug(f"{reaction.reactants.ids=}")
+            mrich.debug(f'{reaction.product.id=}')
+            mrich.debug(f'{reaction.reactants.ids=}')
 
         if permitted_reactions:
             assert reaction in permitted_reactions
@@ -140,27 +138,27 @@ class Recipe:
 
         if quoted_only or supplier:
             if debug:
-                mrich.debug(f"Checking reactant_availability: {reaction=}")
+                mrich.debug(f'Checking reactant_availability: {reaction=}')
             if reaction_checking_cache and reaction.id in reaction_checking_cache:
                 ok = reaction_checking_cache[reaction.id]
-                print("reaction_checking_cache used")
+                print('reaction_checking_cache used')
             else:
                 ok = reaction.check_reactant_availability(supplier=supplier)
                 # print('cache not used')
                 if reaction_checking_cache is not None:
                     reaction_checking_cache[reaction.id] = ok
             if not ok:
-                if unavailable_reaction == "error":
-                    mrich.error(f"Reactants not available for {reaction=}")
+                if unavailable_reaction == 'error':
+                    mrich.error(f'Reactants not available for {reaction=}')
                 if pick_cheapest:
                     return None
                 else:
                     return []
 
-        def get_reactant_amount_pairs(reaction: "Reaction") -> list[tuple[int, float]]:
+        def get_reactant_amount_pairs(reaction: 'Reaction') -> list[tuple[int, float]]:
             """Get pairs of reactant ID and float amounts"""
             if reaction_reactant_cache and reaction.id in reaction_reactant_cache:
-                print("reaction_reactant_cache used")
+                print('reaction_reactant_cache used')
                 return reaction_reactant_cache[reaction.id]
             else:
                 pairs = reaction.get_reactant_amount_pairs(compound_object=False)
@@ -169,31 +167,29 @@ class Recipe:
                 return pairs
 
         if debug:
-            mrich.debug(f"get_reactant_amount_pairs({reaction.id})")
+            mrich.debug(f'get_reactant_amount_pairs({reaction.id})')
         pairs = get_reactant_amount_pairs(reaction)
 
         for reactant, reactant_amount in pairs:
-
             reactant = db.get_compound(id=reactant)
 
             if debug:
-                mrich.debug(f"{reactant.id=}, {reactant_amount=}")
+                mrich.debug(f'{reactant.id=}, {reactant_amount=}')
 
             # scale amount
             reactant_amount *= amount
             reactant_amount /= reaction.product_yield
 
             inner_reactions = reactant.get_reactions(
-                none="quiet", permitted_reactions=permitted_reactions
+                none='quiet', permitted_reactions=permitted_reactions
             )
 
             if inner_reactions:
-
                 if debug:
                     if len(inner_reactions) == 1:
-                        mrich.debug(f"Reactant has ONE inner reaction")
+                        mrich.debug('Reactant has ONE inner reaction')
                     else:
-                        mrich.warning(f"{reactant=} has MULTIPLE inner reactions")
+                        mrich.warning(f'{reactant=} has MULTIPLE inner reactions')
 
                 new_recipes = []
 
@@ -214,9 +210,7 @@ class Recipe:
                     inner_recipes += reaction_recipes
 
                 for recipe in recipes:
-
                     for inner_recipe in inner_recipes:
-
                         combined_recipe = recipe.copy()
 
                         combined_recipe.reactants += inner_recipe.reactants
@@ -231,7 +225,6 @@ class Recipe:
                 recipes = new_recipes
 
             else:
-
                 ingredient = reactant.as_ingredient(reactant_amount, supplier=supplier)
                 for recipe in recipes:
                     recipe.reactants.add(ingredient)
@@ -243,7 +236,7 @@ class Recipe:
 
         if pick_cheapest:
             if debug:
-                mrich.debug("Picking cheapest")
+                mrich.debug('Picking cheapest')
             priced = [r for r in recipes if r.get_price(supplier=supplier)]
             # priced = [r for r in recipes if r.price]
             if not priced:
@@ -255,7 +248,7 @@ class Recipe:
 
             if debug:
                 for recipe in recipes:
-                    mrich.debug(f"{recipe}, {recipe.price}")
+                    mrich.debug(f'{recipe}, {recipe.price}')
 
             return sorted_recipes[0]
             # return sorted(priced, key=lambda r: r.price)[0]
@@ -265,17 +258,17 @@ class Recipe:
     @classmethod
     def from_reactions(
         cls,
-        reactions: "ReactionSet",
+        reactions: 'ReactionSet',
         amount: float = 1,
         pick_cheapest: bool = True,
-        permitted_reactions: "ReactionSet | None" = None,
+        permitted_reactions: 'ReactionSet | None' = None,
         final_products_only: bool = True,
         return_products: bool = False,
         supplier: str | None = None,
         use_routes: bool = False,
         debug: bool = False,
         **kwargs,
-    ) -> "Recipe | list[Recipe] | CompoundSet":
+    ) -> 'Recipe | list[Recipe] | CompoundSet':
         """Create a :class:`.Recipe` from a :class:`.ReactionSet` and its upstream dependencies
 
         :param reactions: reactions to create recipe from
@@ -288,32 +281,31 @@ class Recipe:
 
         """
 
+        from .cset import CompoundSet
         from .rset import ReactionSet
-        from .cset import IngredientSet, CompoundSet
 
         assert isinstance(reactions, ReactionSet)
 
         db = reactions.db
 
         if debug:
-            mrich.debug("Recipe.from_reactions()")
-            mrich.var("reactions", reactions)
-            mrich.var("amount", amount)
-            mrich.var("final_products_only", final_products_only)
-            mrich.var("permitted_reactions", permitted_reactions)
+            mrich.debug('Recipe.from_reactions()')
+            mrich.var('reactions', reactions)
+            mrich.var('amount', amount)
+            mrich.var('final_products_only', final_products_only)
+            mrich.var('permitted_reactions', permitted_reactions)
 
         # get all the products
         products = reactions.products
 
         if debug:
-            mrich.var("products", products)
+            mrich.var('products', products)
 
         # return products
 
         if final_products_only:
-
             if debug:
-                mrich.var("products.str_ids", products.str_ids)
+                mrich.var('products.str_ids', products.str_ids)
 
             # raise NotImplementedError
             ids = reactions.db.execute(
@@ -325,11 +317,11 @@ class Recipe:
             """
             ).fetchall()
 
-            ids = [i for i, in ids]
+            ids = [i for (i,) in ids]
 
             products = CompoundSet(db, ids)
             if debug:
-                mrich.var("final products", products)
+                mrich.var('final products', products)
 
             # return ids
 
@@ -351,7 +343,7 @@ class Recipe:
     @classmethod
     def from_compounds(
         cls,
-        compounds: "CompoundSet",
+        compounds: 'CompoundSet',
         amount: float = 1,
         debug: bool = False,
         pick_cheapest: bool = True,
@@ -362,7 +354,7 @@ class Recipe:
         pick_first: bool = False,
         warn_multiple_solutions: bool = True,
         pick_cheapest_inner_routes: bool = False,
-        unavailable_reaction: str = "error",
+        unavailable_reaction: str = 'error',
         reaction_checking_cache: dict[int, bool] | None = None,
         reaction_reactant_cache: dict[int, bool] | None = None,
         use_routes: bool = False,
@@ -396,7 +388,7 @@ class Recipe:
 
         assert n_comps
 
-        if not hasattr(amount, "__iter__"):
+        if not hasattr(amount, '__iter__'):
             amount = [amount] * n_comps
 
         if use_routes:
@@ -409,19 +401,18 @@ class Recipe:
         options = []
 
         ok = 0
-        mrich.var("#compounds", n_comps)
+        mrich.var('#compounds', n_comps)
 
         for comp, a in mrich.track(
-            zip(compounds, amount),
-            prefix="Solving individual compound recipes...",
+            zip(compounds, amount, strict=False),
+            prefix='Solving individual compound recipes...',
             total=n_comps,
         ):
             comp_options = []
 
             if use_routes:
-
                 if comp.id not in route_lookup:
-                    mrich.error("No routes to", comp)
+                    mrich.error('No routes to', comp)
                     continue
 
                 comp_options = []
@@ -430,9 +421,7 @@ class Recipe:
                     comp_options.append(route)
 
             else:
-
                 for reaction in comp.reactions:
-
                     if permitted_reactions and reaction not in permitted_reactions:
                         continue
 
@@ -459,30 +448,30 @@ class Recipe:
 
                 if not comp_options:
                     mrich.error(
-                        f"No solutions for compound={comp} ({comp.reactions.ids=})"
+                        f'No solutions for compound={comp} ({comp.reactions.ids=})'
                     )
                     continue
 
             if pick_cheapest and len(comp_options) > 1:
                 if warn_multiple_solutions:
                     mrich.warning(
-                        f"Multiple solutions for", comp, "(", len(comp_options), ")"
+                        'Multiple solutions for', comp, '(', len(comp_options), ')'
                     )
                 if debug:
-                    mrich.debug("Picking cheapest...")
+                    mrich.debug('Picking cheapest...')
                 priced = [r for r in comp_options if r.price]
                 comp_options = sorted(priced, key=lambda r: r.price)[:1]
 
             if warn_multiple_solutions and len(comp_options) > 1:
-                mrich.warning(f"Multiple solutions for compound={comp}")
+                mrich.warning(f'Multiple solutions for compound={comp}')
                 if debug:
-                    mrich.debug(f"{comp_options=}")
+                    mrich.debug(f'{comp_options=}')
             else:
                 if n_comps <= 200:
-                    mrich.success(f"Found solution for compound={comp}")
+                    mrich.success(f'Found solution for compound={comp}')
                 ok += 1
-                mrich.set_progress_field("ok", ok)
-                mrich.set_progress_field("n", n_comps)
+                mrich.set_progress_field('ok', ok)
+                mrich.set_progress_field('n', n_comps)
 
             options.append(comp_options)
 
@@ -490,7 +479,7 @@ class Recipe:
 
         from itertools import product
 
-        mrich.print("Solving recipe combinations...")
+        mrich.print('Solving recipe combinations...')
         combinations = list(product(*options))
 
         if not solve_combinations:
@@ -500,16 +489,15 @@ class Recipe:
 
         if n_comps > 1:
             generator = mrich.track(
-                combinations, prefix="Combining recipes...", total=len(combinations)
+                combinations, prefix='Combining recipes...', total=len(combinations)
             )
         else:
             generator = combinations
 
         ok = 0
         for combo in generator:
-
             if debug:
-                mrich.debug(f"Combination of {len(combo)} recipes")
+                mrich.debug(f'Combination of {len(combo)} recipes')
 
             if not combo:
                 continue
@@ -523,20 +511,20 @@ class Recipe:
 
             solutions.append(solution)
             ok += 1
-            mrich.set_progress_field("ok", ok)
-            mrich.set_progress_field("n", len(combinations))
+            mrich.set_progress_field('ok', ok)
+            mrich.set_progress_field('n', len(combinations))
 
         if not solutions:
-            mrich.error("No solutions")
+            mrich.error('No solutions')
             return None
 
         if pick_first:
             return solutions[0]
 
         if pick_cheapest:
-            mrich.debug("Calculating prices...")
+            mrich.debug('Calculating prices...')
             priced = [r for r in solutions if r.price]
-            mrich.print("Picking cheapest from", len(priced), "options")
+            mrich.print('Picking cheapest from', len(priced), 'options')
             if not priced:
                 mrich.error("0 recipes with prices, can't choose cheapest")
                 return solutions
@@ -547,7 +535,7 @@ class Recipe:
     @classmethod
     def from_reactants(
         cls,
-        reactants: "CompoundSet | IngredientSet",
+        reactants: 'CompoundSet | IngredientSet',
         amount: float = 1,
         debug: bool = False,
         return_products: bool = False,
@@ -555,7 +543,7 @@ class Recipe:
         pick_cheapest: bool = False,
         use_routes: bool = False,
         **kwargs,
-    ) -> "list[Recipe] | Recipe | CompoundSet":
+    ) -> 'list[Recipe] | Recipe | CompoundSet':
         """Find the maximal recipe from a given set of reactants
 
         :param reactants: :class:`.CompoundSet` or :class:`.IngredientSet` for the reactants. Ingredient amounts are ignored
@@ -581,7 +569,6 @@ class Recipe:
 
         # recursively search for possible reactions
         for i in range(300):
-
             if debug:
                 mrich.debug(i)
 
@@ -592,19 +579,19 @@ class Recipe:
                 break
 
             if debug:
-                mrich.debug(f"Adding {len(reaction_ids)} reactions")
+                mrich.debug(f'Adding {len(reaction_ids)} reactions')
 
             possible_reactions += reaction_ids
 
             if debug:
-                mrich.var("reaction_ids", reaction_ids)
+                mrich.var('reaction_ids', reaction_ids)
 
             product_ids = db.get_possible_reaction_product_ids(
                 reaction_ids=reaction_ids
             )
 
             if debug:
-                mrich.var("product_ids", product_ids)
+                mrich.var('product_ids', product_ids)
 
             n_prev = len(all_reactants)
 
@@ -614,12 +601,12 @@ class Recipe:
                 break
 
         else:
-            raise NotImplementedError("Maximum recursion depth exceeded")
+            raise NotImplementedError('Maximum recursion depth exceeded')
 
         possible_reactions = list(set(possible_reactions))
 
         if debug:
-            mrich.var("all possible reactions", possible_reactions)
+            mrich.var('all possible reactions', possible_reactions)
 
         from .rset import ReactionSet
 
@@ -641,8 +628,8 @@ class Recipe:
     @classmethod
     def from_json(
         cls,
-        db: "Database",
-        path: "str | Path",
+        db: 'Database',
+        path: 'str | Path',
         debug: bool = True,
         allow_db_mismatch: bool = False,
         clear_quotes: bool = False,
@@ -662,6 +649,7 @@ class Recipe:
 
         # imports
         import json
+
         from .cset import IngredientSet
         from .rset import ReactionSet
 
@@ -669,55 +657,55 @@ class Recipe:
         if not data:
             if debug:
                 mrich.reading(path)
-            data = json.load(open(path, "rt"))
+            data = json.load(open(path))
 
         # check metadata
-        if str(db.path.resolve()) != data["database"]:
+        if str(db.path.resolve()) != data['database']:
             if db_mismatch_warning:
-                mrich.var("session", str(db.path.resolve()))
-                mrich.var("in file", data["database"])
+                mrich.var('session', str(db.path.resolve()))
+                mrich.var('in file', data['database'])
             if allow_db_mismatch:
                 if db_mismatch_warning:
-                    mrich.warning("Database path mismatch")
+                    mrich.warning('Database path mismatch')
             else:
                 mrich.error(
-                    "Database path mismatch, set allow_db_mismatch=True to ignore"
+                    'Database path mismatch, set allow_db_mismatch=True to ignore'
                 )
                 return None
 
         if debug:
             mrich.print(f'Recipe was generated at: {data["timestamp"]}')
-        price = data["price"]
+        price = data['price']
 
         # IngredientSets
-        products = IngredientSet.from_ingredient_dicts(db, data["products"])
-        intermediates = IngredientSet.from_ingredient_dicts(db, data["intermediates"])
+        products = IngredientSet.from_ingredient_dicts(db, data['products'])
+        intermediates = IngredientSet.from_ingredient_dicts(db, data['intermediates'])
         reactants = IngredientSet.from_ingredient_dicts(
-            db, data["reactants"], supplier=data["reactant_supplier"]
+            db, data['reactants'], supplier=data['reactant_supplier']
         )
 
-        if "compounds" in data:
+        if 'compounds' in data:
             compounds = IngredientSet.from_ingredient_dicts(
-                db, data["compounds"], supplier=data["compound_supplier"]
+                db, data['compounds'], supplier=data['compound_supplier']
             )
         else:
             compounds = IngredientSet(db)
 
         if clear_quotes:
-            reactants.df["quote_id"] = None
-            reactants.df["quoted_amount"] = None
-            compounds.df["quote_id"] = None
-            compounds.df["quoted_amount"] = None
+            reactants.df['quote_id'] = None
+            reactants.df['quoted_amount'] = None
+            compounds.df['quote_id'] = None
+            compounds.df['quoted_amount'] = None
 
         # ReactionSet
-        reactions = ReactionSet(db, data["reaction_ids"], sort=False)
+        reactions = ReactionSet(db, data['reaction_ids'], sort=False)
 
         if debug:
-            mrich.var("reactants", reactants)
-            mrich.var("intermediates", intermediates)
-            mrich.var("products", products)
-            mrich.var("reactions", reactions)
-            mrich.var("compounds", compounds)
+            mrich.var('reactants', reactants)
+            mrich.var('intermediates', intermediates)
+            mrich.var('products', products)
+            mrich.var('reactions', reactions)
+            mrich.var('compounds', compounds)
 
         # Create the object
         self = cls.__new__(cls)
@@ -735,40 +723,40 @@ class Recipe:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Associated :class:`.Database:"""
         return self._db
 
     @property
-    def products(self) -> "IngredientSet":
+    def products(self) -> 'IngredientSet':
         """Product :class:`.IngredientSet`"""
         return self._products
 
     @property
-    def compounds(self) -> "IngredientSet":
+    def compounds(self) -> 'IngredientSet':
         """Product :class:`.IngredientSet`"""
         return self._compounds
 
     @compounds.setter
-    def compounds(self, a: "IngredientSet"):
+    def compounds(self, a: 'IngredientSet'):
         """Set the compounds"""
         self._compounds = a
         self.__flag_modification()
 
     @property
-    def poses(self) -> "PoseSet":
+    def poses(self) -> 'PoseSet':
         """Product poses"""
         if self._poses is None:
             self._poses = self.combined_compounds.poses
-            self._poses._name = f"poses of {self}"
+            self._poses._name = f'poses of {self}'
         return self._poses
 
     @property
-    def product_compounds(self) -> "CompoundSet":
+    def product_compounds(self) -> 'CompoundSet':
         """Product compounds"""
         if self._product_compounds is None:
             self._product_compounds = self.products.compounds
-            self._product_compounds._name = f"products of {self}"
+            self._product_compounds._name = f'products of {self}'
         return self._product_compounds
 
     @property
@@ -777,30 +765,30 @@ class Recipe:
         return set(self.product_compounds.ids) | set(self.compounds.ids)
 
     @property
-    def combined_compounds(self) -> "CompoundSet":
+    def combined_compounds(self) -> 'CompoundSet':
         """Combined product and no-chem compounds"""
         if self._combined_compounds is None:
             from .cset import CompoundSet
 
             self._combined_compounds = CompoundSet(self.db, self.combined_compound_ids)
-            self._combined_compounds._name = f"combined compounds of {self}"
+            self._combined_compounds._name = f'combined compounds of {self}'
         return self._combined_compounds
 
     @property
-    def interactions(self) -> "InteractionSet":
+    def interactions(self) -> 'InteractionSet':
         """Product pose interactions"""
         if self._interactions is None:
             self._interactions = self.poses.interactions
         return self._interactions
 
     @property
-    def product(self) -> "Ingredient":
+    def product(self) -> 'Ingredient':
         """Return single product (if there's only one)"""
         assert len(self.products) == 1
         return self.products[0]
 
     @products.setter
-    def products(self, a: "IngredientSet"):
+    def products(self, a: 'IngredientSet'):
         """Set the products"""
         self._products = a
         self.__flag_modification()
@@ -811,35 +799,35 @@ class Recipe:
         return self._reactants
 
     @reactants.setter
-    def reactants(self, a: "IngredientSet"):
+    def reactants(self, a: 'IngredientSet'):
         """Set the reactants"""
         self._reactants = a
         self.__flag_modification()
 
     @property
-    def intermediates(self) -> "IngredientSet":
+    def intermediates(self) -> 'IngredientSet':
         """Intermediates :class:`.IngredientSet`"""
         return self._intermediates
 
     @intermediates.setter
-    def intermediates(self, a: "IngredientSet"):
+    def intermediates(self, a: 'IngredientSet'):
         """Set the intermediates"""
         self._intermediates = a
         self.__flag_modification()
 
     @property
-    def reactions(self) -> "ReactionSet":
+    def reactions(self) -> 'ReactionSet':
         """Intermediates :class:`.IngredientSet`"""
         return self._reactions
 
     @reactions.setter
-    def reactions(self, a: "ReactionSet"):
+    def reactions(self, a: 'ReactionSet'):
         """Set the reactions"""
         self._reactions = a
         self.__flag_modification()
 
     @property
-    def price(self) -> "Price":
+    def price(self) -> 'Price':
         """Get the price of the reactants"""
         return self.reactants.get_price() + self.compounds.get_price()
 
@@ -888,19 +876,19 @@ class Recipe:
         """Get Recipe type (EMPTY/MIXED/CHEM/NOCHEM)"""
 
         if self.empty:
-            return "EMPTY"
+            return 'EMPTY'
 
         chem = bool(self.reactions)
         nochem = bool(self.compounds)
 
         if chem and nochem:
-            return "MIXED"
+            return 'MIXED'
 
         if chem and not nochem:
-            return "CHEM"
+            return 'CHEM'
 
         if nochem and not chem:
-            return "NOCHEM"
+            return 'NOCHEM'
 
     @property
     def empty(self) -> bool:
@@ -925,7 +913,7 @@ class Recipe:
 
     ### METHODS
 
-    def get_price(self, supplier: str | None = None) -> "Price":
+    def get_price(self, supplier: str | None = None) -> 'Price':
         """get the reactants price. See :meth:`.IngredientSet.get_price`
 
         :param supplier: restrict quotes to this supplier
@@ -1009,8 +997,6 @@ class Recipe:
         if graph_only:
             return graph
         else:
-            import matplotlib as plt
-
             # return nx.draw(graph, pos, with_labels=True, font_weight='bold')
             # pos = nx.spring_layout(graph, iterations=200, k=30)
             pos = nx.spring_layout(graph)
@@ -1018,12 +1004,12 @@ class Recipe:
                 graph,
                 pos=pos,
                 with_labels=True,
-                font_weight="bold",
+                font_weight='bold',
                 node_color=list(colors.values()),
                 node_size=sizes,
             )
 
-    def sankey(self, title: str | None = None) -> "graph_objects.Figure":
+    def sankey(self, title: str | None = None) -> 'graph_objects.Figure':
         """draw a plotly Sankey diagram
 
         :param title:  (Default value = None)
@@ -1037,7 +1023,6 @@ class Recipe:
         nodes = {}
 
         for edge in graph.edges:
-
             c = edge[0]
             if c not in nodes:
                 nodes[c] = len(nodes)
@@ -1062,12 +1047,12 @@ class Recipe:
                 hoverkeys = list(n.keys())
 
             if not n:
-                mrich.error(f"problem w/ node {key=}")
+                mrich.error(f'problem w/ node {key=}')
                 compound_id = int(key[1:])
                 customdata.append((compound_id, None))
 
             else:
-                d = tuple(v if v is not None else "N/A" for v in n.values())
+                d = tuple(v if v is not None else 'N/A' for v in n.values())
                 customdata.append(d)
 
         hoverkeys_edges = None
@@ -1081,23 +1066,23 @@ class Recipe:
                 hoverkeys_edges = list(edge.keys())
 
             if not n:
-                mrich.error(f"problem w/ edge {s=} {t=}")
+                mrich.error(f'problem w/ edge {s=} {t=}')
                 customdata_edges.append((None, None, None))
 
             else:
-                d = tuple(v if v is not None else "N/A" for v in edge.values())
+                d = tuple(v if v is not None else 'N/A' for v in edge.values())
                 customdata_edges.append(d)
 
         hoverlines = []
         for i, key in enumerate(hoverkeys):
-            hoverlines.append(f"{key}=%" "{" f"customdata[{i}]" "}")
-        hovertemplate = "Compound " + "<br>".join(hoverlines) + "<extra></extra>"
+            hoverlines.append(f'{key}=%{{customdata[{i}]}}')
+        hovertemplate = 'Compound ' + '<br>'.join(hoverlines) + '<extra></extra>'
 
         hoverlines_edges = []
         for i, key in enumerate(hoverkeys_edges):
-            hoverlines_edges.append(f"{key}=%" "{" f"customdata[{i}]" "}")
+            hoverlines_edges.append(f'{key}=%{{customdata[{i}]}}')
         hovertemplate_edges = (
-            "Reaction " + "<br>".join(hoverlines_edges) + "<extra></extra>"
+            'Reaction ' + '<br>'.join(hoverlines_edges) + '<extra></extra>'
         )
 
         fig = go.Figure(
@@ -1128,9 +1113,9 @@ class Recipe:
 
         if not title:
             try:
-                title = f"Recipe<br><sup>price={self.price}</sup>"
+                title = f'Recipe<br><sup>price={self.price}</sup>'
             except AssertionError:
-                title = f"Recipe"
+                title = 'Recipe'
 
         fig.update_layout(title=title)
 
@@ -1143,57 +1128,54 @@ class Recipe:
 
         """
 
-        import mcol
-
         mrich.h1(str(self))
 
         if price:
             price = self.price
             if price:
-                mrich.var("\nprice", price.amount, price.currency)
+                mrich.var('\nprice', price.amount, price.currency)
                 # mrich.var('lead-time', self.lead_time, 'working days))
 
         if self.products:
-            mrich.h3(f"{len(self.products)} products")
+            mrich.h3(f'{len(self.products)} products')
 
             if len(self.products) < 100:
                 for product in self.products:
-                    mrich.var(str(product.compound), f"{product.amount:.2f}", "mg")
+                    mrich.var(str(product.compound), f'{product.amount:.2f}', 'mg')
 
         if self.intermediates:
-            mrich.h3(f"{len(self.intermediates)} intermediates")
+            mrich.h3(f'{len(self.intermediates)} intermediates')
 
             if len(self.intermediates) < 100:
                 for intermediate in self.intermediates:
                     mrich.var(
                         str(intermediate.compound),
-                        f"{intermediate.amount:.2f}",
-                        "mg",
+                        f'{intermediate.amount:.2f}',
+                        'mg',
                     )
 
         if self.reactants:
-            mrich.h3(f"{len(self.reactants)} reactants")
+            mrich.h3(f'{len(self.reactants)} reactants')
 
             if len(self.reactants) < 100:
                 for reactant in self.reactants:
-                    mrich.var(str(reactant.compound), f"{reactant.amount:.2f}", "mg")
+                    mrich.var(str(reactant.compound), f'{reactant.amount:.2f}', 'mg')
 
         if self.reactions:
-            mrich.h3(f"{len(self.reactions)} reactions")
+            mrich.h3(f'{len(self.reactions)} reactions')
 
             if len(self.reactions) < 100:
                 for reaction in self.reactions:
                     mrich.var(str(reaction), reaction.reaction_str, reaction.type)
 
-        if hasattr(self, "_compounds") and self.compounds:
-
-            mrich.h3(f"{len(self.compounds)} compounds")
+        if hasattr(self, '_compounds') and self.compounds:
+            mrich.h3(f'{len(self.compounds)} compounds')
 
             if len(self.compounds) < 100:
                 for compound in self.compounds:
-                    mrich.var(str(compound.compound), f"{compound.amount:.2f}", "mg")
+                    mrich.var(str(compound.compound), f'{compound.amount:.2f}', 'mg')
 
-    def get_ingredient(self, id) -> "Ingredient":
+    def get_ingredient(self, id) -> 'Ingredient':
         """Get an ingredient by its compound ID
 
         :param id: compound ID
@@ -1214,14 +1196,14 @@ class Recipe:
         :param amount: amount in ``mg`` (Default value = 20)
 
         """
-        self.reactants.df["amount"] += amount
+        self.reactants.df['amount'] += amount
 
     def write_json(
         self,
-        file: "str | Path",
+        file: 'str | Path',
         *,
         extra: dict | None = None,
-        indent: str = "\t",
+        indent: str = '\t',
         **kwargs,
     ) -> None:
         """Serialise this recipe object and write it to disk
@@ -1236,7 +1218,7 @@ class Recipe:
 
         file = Path(file).resolve()
 
-        assert file.parent.exists(), f"Directory does not exist: {file.parent}"
+        assert file.parent.exists(), f'Directory does not exist: {file.parent}'
 
         data = self.get_dict(serialise_price=True, **kwargs)
 
@@ -1244,7 +1226,7 @@ class Recipe:
             data.update(extra)
 
         mrich.writing(file)
-        json.dump(data, open(file, "wt"), indent=indent)
+        json.dump(data, open(file, 'w'), indent=indent)
 
     def get_dict(
         self,
@@ -1282,61 +1264,60 @@ class Recipe:
 
         """
 
-        import json
         from datetime import datetime
 
         data = {}
 
         # Database
         if database:
-            data["database"] = str(self.db.path.resolve())
+            data['database'] = str(self.db.path.resolve())
         if timestamp:
-            data["timestamp"] = str(datetime.now())
+            data['timestamp'] = str(datetime.now())
 
         # Recipe properties
         try:
             if price and serialise_price:
-                data["price"] = self.price.get_dict()
+                data['price'] = self.price.get_dict()
             elif price:
-                data["price"] = self.price
+                data['price'] = self.price
         except AssertionError as e:
-            mrich.warning(f"Could not get price: {e}")
-            data["price"] = None
+            mrich.warning(f'Could not get price: {e}')
+            data['price'] = None
 
         if reactant_supplier:
-            data["reactant_supplier"] = self.reactants.supplier
+            data['reactant_supplier'] = self.reactants.supplier
 
         if compound_supplier:
-            data["compound_supplier"] = self.compounds.supplier
+            data['compound_supplier'] = self.compounds.supplier
 
         # IngredientSets
         if compound_ids_only:
-            data["reactant_ids"] = self.reactants.compound_ids
-            data["intermediate_ids"] = self.intermediates.compound_ids
+            data['reactant_ids'] = self.reactants.compound_ids
+            data['intermediate_ids'] = self.intermediates.compound_ids
             if products:
-                data["products_ids"] = self.products.compound_ids
-            data["compound_ids"] = self.compounds.compound_ids
+                data['products_ids'] = self.products.compound_ids
+            data['compound_ids'] = self.compounds.compound_ids
 
         else:
-            data["reactants"] = self.reactants.df.to_dict(orient="list")
-            data["intermediates"] = self.intermediates.df.to_dict(orient="list")
+            data['reactants'] = self.reactants.df.to_dict(orient='list')
+            data['intermediates'] = self.intermediates.df.to_dict(orient='list')
             if products:
-                data["products"] = self.products.df.to_dict(orient="list")
-            data["compounds"] = self.compounds.df.to_dict(orient="list")
+                data['products'] = self.products.df.to_dict(orient='list')
+            data['compounds'] = self.compounds.df.to_dict(orient='list')
 
         # ReactionSet
-        data["reaction_ids"] = self.reactions.ids
+        data['reaction_ids'] = self.reactions.ids
 
         return data
 
-    def get_routes(self, return_ids: bool = False) -> "RouteSet":
+    def get_routes(self, return_ids: bool = False) -> 'RouteSet':
         """Get routes"""
         return self.products.get_routes(
             permitted_reactions=self.reactions, return_ids=return_ids
         )
 
     def register_missing_routes(
-        self, missing_only: bool = True, supplier: str = "Enamine"
+        self, missing_only: bool = True, supplier: str = 'Enamine'
     ) -> None:
         """Calculate missing routes to products of this Recipe"""
 
@@ -1348,19 +1329,18 @@ class Recipe:
             from .cset import CompoundSet
 
             records = self.db.select_where(
-                table="route",
-                key=f"route_product IN {products.str_ids}",
-                query="route_product",
+                table='route',
+                key=f'route_product IN {products.str_ids}',
+                query='route_product',
                 multiple=True,
             )
-            existing = set(i for i, in records)
+            existing = set(i for (i,) in records)
             missing = set(products.ids) - existing
             products = CompoundSet(self.db, missing)
 
-        mrich.var("#products", len(products))
+        mrich.var('#products', len(products))
 
         for i, c in mrich.track(enumerate(products), total=len(products)):
-
             try:
                 reactions = c.reactions
             except Exception as e:
@@ -1368,7 +1348,6 @@ class Recipe:
                 continue
 
             for reaction in reactions:
-
                 try:
                     recipes = reaction.get_recipes(supplier=supplier)
                 except Exception as e:
@@ -1376,16 +1355,15 @@ class Recipe:
                     continue
 
                 for recipe in recipes:
-
                     route = self.db.register_route(recipe=recipe)
 
-                    mrich.print(f"registered {route=}")
+                    mrich.print(f'registered {route=}')
 
         self.db.prune_duplicate_routes()
 
     def write_CAR_csv(
-        self, file: "str | Path", return_df: bool = False
-    ) -> "DataFrame | None":
+        self, file: 'str | Path', return_df: bool = False
+    ) -> 'DataFrame | None':
         """Prepares CSVs for use with CAR.
 
         .. attention::
@@ -1414,9 +1392,9 @@ class Recipe:
 
         """
 
-        from .cset import CompoundSet
-        from pandas import DataFrame
         from pathlib import Path
+
+        from pandas import DataFrame
 
         # solve each product's reaction
 
@@ -1427,39 +1405,37 @@ class Recipe:
         routes = self.get_routes()
 
         for sub_recipe in routes:
-
             product = sub_recipe.product
 
             row = {
-                "target-names": str(product.compound),
-                "no-steps": 0,
-                "concentration-required-mM": None,
-                "amount-required-uL": None,
-                "batch-tag": None,
+                'target-names': str(product.compound),
+                'no-steps': 0,
+                'concentration-required-mM': None,
+                'amount-required-uL': None,
+                'batch-tag': None,
             }
 
             for i, reaction in enumerate(sub_recipe.reactions):
-
                 i = i + 1
 
-                row["no-steps"] += 1
+                row['no-steps'] += 1
 
                 match len(reaction.reactants):
                     case 1:
-                        row[f"reactant-1-{i}"] = reaction.reactants[0].smiles
-                        row[f"reactant-2-{i}"] = None
+                        row[f'reactant-1-{i}'] = reaction.reactants[0].smiles
+                        row[f'reactant-2-{i}'] = None
                     case 2:
-                        row[f"reactant-1-{i}"] = reaction.reactants[0].smiles
-                        row[f"reactant-2-{i}"] = reaction.reactants[1].smiles
+                        row[f'reactant-1-{i}'] = reaction.reactants[0].smiles
+                        row[f'reactant-2-{i}'] = reaction.reactants[1].smiles
                     case _:
                         # mrich.warning(f"More than two reactants for {reaction=}")
                         for j, r in enumerate(reaction.reactants):
-                            row[f"reactant-{j+1}-{i}"] = reaction.reactants[j].smiles
+                            row[f'reactant-{j + 1}-{i}'] = reaction.reactants[j].smiles
 
-                row[f"reaction-product-smiles-{i}"] = reaction.product.smiles
-                row[f"reaction-name-{i}"] = reaction.type
-                row[f"reaction-recipe-{i}"] = None
-                row[f"reaction-groupby-column-{i}"] = None
+                row[f'reaction-product-smiles-{i}'] = reaction.product.smiles
+                row[f'reaction-name-{i}'] = reaction.type
+                row[f'reaction-recipe-{i}'] = None
+                row[f'reaction-groupby-column-{i}'] = None
                 # row[f'reaction-id-{i}'] = int(reaction.id)
 
             rows.append(row)
@@ -1467,14 +1443,14 @@ class Recipe:
         df = DataFrame(rows)
 
         if len(df[df.duplicated()]):
-            mrich.warning("Removing duplicates from CAR DataFrame")
+            mrich.warning('Removing duplicates from CAR DataFrame')
             df = df.drop_duplicates()
 
         df = df.convert_dtypes()
 
-        for n_steps in set(df["no-steps"]):
-            subset = df[df["no-steps"] == n_steps]
-            this_file = file.replace(".csv", f"_{n_steps}steps.csv")
+        for n_steps in set(df['no-steps']):
+            subset = df[df['no-steps'] == n_steps]
+            this_file = file.replace('.csv', f'_{n_steps}steps.csv')
             mrich.writing(this_file)
             subset.to_csv(this_file, index=False)
 
@@ -1485,10 +1461,10 @@ class Recipe:
 
     def write_reactant_csv(
         self,
-        file: "str | Path",
+        file: 'str | Path',
         reaction_type_counts: bool = True,
         return_df: bool = False,
-    ) -> "DataFrame | None":
+    ) -> 'DataFrame | None':
         """Detailed CSV output including reactant information for purchasing and information on the downstream synthetic use
 
         Reactant
@@ -1521,11 +1497,7 @@ class Recipe:
         """
         # - remove_with
 
-        from pandas import DataFrame
-
         # from rich import print
-        from .cset import CompoundSet
-        from .rset import ReactionSet
 
         data = []
 
@@ -1538,7 +1510,7 @@ class Recipe:
         INNER JOIN {self.db.SQL_SCHEMA_PREFIX}route ON route_id = component_route
         WHERE component_type = 2
         AND component_ref IN {self.reactants.compounds.str_ids}
-        AND component_route IN {str(tuple(route_ids)).replace(',)',')')}
+        AND component_route IN {str(tuple(route_ids)).replace(',)', ')')}
         """
         product_lookup = {}
         for reactant_id, product_id in self.db.execute(sql):
@@ -1565,11 +1537,11 @@ class Recipe:
         reaction_lookup = {}
         for reactant_id, reaction_id, reaction_type in self.db.execute(sql):
             reaction_lookup.setdefault(reactant_id, dict(ids=set(), types=set()))
-            reaction_lookup[reactant_id]["ids"].add(reaction_id)
-            reaction_lookup[reactant_id]["types"].add(reaction_type)
-            reaction_lookup[reactant_id].setdefault("counts", {})
-            reaction_lookup[reactant_id]["counts"].setdefault(reaction_type, 0)
-            reaction_lookup[reactant_id]["counts"][reaction_type] += 1
+            reaction_lookup[reactant_id]['ids'].add(reaction_id)
+            reaction_lookup[reactant_id]['types'].add(reaction_type)
+            reaction_lookup[reactant_id].setdefault('counts', {})
+            reaction_lookup[reactant_id]['counts'].setdefault(reaction_type, 0)
+            reaction_lookup[reactant_id]['counts'][reaction_type] += 1
 
         smiles_lookup = self.db.get_compound_id_smiles_dict(self.reactants.compounds)
 
@@ -1581,9 +1553,9 @@ class Recipe:
 
         df = self.reactants.df
 
-        df["smiles"] = df["compound_id"].apply(lambda x: smiles_lookup[x])
-        df["inchikey"] = df["compound_id"].apply(lambda x: inchikey_lookup[x])
-        df = df.drop(columns=["supplier", "max_lead_time", "quoted_amount"])
+        df['smiles'] = df['compound_id'].apply(lambda x: smiles_lookup[x])
+        df['inchikey'] = df['compound_id'].apply(lambda x: inchikey_lookup[x])
+        df = df.drop(columns=['supplier', 'max_lead_time', 'quoted_amount'])
 
         ### Quote DataFrame
 
@@ -1591,120 +1563,117 @@ class Recipe:
 
         qdf = qdf.rename(
             columns={
-                "id": "quote_id",
-                "smiles": "quoted_smiles",
-                "purity": "quoted_purity",
-                "date": "quote_date",
-                "lead_time": "quote_lead_time_days",
-                "price": "quote_price",
-                "currency": "quote_currency",
-                "catalogue": "quote_catalogue",
-                "supplier": "quote_supplier",
-                "entry": "quote_entry",
-                "amount": "quoted_amount_mg",
+                'id': 'quote_id',
+                'smiles': 'quoted_smiles',
+                'purity': 'quoted_purity',
+                'date': 'quote_date',
+                'lead_time': 'quote_lead_time_days',
+                'price': 'quote_price',
+                'currency': 'quote_currency',
+                'catalogue': 'quote_catalogue',
+                'supplier': 'quote_supplier',
+                'entry': 'quote_entry',
+                'amount': 'quoted_amount_mg',
             }
         )
-        qdf = qdf.drop(columns=["compound"])
+        qdf = qdf.drop(columns=['compound'])
 
         ### Downstream info
 
         try:
-            df["downstream_product_ids"] = df["compound_id"].apply(
+            df['downstream_product_ids'] = df['compound_id'].apply(
                 lambda x: product_lookup.get(x, set())
             )
 
-            df["downstream_reaction_ids"] = df["compound_id"].apply(
-                lambda x: reaction_lookup[x]["ids"]
+            df['downstream_reaction_ids'] = df['compound_id'].apply(
+                lambda x: reaction_lookup[x]['ids']
             )
-            df["downstream_reaction_types"] = df["compound_id"].apply(
-                lambda x: reaction_lookup[x]["types"]
+            df['downstream_reaction_types'] = df['compound_id'].apply(
+                lambda x: reaction_lookup[x]['types']
             )
         except KeyError as e:
-            mrich.error(f"Reactant C{e} is missing downstream reaction")
+            mrich.error(f'Reactant C{e} is missing downstream reaction')
             mrich.error(
-                "Are all routes enumerated? Try running calculate_missing_routes()"
+                'Are all routes enumerated? Try running calculate_missing_routes()'
             )
             return None
 
-        df["num_downstream_reactions"] = df["downstream_reaction_ids"].apply(len)
-        df["num_downstream_reaction_types"] = df["downstream_reaction_types"].apply(len)
-        df["num_downstream_products"] = df["downstream_product_ids"].apply(len)
+        df['num_downstream_reactions'] = df['downstream_reaction_ids'].apply(len)
+        df['num_downstream_reaction_types'] = df['downstream_reaction_types'].apply(len)
+        df['num_downstream_products'] = df['downstream_product_ids'].apply(len)
 
         ### Join and reformat
 
-        df = df.merge(qdf, on="quote_id", how="left")
+        df = df.merge(qdf, on='quote_id', how='left')
 
         df = df.rename(
             columns={
-                "amount": "required_amount_mg",
+                'amount': 'required_amount_mg',
             }
         )
 
         cols = [
-            "compound_id",
-            "smiles",
-            "inchikey",
-            "required_amount_mg",
-            "quoted_amount_mg",
-            "quote_id",
-            "quote_supplier",
-            "quote_catalogue",
-            "quote_entry",
-            "quote_price",
-            "quote_currency",
-            "quote_lead_time_days",
-            "quoted_purity",
-            "quoted_smiles",
-            "quote_date",
-            "num_downstream_products",
-            "num_downstream_reaction_types",
-            "num_downstream_reactions",
+            'compound_id',
+            'smiles',
+            'inchikey',
+            'required_amount_mg',
+            'quoted_amount_mg',
+            'quote_id',
+            'quote_supplier',
+            'quote_catalogue',
+            'quote_entry',
+            'quote_price',
+            'quote_currency',
+            'quote_lead_time_days',
+            'quoted_purity',
+            'quoted_smiles',
+            'quote_date',
+            'num_downstream_products',
+            'num_downstream_reaction_types',
+            'num_downstream_reactions',
         ]
 
         if reaction_type_counts:
             for i, row in df.iterrows():
-
-                counts = reaction_lookup[row["compound_id"]]["counts"]
+                counts = reaction_lookup[row['compound_id']]['counts']
 
                 for reaction_type, count in counts.items():
-                    key = f"num_downstream ({reaction_type})"
+                    key = f'num_downstream ({reaction_type})'
                     df.loc[i, key] = count
                     if key not in cols:
                         cols.append(key)
 
         cols += [
-            "downstream_product_ids",
-            "downstream_reaction_types",
-            "downstream_reaction_ids",
+            'downstream_product_ids',
+            'downstream_reaction_types',
+            'downstream_reaction_ids',
         ]
 
         df = df[[c for c in cols if c in df.columns]]
 
         ### Add estimated quotes
 
-        unquoted = df[df["quote_id"].isna()]
+        unquoted = df[df['quote_id'].isna()]
 
         if len(unquoted):
-
             for i, row in unquoted.iterrows():
-
-                compound = self.db.get_compound(id=row["compound_id"])
+                compound = self.db.get_compound(id=row['compound_id'])
                 ingredient = compound.as_ingredient(
-                    amount=row["required_amount_mg"], get_quote=False
+                    amount=row['required_amount_mg'], get_quote=False
                 )
 
                 quote = ingredient.quote
 
-                df.loc[i, "quoted_amount_mg"] = quote.amount
-                df.loc[i, "quote_supplier"] = quote.supplier
-                df.loc[i, "quote_catalogue"] = quote.catalogue
-                df.loc[i, "quote_entry"] = quote.entry
-                df.loc[i, "quote_price"] = quote.price.amount
-                df.loc[i, "quote_currency"] = quote.price.currency
-                df.loc[i, "quote_lead_time_days"] = quote.lead_time
-                df.loc[i, "quoted_purity"] = quote.purity
-                df.loc[i, "quoted_smiles"] = quote.smiles
-                df.loc[i, "quote_date"] = quote.date
+                df.loc[i, 'quoted_amount_mg'] = quote.amount
+                df.loc[i, 'quote_supplier'] = quote.supplier
+                df.loc[i, 'quote_catalogue'] = quote.catalogue
+                df.loc[i, 'quote_entry'] = quote.entry
+                df.loc[i, 'quote_price'] = quote.price.amount
+                df.loc[i, 'quote_currency'] = quote.price.currency
+                df.loc[i, 'quote_lead_time_days'] = quote.lead_time
+                df.loc[i, 'quoted_purity'] = quote.purity
+                df.loc[i, 'quoted_smiles'] = quote.smiles
+                df.loc[i, 'quote_date'] = quote.date
 
         ### N.B. scaffold series no longer output
 
@@ -1717,15 +1686,14 @@ class Recipe:
         return None
 
     def write_product_csv(
-        self, file: "str | Path", return_df: bool = False
-    ) -> "pd.DataFrame | None":
+        self, file: 'str | Path', return_df: bool = False
+    ) -> 'pd.DataFrame | None':
         """Detailed CSV output including product information for selection and synthesis"""
 
         from pandas import DataFrame
 
         # from rich import print
         from .pset import PoseSet
-        from .cset import CompoundSet
         from .rset import ReactionSet
 
         data = []
@@ -1737,9 +1705,8 @@ class Recipe:
         inspiration_map = self.db.get_compound_id_inspiration_ids_dict()
 
         for product in mrich.track(
-            self.products, prefix="Constructing product DataFrame"
+            self.products, prefix='Constructing product DataFrame'
         ):
-
             d = dict(
                 hippo_id=product.compound_id,
                 smiles=product.smiles,
@@ -1762,11 +1729,11 @@ class Recipe:
             )
 
             if not upstream_routes:
-                mrich.error("No upstream routes for", product)
+                mrich.error('No upstream routes for', product)
                 continue
 
             if not upstream_reactions:
-                mrich.error("No upstream reactions for", product)
+                mrich.error('No upstream reactions for', product)
                 continue
 
             def get_scaffold_series() -> tuple[list[int], bool]:
@@ -1780,22 +1747,22 @@ class Recipe:
 
             poses = pose_map.get(product.id, set())
 
-            d["num_poses"] = len(poses)
-            d["poses"] = poses
-            d["tags"] = product.tags
-            d["num_routes"] = len(upstream_routes)
-            d["num_reaction_steps"] = set(
+            d['num_poses'] = len(poses)
+            d['poses'] = poses
+            d['tags'] = product.tags
+            d['num_routes'] = len(upstream_routes)
+            d['num_reaction_steps'] = set(
                 len(route.reactions) for route in upstream_routes
             )
-            d["reaction_dependencies"] = upstream_reactions.ids
-            d["reactant_dependencies"] = set(
+            d['reaction_dependencies'] = upstream_reactions.ids
+            d['reactant_dependencies'] = set(
                 sum([route.reactants.ids for route in upstream_routes], [])
             )
-            d["route_ids"] = [route.id for route in upstream_routes]
-            d["chemistry_types"] = ", ".join(upstream_reactions.types)
+            d['route_ids'] = [route.id for route in upstream_routes]
+            d['chemistry_types'] = ', '.join(upstream_reactions.types)
             series, is_scaffold = get_scaffold_series()
-            d["is_scaffold"] = is_scaffold
-            d["scaffold_series"] = series
+            d['is_scaffold'] = is_scaffold
+            d['scaffold_series'] = series
 
             inspirations = inspiration_map.get(product.id, None)
 
@@ -1803,21 +1770,21 @@ class Recipe:
                 scaffold = product.scaffolds[0]
                 inspirations = inspiration_map.get(scaffold.id, None)
 
-                if not inspirations and "inspiration_pose_ids" in scaffold.metadata:
-                    inspirations = scaffold.metadata["inspiration_pose_ids"]
+                if not inspirations and 'inspiration_pose_ids' in scaffold.metadata:
+                    inspirations = scaffold.metadata['inspiration_pose_ids']
 
             if (
                 not inspirations
                 and is_scaffold
-                and "inspiration_pose_ids" in product.metadata
+                and 'inspiration_pose_ids' in product.metadata
             ):
-                inspirations = product.metadata["inspiration_pose_ids"]
+                inspirations = product.metadata['inspiration_pose_ids']
 
             if inspirations:
                 inspirations = PoseSet(self.db, inspirations)
-                d["inspirations"] = ", ".join(n for n in inspirations.names)
+                d['inspirations'] = ', '.join(n for n in inspirations.names)
             else:
-                d["inspirations"] = ""
+                d['inspirations'] = ''
 
             data.append(d)
 
@@ -1831,15 +1798,13 @@ class Recipe:
         return None
 
     def write_chemistry_csv(
-        self, file: "str | Path", return_df: bool = True
-    ) -> "pd.DataFrame | None":
+        self, file: 'str | Path', return_df: bool = True
+    ) -> 'pd.DataFrame | None':
         """Detailed CSV output synthetis information for chemistry types in this set"""
 
         from pandas import DataFrame
 
-        from rich import print
         from .cset import CompoundSet
-        from .rset import ReactionSet
 
         data = []
 
@@ -1848,7 +1813,6 @@ class Recipe:
         scaffolds = CompoundSet(self.db)
 
         for product in self.products:
-
             if scaffolds := product.scaffolds:
                 scaffolds += scaffolds
             else:
@@ -1859,9 +1823,8 @@ class Recipe:
         route_types = {}
 
         for compound in scaffolds:
-
             elabs = (
-                self.products.compounds.get_by_scaffold(scaffold=compound, none="quiet")
+                self.products.compounds.get_by_scaffold(scaffold=compound, none='quiet')
                 or []
             )
 
@@ -1880,37 +1843,36 @@ class Recipe:
                     upstream_routes.append(route)
 
             if not upstream_routes:
-                mrich.warning(f"No routes to scaffold={compound}")
+                mrich.warning(f'No routes to scaffold={compound}')
                 continue
 
-            d["num_routes"] = len(upstream_routes)
+            d['num_routes'] = len(upstream_routes)
 
             for j, route in enumerate(upstream_routes):
-                d[f"route_{j+1}_num_steps"] = len(route.reactions)
+                d[f'route_{j + 1}_num_steps'] = len(route.reactions)
 
                 group = route_types.setdefault(compound.id, set())
                 group.add(tuple([r.type for r in route.reactions]))
 
                 for k, reaction in enumerate(route.reactions):
-                    key = f"route_{j+1}_reaction_{k+1}"
+                    key = f'route_{j + 1}_reaction_{k + 1}'
 
                     product = reaction.product
 
-                    d[f"{key}_type"] = reaction.type
-                    d[f"{key}_product_smiles"] = product.smiles
-                    d[f"{key}_product_id"] = product.id
-                    d[f"{key}_product_yield"] = reaction.product_yield
+                    d[f'{key}_type'] = reaction.type
+                    d[f'{key}_product_smiles'] = product.smiles
+                    d[f'{key}_product_id'] = product.id
+                    d[f'{key}_product_yield'] = reaction.product_yield
 
                     for i, reactant in enumerate(reaction.reactants):
-                        d[f"{key}_reactant_{i+1}_smiles"] = reactant.smiles
-                        d[f"{key}_reactant_{i+1}_id"] = reactant.id
+                        d[f'{key}_reactant_{i + 1}_smiles'] = reactant.smiles
+                        d[f'{key}_reactant_{i + 1}_id'] = reactant.id
 
             data.append(d)
 
         missing_scaffolds = {}
 
         for compound in self.products.compounds:
-
             if compound in scaffolds:
                 continue
 
@@ -1922,7 +1884,6 @@ class Recipe:
             scaffolds = compound.scaffolds
 
             for scaffold in scaffolds:
-
                 if scaffold.id not in route_types:
                     group = missing_scaffolds.setdefault(scaffold.id, [])
                     group.append(compound.id)
@@ -1936,11 +1897,10 @@ class Recipe:
                             mrich.success(scaffold)
                             mrich.success(chem_types)
                             raise ValueError(
-                                "Scaffold has route not present in dataframe"
+                                'Scaffold has route not present in dataframe'
                             )
 
         for scaffold_id, elab_ids in missing_scaffolds.items():
-
             compound = self.db.get_compound(id=sorted(elab_ids)[0])
 
             d = dict(
@@ -1958,30 +1918,30 @@ class Recipe:
                     upstream_routes.append(route)
 
             if not upstream_routes:
-                mrich.error(f"No routes to elab {compound}")
-                raise ValueError(f"No routes to elab {compound}")
+                mrich.error(f'No routes to elab {compound}')
+                raise ValueError(f'No routes to elab {compound}')
 
-            d["num_routes"] = len(upstream_routes)
+            d['num_routes'] = len(upstream_routes)
 
             for j, route in enumerate(upstream_routes):
-                d[f"route_{j+1}_num_steps"] = len(route.reactions)
+                d[f'route_{j + 1}_num_steps'] = len(route.reactions)
 
                 group = route_types.setdefault(compound.id, set())
                 group.add(tuple([r.type for r in route.reactions]))
 
                 for k, reaction in enumerate(route.reactions):
-                    key = f"route_{j+1}_reaction_{k+1}"
+                    key = f'route_{j + 1}_reaction_{k + 1}'
 
                     product = reaction.product
 
-                    d[f"{key}_type"] = reaction.type
-                    d[f"{key}_product_smiles"] = product.smiles
-                    d[f"{key}_product_id"] = product.id
-                    d[f"{key}_product_yield"] = reaction.product_yield
+                    d[f'{key}_type'] = reaction.type
+                    d[f'{key}_product_smiles'] = product.smiles
+                    d[f'{key}_product_id'] = product.id
+                    d[f'{key}_product_yield'] = reaction.product_yield
 
                     for i, reactant in enumerate(reaction.reactants):
-                        d[f"{key}_reactant_{i+1}_smiles"] = reactant.smiles
-                        d[f"{key}_reactant_{i+1}_id"] = reactant.id
+                        d[f'{key}_reactant_{i + 1}_smiles'] = reactant.smiles
+                        d[f'{key}_reactant_{i + 1}_id'] = reactant.id
 
             data.append(d)
 
@@ -1996,28 +1956,28 @@ class Recipe:
 
     def to_syndirella(
         self,
-        out_key: "str | Path",
-        poses: "PoseSet",
+        out_key: 'str | Path',
+        poses: 'PoseSet',
         *,
         separate: bool = False,
-    ) -> "DataFrame":
+    ) -> 'DataFrame':
         """Generate inputs for running syndirella elaboration"""
 
         import shutil
         from pathlib import Path
 
-        out_key = Path(".") / out_key
+        out_key = Path('.') / out_key
         out_dir = out_key.parent
         out_key = out_key.name
 
-        mrich.var("out_key", out_key)
-        mrich.var("out_dir", out_dir)
+        mrich.var('out_key', out_key)
+        mrich.var('out_dir', out_dir)
 
         if not out_dir.exists():
             mrich.writing(out_dir)
             out_dir.mkdir(parents=True, exist_ok=True)
 
-        template_dir = out_dir / "templates"
+        template_dir = out_dir / 'templates'
         if not template_dir.exists():
             mrich.writing(template_dir)
             template_dir.mkdir(parents=True, exist_ok=True)
@@ -2042,12 +2002,12 @@ class Recipe:
         """
 
         pose_compounds = poses.compounds
-        assert set(self.products.compound_ids) == set(
-            pose_compounds.ids
-        ), "supplied poses have different compounds to Recipe products"
-        assert len(poses) == len(
-            self.products
-        ), "some duplicate compounds in supplied poses"
+        assert set(self.products.compound_ids) == set(pose_compounds.ids), (
+            'supplied poses have different compounds to Recipe products'
+        )
+        assert len(poses) == len(self.products), (
+            'some duplicate compounds in supplied poses'
+        )
 
         df = poses.get_df(
             inchikey=False,
@@ -2059,34 +2019,33 @@ class Recipe:
         )
 
         df = df.reset_index()
-        df = df.rename(columns={"id": "pose_id"})
-        df["compound_set"] = df["compound_id"].apply(lambda x: f"C{x}")
-        df = df.set_index(["compound_id", "pose_id"])
+        df = df.rename(columns={'id': 'pose_id'})
+        df['compound_set'] = df['compound_id'].apply(lambda x: f'C{x}')
+        df = df.set_index(['compound_id', 'pose_id'])
 
         ## CHECKS
 
-        no_refs = df[df["reference_id"].isna()]
+        no_refs = df[df['reference_id'].isna()]
 
         if len(no_refs):
-            mrich.error(len(no_refs), "poses without reference!")
-            ids = set(no_refs.index.get_level_values("pose_id"))
+            mrich.error(len(no_refs), 'poses without reference!')
+            ids = set(no_refs.index.get_level_values('pose_id'))
             mrich.print(ids)
-            from .pset import PoseSet
 
-        no_insps = bool([1 for i in df["inspiration_aliases"].values if not len(i)])
+        no_insps = bool([1 for i in df['inspiration_aliases'].values if not len(i)])
 
         if no_insps:
-            mrich.error(len(no_insps), "poses without inspirations!")
+            mrich.error(len(no_insps), 'poses without inspirations!')
             return None
 
         ## TEMPLATES
 
         references = poses.references
         ref_lookup = self.db.get_pose_id_alias_dict(references)
-        df["template"] = df["reference_id"].apply(lambda x: ref_lookup[x])
+        df['template'] = df['reference_id'].apply(lambda x: ref_lookup[x])
 
         for ref_pose in references:
-            assert ref_pose.apo_path, f"Reference {ref_pose} has no apo_path"
+            assert ref_pose.apo_path, f'Reference {ref_pose} has no apo_path'
 
             template = template_dir / ref_pose.apo_path.name
 
@@ -2097,122 +2056,119 @@ class Recipe:
         ## INSPIRATIONS
 
         for i, row in df.iterrows():
-            for j, alias in enumerate(row["inspiration_aliases"]):
-                df.loc[i, f"hit{j+1}"] = alias
+            for j, alias in enumerate(row['inspiration_aliases']):
+                df.loc[i, f'hit{j + 1}'] = alias
 
         inspirations = poses.inspirations
 
-        sdf_name = out_dir / f"{out_key}_syndirella_inspiration_hits.sdf"
+        sdf_name = out_dir / f'{out_key}_syndirella_inspiration_hits.sdf'
 
         inspirations.write_sdf(
             sdf_name,
             tags=False,
             metadata=False,
-            name_col="name",
+            name_col='name',
         )
 
         ## ADD ROUTE INFO
 
         routes = self.get_routes()
 
-        for sub_recipe in mrich.track(routes, prefix="Adding chemistry info..."):
-
+        for sub_recipe in mrich.track(routes, prefix='Adding chemistry info...'):
             product = sub_recipe.product
 
             product_id = product.compound_id
 
-            matches = df.xs(product_id, level="compound_id")
+            matches = df.xs(product_id, level='compound_id')
 
             if len(matches) > 1:
-                mrich.warning("Multiple rows for compound", product_id)
+                mrich.warning('Multiple rows for compound', product_id)
 
             for i, row in matches.iterrows():
-
                 key = (product_id, i)
 
                 for j, reaction in enumerate(sub_recipe.reactions):
-
                     j = j + 1
 
                     match len(reaction.reactants):
                         case 1:
-                            df.loc[key, f"reactant_step{j}"] = reaction.reactants[
+                            df.loc[key, f'reactant_step{j}'] = reaction.reactants[
                                 0
                             ].smiles
-                            df.loc[key, f"reactant2_step{j}"] = None
+                            df.loc[key, f'reactant2_step{j}'] = None
                         case 2:
-                            df.loc[key, f"reactant_step{j}"] = reaction.reactants[
+                            df.loc[key, f'reactant_step{j}'] = reaction.reactants[
                                 0
                             ].smiles
-                            df.loc[key, f"reactant2_step{j}"] = reaction.reactants[
+                            df.loc[key, f'reactant2_step{j}'] = reaction.reactants[
                                 1
                             ].smiles
                         case 3:
-                            df.loc[key, f"reactant_step{j}"] = reaction.reactants[
+                            df.loc[key, f'reactant_step{j}'] = reaction.reactants[
                                 0
                             ].smiles
-                            df.loc[key, f"reactant2_step{j}"] = reaction.reactants[
+                            df.loc[key, f'reactant2_step{j}'] = reaction.reactants[
                                 1
                             ].smiles
-                            df.loc[key, f"reactant3_step{j}"] = reaction.reactants[
+                            df.loc[key, f'reactant3_step{j}'] = reaction.reactants[
                                 2
                             ].smiles
                         case _:
-                            raise NotImplementedError("Too many reactants")
+                            raise NotImplementedError('Too many reactants')
 
-                    df.loc[key, f"product_step{j}"] = reaction.product.smiles
-                    df.loc[key, f"reaction_name_step{j}"] = reaction.type
+                    df.loc[key, f'product_step{j}'] = reaction.product.smiles
+                    df.loc[key, f'reaction_name_step{j}'] = reaction.type
 
                 break
 
         ## REMOVE UNECESSARY COLS
 
-        df = df.drop(columns=["reference_id", "inspiration_aliases"])
+        df = df.drop(columns=['reference_id', 'inspiration_aliases'])
 
         ## REORDER COLUMNS
 
         cols = [
-            "smiles",
-            "reaction_name_step1",
-            "reactant_step1",
-            "reactant2_step1",
-            "reactant3_step1",
-            "product_step11",
-            "hit1",
-            "hit2",
-            "hit3",
-            "hit4",
-            "hit5",
-            "hit6",
-            "hit7",
-            "hit8",
-            "hit9",
-            "template",
-            "compound_set",
+            'smiles',
+            'reaction_name_step1',
+            'reactant_step1',
+            'reactant2_step1',
+            'reactant3_step1',
+            'product_step11',
+            'hit1',
+            'hit2',
+            'hit3',
+            'hit4',
+            'hit5',
+            'hit6',
+            'hit7',
+            'hit8',
+            'hit9',
+            'template',
+            'compound_set',
         ]
 
         if not any([c not in cols for c in df.columns]):
             df = df[[c for c in cols if c in df.columns]]
 
         if not separate:
-            out_path = out_dir / f"{out_key}_syndirella_input.csv"
+            out_path = out_dir / f'{out_key}_syndirella_input.csv'
             mrich.writing(out_path)
             df.to_csv(out_path)
             return df
 
         for idx, row in df.iterrows():
-            out_path = out_dir / f"{out_key}_{row['compound_set']}_syndirella_input.csv"
+            out_path = out_dir / f'{out_key}_{row["compound_set"]}_syndirella_input.csv'
             mrich.writing(out_path)
             single_df = row.to_frame().T
-            single_df = single_df.dropna(axis=1, how="all")
+            single_df = single_df.dropna(axis=1, how='all')
             single_df.to_csv(out_path, index=False)
 
         return df
 
-    def copy(self) -> "Recipe":
+    def copy(self) -> 'Recipe':
         """Copy this recipe"""
 
-        if hasattr(self, "compounds"):
+        if hasattr(self, 'compounds'):
             compounds = self.compounds.copy()
         else:
             compounds = None
@@ -2240,8 +2196,8 @@ class Recipe:
         # no duplicate ingredients
 
         if debug:
-            mrich.debug("Checking integrity:", self)
-            mrich.debug("Checking for duplicate compounds")
+            mrich.debug('Checking integrity:', self)
+            mrich.debug('Checking for duplicate compounds')
 
         if len(self.reactants.compound_ids) != len(set(self.reactants.compound_ids)):
             mrich.error("Reactant compound ID's are not unique")
@@ -2258,31 +2214,31 @@ class Recipe:
         # all references should exist
 
         if debug:
-            mrich.debug("Checking for missing references")
+            mrich.debug('Checking for missing references')
 
         if self.db.count_where(
-            table="reaction", key=f"reaction_id IN {self.reactions.str_ids}"
+            table='reaction', key=f'reaction_id IN {self.reactions.str_ids}'
         ) < len(self.reactions):
-            mrich.error("Not all Reactions in Database")
+            mrich.error('Not all Reactions in Database')
             return False
 
         if self.db.count_where(
-            table="compound", key=f"compound_id IN {self.product_compounds.str_ids}"
+            table='compound', key=f'compound_id IN {self.product_compounds.str_ids}'
         ) < len(self.products):
-            mrich.error("Not all product Compounds in Database")
+            mrich.error('Not all product Compounds in Database')
             return False
 
         if self.db.count_where(
-            table="compound", key=f"compound_id IN {self.reactants.compounds.str_ids}"
+            table='compound', key=f'compound_id IN {self.reactants.compounds.str_ids}'
         ) < len(self.reactants):
-            mrich.error("Not all reactant Compounds in Database")
+            mrich.error('Not all reactant Compounds in Database')
             return False
 
         if self.db.count_where(
-            table="compound",
-            key=f"compound_id IN {self.intermediates.compounds.str_ids}",
+            table='compound',
+            key=f'compound_id IN {self.intermediates.compounds.str_ids}',
         ) < len(self.intermediates):
-            mrich.error("Not all intermediate Compounds in Database")
+            mrich.error('Not all intermediate Compounds in Database')
             return False
 
         reaction_intermediates = self.reactions.intermediates
@@ -2290,45 +2246,43 @@ class Recipe:
         reaction_reactants = self.reactions.reactants
 
         if debug:
-            mrich.debug("Checking for missing reactions")
+            mrich.debug('Checking for missing reactions')
 
         # all products should have a reaction
         for product in self.products:
             if product not in reaction_products:
-                mrich.error(f"Product: {product} does not have associated reaction")
+                mrich.error(f'Product: {product} does not have associated reaction')
                 return False
 
         # intermediates
         for intermediate in self.intermediates:
             if intermediate not in reaction_intermediates:
                 mrich.error(
-                    f"Intermediate: {intermediate} is not in self.reactions.intermediates"
+                    f'Intermediate: {intermediate} is not in self.reactions.intermediates'
                 )
                 return False
 
         # reactants
         for reactant in self.reactants:
             if reactant not in reaction_reactants:
-                mrich.error(f"Reactant: {reactant} is not in self.reactions.reactants")
+                mrich.error(f'Reactant: {reactant} is not in self.reactions.reactants')
                 return False
 
         # all reactions should have enough reactant
 
         if debug:
-            mrich.debug("Checking reactant quantities")
+            mrich.debug('Checking reactant quantities')
 
         for reaction in self.reactions:
-
             product_ingredient = self.products(compound_id=reaction.product_id)
 
             if product_ingredient is None:
                 product_ingredient = self.intermediates(compound_id=reaction.product_id)
 
             if debug and reaction.product_yield < 1.0:
-                mrich.debug(f"{reaction}.product_yield={reaction.product_yield}")
+                mrich.debug(f'{reaction}.product_yield={reaction.product_yield}')
 
             for reactant in reaction.reactants:
-
                 reactant_ingredient = self.intermediates(compound_id=reactant.id)
 
                 if reactant_ingredient is None:
@@ -2338,16 +2292,16 @@ class Recipe:
 
                 if reactant_ingredient.amount < required_amount:
                     mrich.error(
-                        f"Not enough of {reactant_ingredient.compound}: {reactant_ingredient.amount} < {required_amount}"
+                        f'Not enough of {reactant_ingredient.compound}: {reactant_ingredient.amount} < {required_amount}'
                     )
                     return False
 
         if debug:
-            mrich.success(self, "OK")
+            mrich.success(self, 'OK')
 
         return True
 
-    def add_ingredient(self, ingredient: "Ingredient", amount: float = 1):
+    def add_ingredient(self, ingredient: 'Ingredient', amount: float = 1):
         """Add an :class:`.Ingredient` object for direct purchase (no associated reactions)"""
         self.compounds.add(ingredient)
 
@@ -2357,61 +2311,59 @@ class Recipe:
         """Unformatted string representation"""
 
         if self.score:
-            s = f"(score={self.score:.3f})"
+            s = f'(score={self.score:.3f})'
         else:
-            s = ""
+            s = ''
 
         if self.hash:
-            return f"Recipe_{self.hash}{s}"
+            return f'Recipe_{self.hash}{s}'
 
-        return f"Recipe{s}"
+        return f'Recipe{s}'
 
     def __longstr(self) -> str:
         """Unformatted string representation"""
 
         if self.empty:
-            return f"Empty Recipe()"
+            return 'Empty Recipe()'
 
         if self.reactions:
-
             if self.intermediates:
-                s = f"{self.reactants} --> {self.intermediates} --> {self.products} via {self.reactions}"
+                s = f'{self.reactants} --> {self.intermediates} --> {self.products} via {self.reactions}'
             else:
-                s = f"{self.reactants} --> {self.products} via {self.reactions}"
+                s = f'{self.reactants} --> {self.products} via {self.reactions}'
 
             if self.score:
-                s += f", score={self.score:.3f}"
+                s += f', score={self.score:.3f}'
 
             if self.hash:
-                return f"Recipe_{self.hash}({s})"
+                return f'Recipe_{self.hash}({s})'
 
-            return f"Recipe({s})"
+            return f'Recipe({s})'
 
         else:
-
-            s = f"{self.compounds}"
+            s = f'{self.compounds}'
 
             if self.hash:
-                return f"Recipe_{self.hash}({s})"
+                return f'Recipe_{self.hash}({s})'
 
-            return f"Recipe(#compounds={self.num_compounds} [no-chem])"
+            return f'Recipe(#compounds={self.num_compounds} [no-chem])'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self.__longstr()}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self.__longstr()}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self.__longstr()}"
+        return f'[bold underline]{self.__longstr()}'
 
-    def __add__(self, other: "Recipe"):
+    def __add__(self, other: 'Recipe'):
         """Add another :class:`.Recipe` to this one"""
         result = self.copy()
         result.reactants += other.reactants
         result.intermediates += other.intermediates
         result.reactions += other.reactions
         result.products += other.products
-        if hasattr(other, "compounds"):
+        if hasattr(other, 'compounds'):
             result.compounds += other.compounds
         return result
 
@@ -2424,10 +2376,10 @@ class Route(Recipe):
         db,
         *,
         route_id: int,
-        product: "IngredientSet",
-        reactants: "IngredientSet",
-        intermediates: "IngredientSet",
-        reactions: "ReactionSet",
+        product: 'IngredientSet',
+        reactants: 'IngredientSet',
+        intermediates: 'IngredientSet',
+        reactions: 'ReactionSet',
     ) -> None:
         """Route initialisation"""
 
@@ -2456,8 +2408,8 @@ class Route(Recipe):
 
     @classmethod
     def from_json(
-        cls, db: "Database", path: "str | Path", data: dict = None
-    ) -> "Route":
+        cls, db: 'Database', path: 'str | Path', data: dict = None
+    ) -> 'Route':
         """Load a serialised route from a JSON file
 
         :param db: database to link
@@ -2467,18 +2419,19 @@ class Route(Recipe):
         """
 
         import json
+
         from .cset import IngredientSet
         from .rset import ReactionSet
 
         if data is None:
-            data = json.load(open(path, "rt"))
+            data = json.load(open(path))
 
         self = cls.__new__(cls)
 
         self._db = db
-        self._id = data["id"]
+        self._id = data['id']
 
-        self._product_id = data["product_id"]
+        self._product_id = data['product_id']
         self._products = IngredientSet.from_compounds(
             compounds=None, ids=[self._product_id], db=db
         )  # IngredientSet
@@ -2486,17 +2439,17 @@ class Route(Recipe):
         self._reactants = IngredientSet.from_json(
             db=db,
             path=None,
-            data=data["reactants"]["data"],
-            supplier=data["reactants"]["supplier"],
+            data=data['reactants']['data'],
+            supplier=data['reactants']['supplier'],
         )
         self._intermediates = IngredientSet.from_json(
             db=db,
             path=None,
-            data=data["intermediates"]["data"],
-            supplier=data["intermediates"]["supplier"],
+            data=data['intermediates']['data'],
+            supplier=data['intermediates']['supplier'],
         )
         self._reactions = ReactionSet(
-            db=db, indices=data["reactions"]["indices"]
+            db=db, indices=data['reactions']['indices']
         )  # ReactionSet
 
         return self
@@ -2504,12 +2457,12 @@ class Route(Recipe):
     ### PROPERTIES
 
     @property
-    def product(self) -> "Ingredient":
+    def product(self) -> 'Ingredient':
         """Product ingredient"""
         return self._products[0]
 
     @property
-    def product_compound(self) -> "Compound":
+    def product_compound(self) -> 'Compound':
         """Product compound"""
         return self.product.compound
 
@@ -2519,7 +2472,7 @@ class Route(Recipe):
         return self._id
 
     @property
-    def price(self) -> "Price":
+    def price(self) -> 'Price':
         """Get the price of the reactants"""
         return self.reactants.price
 
@@ -2529,11 +2482,11 @@ class Route(Recipe):
         """Serialisable dictionary"""
         data = {}
 
-        data["id"] = self.id
-        data["product_id"] = self.product.id
-        data["reactants"] = self.reactants.get_dict()
-        data["intermediates"] = self.intermediates.get_dict()
-        data["reactions"] = self.reactions.get_dict()
+        data['id'] = self.id
+        data['product_id'] = self.product.id
+        data['reactants'] = self.reactants.get_dict()
+        data['intermediates'] = self.intermediates.get_dict()
+        data['reactions'] = self.reactions.get_dict()
 
         return data
 
@@ -2541,21 +2494,21 @@ class Route(Recipe):
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return f"Route #{self.id}: {self.product_compound}"
+        return f'Route #{self.id}: {self.product_compound}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
 
 class RouteSet:
     """A set of Route objects"""
 
-    def __init__(self, db: "Database", routes: "list[Route]") -> None:
+    def __init__(self, db: 'Database', routes: 'list[Route]') -> None:
         """RouteSet initialisation"""
 
         data = {}
@@ -2572,7 +2525,7 @@ class RouteSet:
     ### FACTORIES
 
     @classmethod
-    def from_ids(cls, db: "Database", ids: list | set, progress: bool = True):
+    def from_ids(cls, db: 'Database', ids: list | set, progress: bool = True):
         """Generate a routeset from a set of :class:`.Route` IDs
 
         :param db: database to link
@@ -2581,7 +2534,7 @@ class RouteSet:
         """
 
         if progress:
-            ids = mrich.track(ids, prefix="Getting routes")
+            ids = mrich.track(ids, prefix='Getting routes')
 
         routes = [db.get_route(id=route_id) for route_id in ids]
 
@@ -2589,30 +2542,30 @@ class RouteSet:
         return RouteSet(db, routes)
 
     @classmethod
-    def from_product_ids(cls, db: "Database", ids: list | set, progress: bool = True):
+    def from_product_ids(cls, db: 'Database', ids: list | set, progress: bool = True):
         """Generate a routeset from a set of product :class:`.Compound` IDs
 
         :param db: database to link
         :param ids: :class:`.Compound` database IDs
         """
 
-        str_ids = str(tuple(ids)).replace(",)", ")")
+        str_ids = str(tuple(ids)).replace(',)', ')')
 
         records = db.select_where(
-            table="route",
-            query="route_id",
-            key=f"route_product IN {str_ids}",
+            table='route',
+            query='route_id',
+            key=f'route_product IN {str_ids}',
             multiple=True,
         )
 
-        route_ids = [i for i, in records]
+        route_ids = [i for (i,) in records]
 
         return cls.from_ids(db, route_ids, progress=progress)
 
     @classmethod
     def from_json(
-        cls, db: "Database", path: "str | Path", data: dict = None
-    ) -> "RouteSet":
+        cls, db: 'Database', path: 'str | Path', data: dict = None
+    ) -> 'RouteSet':
         """Load a serialised routeset from a JSON file
 
         :param db: database to link
@@ -2626,11 +2579,11 @@ class RouteSet:
         if data is None:
             import json
 
-            data = json.load(open(path, "rt"))
+            data = json.load(open(path))
 
         new_data = {}
-        for d in mrich.track(data["routes"].values(), prefix="Loading Routes..."):
-            route_id = d["id"]
+        for d in mrich.track(data['routes'].values(), prefix='Loading Routes...'):
+            route_id = d['id']
             new_data[route_id] = Route.from_json(db=db, path=None, data=d)
 
         self._data = new_data
@@ -2644,7 +2597,7 @@ class RouteSet:
     ### PROPERTIES
 
     @property
-    def data(self) -> "dict[int, Route]":
+    def data(self) -> 'dict[int, Route]':
         """Get internal data dictionary"""
         return self._data
 
@@ -2654,7 +2607,7 @@ class RouteSet:
         return self._db
 
     @property
-    def routes(self) -> "list[Route]":
+    def routes(self) -> 'list[Route]':
         """Get route objects"""
         return self.data.values()
 
@@ -2662,12 +2615,12 @@ class RouteSet:
     def product_ids(self) -> list[int]:
         """Get the :class:`.Compound` ID's of the products"""
         ids = self.db.select_where(
-            table="route",
-            query="DISTINCT route_product",
-            key=f"route_id IN {self.str_ids}",
+            table='route',
+            query='DISTINCT route_product',
+            key=f'route_id IN {self.str_ids}',
             multiple=True,
         )
-        return [i for i, in ids]
+        return [i for (i,) in ids]
 
     @property
     def reactant_ids(self) -> list[int]:
@@ -2680,17 +2633,17 @@ class RouteSet:
         """
 
         c = self.db.execute(sql)
-        return [i for i, in c]
+        return [i for (i,) in c]
 
     @property
-    def products(self) -> "CompoundSet":
+    def products(self) -> 'CompoundSet':
         """Return a :class:`.CompoundSet` of all the route products"""
         from .cset import CompoundSet
 
         return CompoundSet(self.db, self.product_ids)
 
     @property
-    def reactants(self) -> "CompoundSet":
+    def reactants(self) -> 'CompoundSet':
         """Return a :class:`.CompoundSet` of all the route reactants"""
         from .cset import CompoundSet
 
@@ -2699,7 +2652,7 @@ class RouteSet:
     @property
     def str_ids(self) -> str:
         """Return an SQL formatted tuple string of the :class:`.Route` ID's"""
-        return str(tuple(self.ids)).replace(",)", ")")
+        return str(tuple(self.ids)).replace(',)', ')')
 
     @property
     def ids(self) -> list[int]:
@@ -2714,12 +2667,11 @@ class RouteSet:
         """
 
         if self._cluster_map is None:
-
             # get route mapping
             pairs = self.db.select_where(
-                query="route_product, route_id",
-                key=f"route_id IN {self.str_ids}",
-                table="route",
+                query='route_product, route_id',
+                key=f'route_id IN {self.str_ids}',
+                table='route',
                 multiple=True,
             )
 
@@ -2745,11 +2697,11 @@ class RouteSet:
 
     ### METHODS
 
-    def copy(self) -> "RouteSet":
+    def copy(self) -> 'RouteSet':
         """Copy this RouteSet"""
         return RouteSet(self.db, self.data.values())
 
-    def set_db_pointers(self, db: "Database") -> None:
+    def set_db_pointers(self, db: 'Database') -> None:
         """
 
         :param db:
@@ -2772,32 +2724,32 @@ class RouteSet:
 
         # populate with routes
         for route_id, route in self.data.items():
-            data["routes"][route_id] = route.get_dict()
+            data['routes'][route_id] = route.get_dict()
 
         return data
 
     def prune_unavailable(self, suppliers: list[str]):
         """Remove routes that don't have all reactants available from given suppliers"""
 
-        suppliers_str = str(tuple(suppliers)).replace(",)", ")")
+        suppliers_str = str(tuple(suppliers)).replace(',)', ')')
 
         sql = f"""
         WITH possible_reactants AS (
             SELECT quote_compound, COUNT(
-                CASE 
-                    WHEN quote_supplier IN {suppliers_str} THEN 1 
-                END) AS [count_valid] 
+                CASE
+                    WHEN quote_supplier IN {suppliers_str} THEN 1
+                END) AS [count_valid]
             FROM {self.db.SQL_SCHEMA_PREFIX}quote
             GROUP BY quote_compound
         ),
 
         route_reactants AS (
-            SELECT route_id, route_product, 
+            SELECT route_id, route_product,
             COUNT(
-                CASE 
-                    WHEN count_valid = 0 THEN 1 
-                    WHEN count_valid IS NULL THEN 1 
-                END) 
+                CASE
+                    WHEN count_valid = 0 THEN 1
+                    WHEN count_valid IS NULL THEN 1
+                END)
             AS [count_unavailable] FROM {self.db.SQL_SCHEMA_PREFIX}route
             INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component ON component_route = route_id
             LEFT JOIN possible_reactants ON quote_compound = component_ref
@@ -2812,10 +2764,10 @@ class RouteSet:
 
         route_ids = self.db.execute(sql).fetchall()
 
-        route_ids = [i for i, in route_ids]
+        route_ids = [i for (i,) in route_ids]
 
-        mrich.var("#routes before pruning", len(self))
-        mrich.var("#routes after pruning", len(route_ids))
+        mrich.var('#routes before pruning', len(self))
+        mrich.var('#routes after pruning', len(route_ids))
 
         return RouteSet.from_ids(self.db, route_ids)
 
@@ -2824,18 +2776,18 @@ class RouteSet:
         route_id, route = self.data.popitem()
         return route_id
 
-    def pop(self) -> "Route":
+    def pop(self) -> 'Route':
         """Pop the last route from the set and return it's object"""
         route_id, route = self.data.popitem()
         return route
 
     def balanced_pop(
         self, permitted_clusters: set[tuple] | None = None, debug: bool = False
-    ) -> "Route":
+    ) -> 'Route':
         """Pop a route from this set, while maintaining the balance of scaffold clusters populations"""
 
         if not self._data:
-            mrich.print("RouteSet depleted")
+            mrich.print('RouteSet depleted')
             return None
 
         if not self.cluster_map:
@@ -2855,7 +2807,7 @@ class RouteSet:
                 for cluster in permitted_clusters:
                     if cluster not in self.cluster_map:
                         mrich.warning(
-                            cluster, "in permitted_clusters but not cluster_map"
+                            cluster, 'in permitted_clusters but not cluster_map'
                         )
                     else:
                         self._permitted_clusters.append(cluster)
@@ -2869,7 +2821,7 @@ class RouteSet:
         ### pop a Route
 
         if debug:
-            mrich.debug(f"Would pop Route from {self._current_cluster=}")
+            mrich.debug(f'Would pop Route from {self._current_cluster=}')
 
         cluster = self._current_cluster
 
@@ -2886,15 +2838,15 @@ class RouteSet:
             mrich.print(self.cluster_map)
             raise
         except KeyError:
-            mrich.print("cluster", cluster)
-            mrich.print("self._permitted_clusters", self._permitted_clusters)
-            mrich.print("self.cluster_map.keys()", self.cluster_map.keys())
+            mrich.print('cluster', cluster)
+            mrich.print('self._permitted_clusters', self._permitted_clusters)
+            mrich.print('self.cluster_map.keys()', self.cluster_map.keys())
             raise
 
         # clean up empty clusters
 
         if debug:
-            mrich.debug("Popped route", route_id)
+            mrich.debug('Popped route', route_id)
 
         # get the Route object
 
@@ -2903,7 +2855,7 @@ class RouteSet:
             del self._data[route_id]
         else:
             # if debug:
-            mrich.debug("Route not present")
+            mrich.debug('Route not present')
             return self.balanced_pop()
 
         ### increment cluster
@@ -2919,28 +2871,28 @@ class RouteSet:
                         self._current_cluster = self._permitted_clusters[i + 1]
                     break
             else:
-                raise IndexError("This should never be reached...")
+                raise IndexError('This should never be reached...')
 
         # increment_cluster()
 
         if not self.cluster_map[cluster]:
             del self.cluster_map[cluster]
             if not self.cluster_map:
-                mrich.debug("RouteSet.cluster_map depleted")
+                mrich.debug('RouteSet.cluster_map depleted')
             self._permitted_clusters = [
                 c for c in self._permitted_clusters if c != cluster
             ]
             # if debug:
-            mrich.debug("Depleted cluster", cluster)
+            mrich.debug('Depleted cluster', cluster)
 
             if not self._permitted_clusters:
-                mrich.debug("Depleted all permitted clusters", cluster)
-                mrich.debug("Removing cluster restriction", cluster)
+                mrich.debug('Depleted all permitted clusters', cluster)
+                mrich.debug('Removing cluster restriction', cluster)
                 self._permitted_clusters = list(self.cluster_map.keys())
                 self._current_cluster = None
 
         if debug:
-            mrich.debug("#Routes in set", len(self._data))
+            mrich.debug('#Routes in set', len(self._data))
 
         return route
 
@@ -2966,15 +2918,15 @@ class RouteSet:
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return "{" f"Route × {len(self)}" "}"
+        return f'{{Route × {len(self)}}}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __iter__(self):
         """Iterate over routes in this set"""
@@ -2989,12 +2941,12 @@ class RecipeSet:
     """A set of recipes stored on disk"""
 
     def __init__(
-        self, db: "Database", directory: "str | Path", pattern: str = "*.json"
+        self, db: 'Database', directory: 'str | Path', pattern: str = '*.json'
     ):
         """RecipeSet initialisation"""
 
-        from pathlib import Path
         from json import JSONDecodeError
+        from pathlib import Path
 
         self._db = db
         self._json_directory = Path(directory)
@@ -3003,14 +2955,14 @@ class RecipeSet:
         self._json_paths = {}
         for path in self._json_directory.glob(self._json_pattern):
             self._json_paths[
-                path.name.removeprefix("Recipe_").removesuffix(".json")
+                path.name.removeprefix('Recipe_').removesuffix('.json')
             ] = path.resolve()
 
-        mrich.reading(f"{directory}/{pattern}")
+        mrich.reading(f'{directory}/{pattern}')
 
         self._recipes = {}
         for key, path in mrich.track(
-            self._json_paths.items(), prefix="Loading recipes"
+            self._json_paths.items(), prefix='Loading recipes'
         ):
             try:
                 recipe = Recipe.from_json(
@@ -3021,19 +2973,19 @@ class RecipeSet:
                     db_mismatch_warning=False,
                 )
             except JSONDecodeError:
-                mrich.error(f"Bad JSON in {path}")
+                mrich.error(f'Bad JSON in {path}')
                 continue
             recipe._hash = key
             self._recipes[key] = recipe
 
-        mrich.success("Loaded", len(self), "Recipes")
+        mrich.success('Loaded', len(self), 'Recipes')
 
     ### FACTORIES
 
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Associated database"""
         return self._db
 
@@ -3057,23 +3009,22 @@ class RecipeSet:
         recipes = self._recipes.values()
 
         if progress:
-            recipes = mrich.track(recipes, prefix=f"Calculating {self} values...")
+            recipes = mrich.track(recipes, prefix=f'Calculating {self} values...')
 
         for recipe in recipes:
             value = getattr(recipe, key)
-            if serialise_price and key == "price":
+            if serialise_price and key == 'price':
                 value = value.amount
             values.append(value)
 
         return values
 
-    def get_df(self, **kwargs) -> "pandas.DataFrame":
+    def get_df(self, **kwargs) -> 'pandas.DataFrame':
         """Get dataframe of recipe dictionaries. See :meth:`.Recipe.get_dict`"""
 
         data = []
 
         for recipe in self:
-
             d = recipe.get_dict(
                 # reactant_supplier=False,
                 database=False,
@@ -3088,7 +3039,7 @@ class RecipeSet:
 
         return DataFrame(data)
 
-    def items(self) -> "list[tuple[str, Recipe]]":
+    def items(self) -> 'list[tuple[str, Recipe]]':
         """Get data dictionary items"""
         return self._recipes.items()
 
@@ -3109,7 +3060,6 @@ class RecipeSet:
         """Get a :class:`.Recipe` in this set by it's index or key/hash"""
 
         match key:
-
             case int():
                 return list(self._recipes.values())[key]
 
@@ -3118,7 +3068,7 @@ class RecipeSet:
 
             case _:
                 mrich.error(
-                    f"Unsupported type for RecipeSet.__getitem__(): {key=} {type(key)}"
+                    f'Unsupported type for RecipeSet.__getitem__(): {key=} {type(key)}'
                 )
 
         return None
@@ -3134,12 +3084,12 @@ class RecipeSet:
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return "{" f"Recipe × {len(self)}" "}"
+        return f'{{Recipe × {len(self)}}}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'

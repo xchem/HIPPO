@@ -1,12 +1,12 @@
 ## CONFIGURE TESTING DATA
-TARGET = "SARS2_Nprot"
-PROPOSAL = "lb32627-93"
-STACK = "production"
+TARGET = 'SARS2_Nprot'
+PROPOSAL = 'lb32627-93'
+STACK = 'production'
 
 ## CONFIGURE CLEANUP
 
 CLEANUP_FILES = [
-    f"{TARGET}.tar.gz",
+    f'{TARGET}.tar.gz',
 ]
 
 CLEANUP_DIRS = [
@@ -26,7 +26,7 @@ SUBSITES = True
 
 ### SQLITE
 
-DB = "db_test.sqlite"
+DB = 'db_test.sqlite'
 
 CLEANUP_FILES.append(DB)
 

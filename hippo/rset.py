@@ -2,8 +2,6 @@
 
 import mcol
 import mrich
-
-import os
 from numpy import int64
 
 from .db import Database
@@ -48,12 +46,12 @@ class ReactionTable:
 
     """
 
-    _name = "all reactions"
+    _name = 'all reactions'
 
     def __init__(
         self,
         db: Database,
-        table: str = "reaction",
+        table: str = 'reaction',
     ) -> None:
         """ReactionTable initialisation"""
 
@@ -63,7 +61,7 @@ class ReactionTable:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns the associated :class:`.Database`"""
         return self._db
 
@@ -81,15 +79,15 @@ class ReactionTable:
     def types(self) -> list[str]:
         """Returns a list of the unique reaction types present in the table"""
         result = self.db.select(
-            table=self.table, query="DISTINCT reaction_type", multiple=True
+            table=self.table, query='DISTINCT reaction_type', multiple=True
         )
-        return [q for q, in result]
+        return [q for (q,) in result]
 
     @property
     def ids(self) -> list[int]:
         """Returns the IDs of child reactions"""
-        result = self.db.select(table=self.table, query="reaction_id", multiple=True)
-        return [q for q, in result]
+        result = self.db.select(table=self.table, query='reaction_id', multiple=True)
+        return [q for (q,) in result]
 
     ### METHODS
 
@@ -103,7 +101,7 @@ class ReactionTable:
         """
         return self[self.ids].interactive()
 
-    def get_by_type(self, reaction_type: str) -> "ReactionSet":
+    def get_by_type(self, reaction_type: str) -> 'ReactionSet':
         """Get all child reactions of the given type
 
         :param reaction_type: reaction type to filter by
@@ -111,16 +109,16 @@ class ReactionTable:
         """
         result = self.db.select_where(
             table=self.table,
-            query="reaction_id",
-            key="type",
+            query='reaction_id',
+            key='type',
             value=reaction_type,
             multiple=True,
         )
-        rset = self[[q for q, in result]]
-        rset._name = f"all {reaction_type} reactions"
+        rset = self[[q for (q,) in result]]
+        rset._name = f'all {reaction_type} reactions'
         return rset
 
-    def get_df(self, *, smiles: bool = True, mols: bool = True) -> "pandas.DataFrame":
+    def get_df(self, *, smiles: bool = True, mols: bool = True) -> 'pandas.DataFrame':
         """Construct a pandas.DataFrame of all reactions in the database
 
         :param smiles: Include smiles column (Default value = True)
@@ -128,19 +126,18 @@ class ReactionTable:
 
         """
 
-        from rdkit.Chem import Mol
         from pandas import DataFrame
+        from rdkit.Chem import Mol
 
         ### SQL QUERY
 
         data = {}
 
         if not smiles and not mols:
-
             sql = f"""
-            SELECT reaction_id, reaction_type, reaction_product, reactant_compound 
-            FROM {self.db.SQL_SCHEMA_PREFIX}reaction 
-            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant 
+            SELECT reaction_id, reaction_type, reaction_product, reactant_compound
+            FROM {self.db.SQL_SCHEMA_PREFIX}reaction
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant
             ON reaction.reaction_id = reactant.reactant_reaction
             """
 
@@ -150,17 +147,16 @@ class ReactionTable:
                 if reaction_id not in data:
                     data[reaction_id] = dict(product_id=product_id, reactant_ids=[])
                 else:
-                    assert data[reaction_id]["product_id"] == product_id
+                    assert data[reaction_id]['product_id'] == product_id
 
-                data[reaction_id]["reactant_ids"].append(reactant_id)
+                data[reaction_id]['reactant_ids'].append(reactant_id)
 
         else:
-
             sql = f"""
             SELECT {query}
-            FROM {self.db.SQL_SCHEMA_PREFIX}reaction 
+            FROM {self.db.SQL_SCHEMA_PREFIX}reaction
 
-            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant 
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactant
                 ON reaction.reaction_id = reactant.reactant_reaction
 
             INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound c_r
@@ -172,18 +168,17 @@ class ReactionTable:
 
             if not mols:
                 sql = sql.format(
-                    query="reaction_id, reaction_type, reaction_product, reactant_compound, c_p.compound_smiles, c_r.compound_smiles"
+                    query='reaction_id, reaction_type, reaction_product, reactant_compound, c_p.compound_smiles, c_r.compound_smiles'
                 )
 
             else:
                 sql = sql.format(
-                    query="reaction_id, reaction_type, reaction_product, reactant_compound, c_p.compound_smiles, c_r.compound_smiles, mol_to_binary_mol(c_p.compound_mol), mol_to_binary_mol(c_r.compound_mol)"
+                    query='reaction_id, reaction_type, reaction_product, reactant_compound, c_p.compound_smiles, c_r.compound_smiles, mol_to_binary_mol(c_p.compound_mol), mol_to_binary_mol(c_r.compound_mol)'
                 )
 
             results = self.db.execute(sql).fetchall()
 
             for result in results:
-
                 (
                     reaction_id,
                     reaction_type,
@@ -206,15 +201,15 @@ class ReactionTable:
                         reactant_smiles=set(),
                     )
                     if mols:
-                        data[reaction_id]["product_mol"] = Mol(product_mol)
-                        data[reaction_id]["reactant_mols"] = set()
+                        data[reaction_id]['product_mol'] = Mol(product_mol)
+                        data[reaction_id]['reactant_mols'] = set()
                 else:
-                    assert data[reaction_id]["product_id"] == product_id
+                    assert data[reaction_id]['product_id'] == product_id
 
-                data[reaction_id]["reactant_ids"].add(reactant_id)
-                data[reaction_id]["reactant_smiles"].add(reactant_smiles)
+                data[reaction_id]['reactant_ids'].add(reactant_id)
+                data[reaction_id]['reactant_smiles'].add(reactant_smiles)
                 if mols:
-                    data[reaction_id]["reactant_mols"].add(Mol(reactant_mol))
+                    data[reaction_id]['reactant_mols'].add(Mol(reactant_mol))
 
         data = data.values()
         return DataFrame(data)
@@ -252,7 +247,7 @@ class ReactionTable:
 
     ### DUNDERS
 
-    def __getitem__(self, key) -> "Reaction | ReactionSet | None":
+    def __getitem__(self, key) -> 'Reaction | ReactionSet | None':
         """Get a member :class:`.Reaction` object or subset :class:`.ReactionSet` thereof.
 
         :param key: Can be an integer ID, negative integer index, list/set/tuple of IDs, or slice of IDs
@@ -260,9 +255,7 @@ class ReactionTable:
         """
 
         match key:
-
             case int():
-
                 if key == 0:
                     return self.__getitem__(key=1)
 
@@ -286,7 +279,7 @@ class ReactionTable:
 
             case _:
                 mrich.error(
-                    f"Unsupported type for ReactionTable.__getitem__(): {key=} {type(key)}"
+                    f'Unsupported type for ReactionTable.__getitem__(): {key=} {type(key)}'
                 )
 
         return None
@@ -295,21 +288,21 @@ class ReactionTable:
         """Unformatted string representation"""
 
         if self.name:
-            s = f"{self.name}: "
+            s = f'{self.name}: '
         else:
-            s = ""
+            s = ''
 
-        s += "{" f"R × {len(self)}" "}"
+        s += f'{{R × {len(self)}}}'
 
         return s
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __len__(self) -> int:
         """Number of reactions in this set"""
@@ -323,7 +316,7 @@ class ReactionTable:
         self,
         *,
         type: str = None,
-    ) -> "ReactionSet":
+    ) -> 'ReactionSet':
         """Filter reactions by a given type
 
         :param type: reaction type to filter by
@@ -334,7 +327,7 @@ class ReactionTable:
         if type:
             return self.get_by_type(type)
         else:
-            mrich.error("Must provide type argument")
+            mrich.error('Must provide type argument')
             return None
 
 
@@ -385,7 +378,7 @@ class ReactionSet:
 
     """
 
-    _table = "reaction"
+    _table = 'reaction'
 
     def __init__(
         self,
@@ -443,30 +436,30 @@ class ReactionSet:
     def types(self) -> list[str]:
         """Returns the types of reactions in this set"""
         records = self.db.select_where(
-            table="reaction",
-            key=f"reaction_id IN {self.str_ids}",
-            query="DISTINCT reaction_type",
+            table='reaction',
+            key=f'reaction_id IN {self.str_ids}',
+            query='DISTINCT reaction_type',
             multiple=True,
         )
-        return [t for t, in records]
+        return [t for (t,) in records]
 
     @property
     def num_types(self) -> int:
         """Returns the number of reaction types in this set"""
         (count,) = self.db.select_where(
-            table="reaction",
-            key=f"reaction_id IN {self.str_ids}",
-            query="COUNT(DISTINCT reaction_type)",
+            table='reaction',
+            key=f'reaction_id IN {self.str_ids}',
+            query='COUNT(DISTINCT reaction_type)',
         )
         return count
 
     @property
     def str_ids(self) -> str:
         """Return an SQL formatted tuple string of the :class:`.Compound` IDs"""
-        return str(tuple(self.ids)).replace(",)", ")")
+        return str(tuple(self.ids)).replace(',)', ')')
 
     @property
-    def products(self) -> "CompoundSet":
+    def products(self) -> 'CompoundSet':
         """Get all product compounds that can be synthesised with these reactions (no intermediates)"""
         from .cset import CompoundSet
 
@@ -479,13 +472,13 @@ class ReactionSet:
             AND compound_id NOT IN {intermediates.str_ids}
         """
         ).fetchall()
-        cset = CompoundSet(self.db, [i for i, in product_ids])
+        cset = CompoundSet(self.db, [i for (i,) in product_ids])
         if self.name:
-            cset._name = f"products of {self}"
+            cset._name = f'products of {self}'
         return cset
 
     @property
-    def intermediates(self) -> "CompoundSet":
+    def intermediates(self) -> 'CompoundSet':
         """Get all intermediate compounds that can be synthesised with these reactions"""
         from .cset import CompoundSet
 
@@ -496,13 +489,13 @@ class ReactionSet:
             WHERE reactant_reaction IN {self.str_ids}
         """
         intermediate_ids = self.db.execute(sql).fetchall()
-        cset = CompoundSet(self.db, [i for i, in intermediate_ids])
+        cset = CompoundSet(self.db, [i for (i,) in intermediate_ids])
         if self.name:
-            cset._name = f"intermediates of {self}"
+            cset._name = f'intermediates of {self}'
         return cset
 
     @property
-    def reactants(self) -> "CompoundSet":
+    def reactants(self) -> 'CompoundSet':
         """Get all reactant compounds that are used by these reactions"""
         from .cset import CompoundSet
 
@@ -511,9 +504,9 @@ class ReactionSet:
             WHERE reactant_reaction IN {self.str_ids}
         """
         reactant_ids = self.db.execute(sql).fetchall()
-        cset = CompoundSet(self.db, [i for i, in reactant_ids])
+        cset = CompoundSet(self.db, [i for (i,) in reactant_ids])
         if self.name:
-            cset._name = f"reactants of {self}"
+            cset._name = f'reactants of {self}'
         return cset
 
     ### METHODS
@@ -531,38 +524,35 @@ class ReactionSet:
     def interactive(self):
         """Creates a ipywidget to interactively navigate this PoseSet."""
 
+        from IPython.display import display
         from ipywidgets import (
-            interactive,
             BoundedIntText,
             Checkbox,
-            interactive_output,
-            HBox,
             GridBox,
             Layout,
             VBox,
+            interactive_output,
         )
-        from IPython.display import display
-        from pprint import pprint
 
         a = BoundedIntText(
             value=0,
             min=0,
             max=len(self) - 1,
             step=1,
-            description=f"Rs (/{len(self)}):",
+            description=f'Rs (/{len(self)}):',
             disabled=False,
         )
 
-        b = Checkbox(description="Name", value=True)
-        c = Checkbox(description="Summary", value=False)
-        d = Checkbox(description="Draw", value=True)
-        e = Checkbox(description="Check chemistry", value=False)
-        f = Checkbox(description="Reactant Quotes", value=False)
+        b = Checkbox(description='Name', value=True)
+        c = Checkbox(description='Summary', value=False)
+        d = Checkbox(description='Draw', value=True)
+        e = Checkbox(description='Check chemistry', value=False)
+        f = Checkbox(description='Reactant Quotes', value=False)
 
         ui1 = GridBox(
-            [b, c, d], layout=Layout(grid_template_columns="repeat(5, 100px)")
+            [b, c, d], layout=Layout(grid_template_columns='repeat(5, 100px)')
         )
-        ui2 = GridBox([e, f], layout=Layout(grid_template_columns="repeat(2, 150px)"))
+        ui2 = GridBox([e, f], layout=Layout(grid_template_columns='repeat(2, 150px)'))
         ui = VBox([a, ui1, ui2])
 
         def widget(
@@ -605,18 +595,18 @@ class ReactionSet:
         out = interactive_output(
             widget,
             {
-                "i": a,
-                "name": b,
-                "summary": c,
-                "draw": d,
-                "check_chemistry": e,
-                "reactants": f,
+                'i': a,
+                'name': b,
+                'summary': c,
+                'draw': d,
+                'check_chemistry': e,
+                'reactants': f,
             },
         )
 
         display(ui, out)
 
-    def get_df(self, smiles=True, mols=True, **kwargs) -> "pandas.DataFrame":
+    def get_df(self, smiles=True, mols=True, **kwargs) -> 'pandas.DataFrame':
         """Construct a pandas.DataFrame of this ReactionSet
 
         :param smiles: Include smiles column (Default value = True)
@@ -626,23 +616,22 @@ class ReactionSet:
         """
 
         from pandas import DataFrame
-        from rdkit.Chem import Mol
 
-        mrich.debug("Using slower Reaction.dict rather than direct SQL query...")
+        mrich.debug('Using slower Reaction.dict rather than direct SQL query...')
 
         data = []
-        for r in mrich.track(self, prefix="ReactionSet --> DataFrame"):
+        for r in mrich.track(self, prefix='ReactionSet --> DataFrame'):
             data.append(r.get_dict(smiles=smiles, mols=mols, **kwargs))
 
         return DataFrame(data)
 
-    def copy(self) -> "ReactionSet":
+    def copy(self) -> 'ReactionSet':
         """Return a copy of this set"""
         return ReactionSet(self.db, self.ids, sort=False, name=self.name)
 
     def get_recipes(
         self, amounts: float | list[float] = 1.0, **kwargs
-    ) -> "Recipe | list[Recipe]":
+    ) -> 'Recipe | list[Recipe]':
         """Get the :class:`.Recipe` object(s) from this set of recipes
 
         :param amounts: float or list/generator of product amounts in mg, (Default value = 1.0)
@@ -674,21 +663,21 @@ class ReactionSet:
         """Unformatted string representation"""
 
         if self.name:
-            s = f"{self.name}: "
+            s = f'{self.name}: '
         else:
-            s = ""
+            s = ''
 
-        s += "{" f"R × {len(self)}" "}"
+        s += f'{{R × {len(self)}}}'
 
         return s
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __len__(self) -> int:
         """Number of member :class:`.Reaction` objects"""
@@ -698,7 +687,7 @@ class ReactionSet:
         """Iterate through member :class:`.Reaction` objects"""
         return iter(self.db.get_reaction(id=i) for i in self.indices)
 
-    def __getitem__(self, key) -> "Reaction | ReactionSet":
+    def __getitem__(self, key) -> 'Reaction | ReactionSet':
         """Get member :class:`.Reaction` object by single, slice or list/set/tuple of ID"""
 
         match key:
@@ -706,7 +695,7 @@ class ReactionSet:
                 try:
                     index = self.indices[key]
                 except IndexError:
-                    mrich.error(f"list index out of range: {key=} for {self}")
+                    mrich.error(f'list index out of range: {key=} for {self}')
                     raise
                 return self.db.get_reaction(id=index)
             case slice():
@@ -719,12 +708,12 @@ class ReactionSet:
                 return ReactionSet(self.db, ids)
             case _:
                 mrich.error(
-                    f"Unsupported type for ReactionSet.__getitem__(): {key=} {type(key)}"
+                    f'Unsupported type for ReactionSet.__getitem__(): {key=} {type(key)}'
                 )
 
         return None
 
-    def __add__(self, other: "ReactionSet") -> "ReactionSet":
+    def __add__(self, other: 'ReactionSet') -> 'ReactionSet':
         """Add a :class:`.ReactionSet` to this one"""
         if other:
             for reaction in other:
@@ -734,8 +723,8 @@ class ReactionSet:
 
     def __sub__(
         self,
-        other: "ReactionSet",
-    ) -> "ReactionSet":
+        other: 'ReactionSet',
+    ) -> 'ReactionSet':
         """Substract a :class:`.ReactionSet` from this set"""
         match other:
             case ReactionSet():

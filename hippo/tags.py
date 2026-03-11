@@ -1,9 +1,9 @@
 """Classes for managing compound/pose tags"""
 
+from collections.abc import MutableSet
+
 import mcol
 import mrich
-
-from collections.abc import MutableSet
 
 
 class TagTable:
@@ -15,11 +15,11 @@ class TagTable:
 
     """
 
-    _table = "tag"
+    _table = 'tag'
 
     def __init__(
         self,
-        db: "Database",
+        db: 'Database',
     ) -> None:
         """TagTable initialisation"""
 
@@ -28,7 +28,7 @@ class TagTable:
     ### PROPERTIES
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self._db
 
@@ -41,13 +41,13 @@ class TagTable:
     def unique(self) -> set[str]:
         """Returns a set of unique tag names contained in the table"""
         values = self.db.select(
-            table=self.table, query="DISTINCT tag_name", multiple=True
+            table=self.table, query='DISTINCT tag_name', multiple=True
         )
-        return list(sorted(set(v for v, in values)))
+        return list(sorted(set(v for (v,) in values)))
 
     ### METHODS
 
-    def summary(self, return_df: bool = False) -> "pd.DataFrame":
+    def summary(self, return_df: bool = False) -> 'pd.DataFrame':
         """Print a summary table of tags with compound and pose counts"""
 
         from pandas import DataFrame
@@ -68,12 +68,12 @@ class TagTable:
         ]
 
         df = DataFrame(data)
-        df = df.set_index("tag")
+        df = df.set_index('tag')
 
         # compounds with poses
 
         sql = f"""
-        SELECT tag_name, COUNT(DISTINCT pose_compound) 
+        SELECT tag_name, COUNT(DISTINCT pose_compound)
         FROM {self.db.SQL_SCHEMA_PREFIX}tag
         INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose
         ON tag_pose = pose_id
@@ -84,7 +84,7 @@ class TagTable:
         cursor = self.db.execute(sql)
 
         for tag, count in cursor.fetchall():
-            df.loc[tag, "num_posed_compounds"] = count
+            df.loc[tag, 'num_posed_compounds'] = count
 
         df = df.fillna(0)
         df = df.astype(int)
@@ -98,13 +98,13 @@ class TagTable:
         """Rename all instances of a tag across the database"""
 
         match self.db.engine:
-            case "sqlite3":
+            case 'sqlite3':
                 sql = """
                 UPDATE OR IGNORE tag
                 SET tag_name = ?
                 WHERE tag_name = ?;
                 """
-            case "psycopg":
+            case 'psycopg':
                 sql = """
                 UPDATE hippo.tag
                 SET tag_name = %s
@@ -120,21 +120,21 @@ class TagTable:
 
     def delete(self, tag: str) -> None:
         """Delete all assignments for the given tag"""
-        self.db.delete_where(table="tag", key="name", value=tag)
+        self.db.delete_where(table='tag', key='name', value=tag)
 
     ### DUNDERS
 
     def __str__(self) -> str:
         """Unformatted representation of this object"""
-        return f"Tags {self.unique}"
+        return f'Tags {self.unique}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
 
 class TagSet(MutableSet):
@@ -148,7 +148,7 @@ class TagSet(MutableSet):
 
     def __init__(
         self,
-        parent: "Compound | Pose",
+        parent: 'Compound | Pose',
         tags: list | tuple | None = None,
         immutable: bool = False,
         commit: bool = True,
@@ -190,7 +190,7 @@ class TagSet(MutableSet):
         return self._parent
 
     @property
-    def db(self) -> "Database":
+    def db(self) -> 'Database':
         """Returns a pointer to the parent database"""
         return self.parent.db
 
@@ -206,8 +206,8 @@ class TagSet(MutableSet):
 
         """
         sql = f"""
-        DELETE FROM {self.db.SQL_SCHEMA_PREFIX}tag 
-        WHERE tag_name="{tag}" 
+        DELETE FROM {self.db.SQL_SCHEMA_PREFIX}tag
+        WHERE tag_name="{tag}"
         AND tag_{self.parent.table} = {self.parent.id}
         """
 
@@ -223,7 +223,7 @@ class TagSet(MutableSet):
 
         """
         sql = f"""
-        DELETE FROM {self.db.SQL_SCHEMA_PREFIX}tag 
+        DELETE FROM {self.db.SQL_SCHEMA_PREFIX}tag
         WHERE tag_{self.parent.table} = {self.parent.id}
         """
 
@@ -240,7 +240,7 @@ class TagSet(MutableSet):
         :param commit: commit the changes? (Default value = True)
 
         """
-        payload = {"name": tag, self.parent.table: self.parent.id}
+        payload = {'name': tag, self.parent.table: self.parent.id}
         self.db.insert_tag(**payload, commit=commit)
 
     ### METHODS
@@ -281,7 +281,7 @@ class TagSet(MutableSet):
             del self._elements[i]
             self._remove_tag_from_db(tag)
         else:
-            raise ValueError(f"{tag} not in {self}")
+            raise ValueError(f'{tag} not in {self}')
 
     def add(
         self,
@@ -324,11 +324,11 @@ class TagSet(MutableSet):
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f"{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}"
+        return f'{mcol.bold}{mcol.underline}{self}{mcol.unbold}{mcol.ununderline}'
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
-        return f"[bold underline]{self}"
+        return f'[bold underline]{self}'
 
     def __len__(self) -> int:
         """Number of tags in this set"""

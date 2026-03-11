@@ -120,7 +120,7 @@ pytest
 N.B. the numbered tests, e.g. `test_00_cleanup.py` need to run in sequential order to set up the database. Other tests can run in arbitrary order thereafter. The tests will fail if https://fragalysis.diamond.ac.uk can not provide the protein target's data, as specified in tests/config.py.
 
 </details>
-	
+
 <details>
 
 <summary> Postgres specific instructions </summary>

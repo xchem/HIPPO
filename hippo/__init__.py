@@ -10,7 +10,7 @@ See https://hippo-docs.winokan.com and https://github.com/mwinokan/HIPPO
 
 """
 
-__version__ = "0.3.38"
+__version__ = '0.3.38'
 
 from .animal import HIPPO
 from .compound import Compound, Ingredient
@@ -20,13 +20,13 @@ from .feature import Feature
 from .metadata import MetaData
 from .pose import Pose
 from .price import Price
-from .pset import PoseTable, PoseSet
+from .pset import PoseSet, PoseTable
 from .quote import Quote
 from .reaction import Reaction
 from .recipe import Recipe, Route, RouteSet
 from .rgen import RandomRecipeGenerator
-from .rset import ReactionTable, ReactionSet
-from .tags import TagTable, TagSet
+from .rset import ReactionSet, ReactionTable
+from .scoring import CustomAttribute, Scorer
+from .tags import TagSet, TagTable
 from .target import Target
-from .scoring import Scorer, CustomAttribute
 from .web import ProjectPage
