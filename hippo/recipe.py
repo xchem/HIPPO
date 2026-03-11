@@ -316,14 +316,12 @@ class Recipe:
                 mrich.var("products.str_ids", products.str_ids)
 
             # raise NotImplementedError
-            ids = reactions.db.execute(
-                f"""
+            ids = reactions.db.execute(f"""
                 SELECT DISTINCT compound_id FROM {self.db.SQL_SCHEMA_PREFIX}compound
                 LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reactant ON compound_id = reactant_compound
                 WHERE reactant_compound IS NULL
                 AND compound_id IN {products.str_ids}
-            """
-            ).fetchall()
+            """).fetchall()
 
             ids = [i for i, in ids]
 

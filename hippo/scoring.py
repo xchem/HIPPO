@@ -474,7 +474,9 @@ class Scorer:
         :param budget: limit :class:`.Recipe` objects to below this budget value
         :returns: list of :class:`.Recipe` hashes
         """
-        keys = self.get_sorted_df(budget=budget).index[:n]
+        keys = self.get_sorted_df().index[
+            :n
+        ]  # Quick fix, removing "budget" argument to get_sorted_df() for now. Budget filtering will still need to be implemented
         return list(keys)
 
     def top(self, n: int, budget: float | None = None) -> "list[Recipe]":
