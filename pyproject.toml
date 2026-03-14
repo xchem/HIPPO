@@ -50,6 +50,8 @@ dependencies = [
     # - this is probably present in diamond environments,
     # - can use conda install in container
     # - but.. probs don't even need it, it's only used for expressions and I got that covered
+    "django-rdkit",
+    "environs>=14.6.0",
 ]
 
 [dependency-groups]
@@ -116,3 +118,6 @@ exclude = [
 include = [
     "hippo/*.py",
 ]
+
+[tool.uv.sources]
+django-rdkit = { git = "https://github.com/rdkit/django-rdkit" }
