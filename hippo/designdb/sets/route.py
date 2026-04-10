@@ -2,7 +2,6 @@ import json
 
 import mcol
 import mrich
-
 from designdb.models import Component, Route
 from designdb.sets.compound import CompoundSet
 

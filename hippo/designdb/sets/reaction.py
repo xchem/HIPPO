@@ -3,13 +3,11 @@
 import mcol
 import mrich
 import pandas as pd
-from django.db.models import Q
-from hippo.recipe import Recipe
-from IPython.display import display
-from ipywidgets import BoundedIntText, Checkbox, GridBox, Layout, VBox, interactive_output
-
 from designdb.models import Compound, Reactant, Reaction
 from designdb.sets.compound import CompoundSet
+from django.db.models import Q
+from IPython.display import display
+from ipywidgets import BoundedIntText, Checkbox, GridBox, Layout, VBox, interactive_output
 
 
 class ReactionSet:
@@ -267,7 +265,7 @@ class ReactionSet:
 
     def get_recipes(
         self, amounts: float | list[float] = 1.0, **kwargs
-    ) -> Recipe | list[Recipe]:
+    ):
         """Get the :class:`.Recipe` object(s) from this set of recipes
 
         :param amounts: float or list/generator of product amounts in mg, (Default value = 1.0)

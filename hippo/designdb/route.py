@@ -2,7 +2,6 @@ import json
 
 import mcol
 import mrich
-
 from designdb.models import Component, Reaction, Route
 
 from .recipe import Recipe

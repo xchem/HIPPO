@@ -16,6 +16,20 @@ import molparse as mp
 import mrich
 import networkx as nx
 import pandas as pd
+from designdb.models import (
+    Compound,
+    Inspiration,
+    Interaction,
+    Pose,
+    PoseTag,
+    PoseTagJunction,
+    Subsite,
+    SubsiteTag,
+    Target,
+)
+from designdb.sets.interaction import InteractionSet
+from designdb.utils import ScoreSubquery, normalize_string_list
+from designdb.utils_frag import generate_header
 from django.conf import settings
 from django.db import IntegrityError
 from django.db.models import Exists, OuterRef, Q, QuerySet, Subquery
@@ -35,21 +49,6 @@ from pandas import DataFrame
 from rdkit import Chem
 # from rdkit.Chem import inchi
 from rdkit.Chem import PandasTools, SDWriter
-
-from designdb.models import (
-    Compound,
-    Inspiration,
-    Interaction,
-    Pose,
-    PoseTag,
-    PoseTagJunction,
-    Subsite,
-    SubsiteTag,
-    Target,
-)
-from designdb.sets.interaction import InteractionSet
-from designdb.utils import ScoreSubquery, normalize_string_list
-from designdb.utils_frag import generate_header
 
 if settings.MANAGE_MODELS:
     from designdb.utils import JsonGroupArray as ArrayAgg

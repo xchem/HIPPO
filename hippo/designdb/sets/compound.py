@@ -5,12 +5,6 @@ from pathlib import Path
 import mcol
 import mrich
 import pandas as pd
-from django.db.models import Exists, OuterRef, Q
-from pandas import DataFrame, concat, isna
-from rdkit import Chem
-# from rdkit.Chem import inchi
-from rdkit.Chem import Mol
-
 from designdb.ingredient import Ingredient
 from designdb.models import (
     CataloguePrice,
@@ -21,6 +15,11 @@ from designdb.models import (
     Reaction,
 )
 from designdb.price import Price
+from django.db.models import Exists, OuterRef, Q
+from pandas import DataFrame, concat, isna
+from rdkit import Chem
+# from rdkit.Chem import inchi
+from rdkit.Chem import Mol
 
 
 class CompoundSet:

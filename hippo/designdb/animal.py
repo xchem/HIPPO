@@ -74,7 +74,8 @@ class HIPPO:
     @property
     def poses(self):
         """Return pose instances for this target"""
-        return Pose.objects.filter(target=self._target)
+        # return Pose.objects.filter(target=self._target)
+        return PoseSet(Pose.objects.filter(target=self._target))
 
     @property
     def num_poses(self) -> int:

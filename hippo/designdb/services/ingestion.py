@@ -7,13 +7,6 @@ from typing import Any
 import molparse as mp
 import mrich
 import pandas as pd
-from numpy import isnan
-from pandas import read_pickle
-# from mypackage.services.compound import CompoundService
-from rdkit import Chem
-# from rdkit.Chem import inchi
-from rdkit.Chem import PandasTools
-
 from designdb.chem import InvalidChemistryError, UnsupportedChemistryError, check_chemistry
 from designdb.ingredient import Ingredient
 from designdb.models import Compound, Pose, Reactant, Reaction, Scaffold, Target
@@ -33,7 +26,12 @@ from designdb.utils import (
     sanitise_smiles,
 )
 from designdb.utils_frag import UnsupportedFragalysisLongcodeError, parse_observation_longcode
-from src.designdb.services.reaction import ReactionService
+from numpy import isnan
+from pandas import read_pickle
+# from mypackage.services.compound import CompoundService
+from rdkit import Chem
+# from rdkit.Chem import inchi
+from rdkit.Chem import PandasTools
 
 # from .validation.compound import ValidationError, validate_compound_data
 

@@ -7,14 +7,13 @@ from pathlib import Path
 import mrich
 import pandas as pd
 import rdkit
-from django.db.models import Q
-# from mypackage.services.compound import CompoundService
-from rdkit import Chem
-
 # from rdkit.Chem import inchi
 from designdb.models import Compound, Pose, PoseTag, Target
 from designdb.utils import normalize_string_list
 from designdb.utils_frag import GENERATED_TAG_COLS, META_IGNORE_COLS
+from django.db.models import Q
+# from mypackage.services.compound import CompoundService
+from rdkit import Chem
 
 # from .validation.compound import ValidationError, validate_compound_data
 

@@ -1,7 +1,6 @@
 import logging
 
 import mrich
-
 # from mypackage.services.compound import CompoundService
 # from rdkit.Chem import inchi
 from designdb.models import Compound, Reactant, Reaction

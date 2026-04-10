@@ -3,12 +3,11 @@ import re
 
 import mrich
 import rdkit
-# from mypackage.services.compound import CompoundService
-from rdkit import Chem
-
 # from rdkit.Chem import inchi
 from designdb.models import Compound, CompoundTag
 from designdb.utils import inchikey_from_smiles, sanitise_smiles
+# from mypackage.services.compound import CompoundService
+from rdkit import Chem
 
 # from .validation.compound import ValidationError, validate_compound_data
 

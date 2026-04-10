@@ -1,7 +1,6 @@
 """functions for validating chemistry"""
 
 import mrich
-
 from designdb.models import Compound
 
 """

@@ -2,7 +2,6 @@
 
 import mcol
 import mrich
-
 from designdb.models import Interaction
 
 

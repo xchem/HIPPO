@@ -1,9 +1,8 @@
 import mcol
 import mrich
 import pandas as pd
-from django.db.models import Exists, OuterRef, Q
-
 from designdb.models import CataloguePrice, CataloguePriceCompoundJunction, Compound
+from django.db.models import Exists, OuterRef, Q
 
 
 class Ingredient:

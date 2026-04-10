@@ -2,7 +2,6 @@
 
 import mcol
 import mrich
-
 from designdb.models import Compound, Reaction
 from designdb.sets.compound import IngredientSet
 from designdb.sets.reaction import ReactionSet
