@@ -1,27 +1,88 @@
+from pathlib import Path
+
+import mrich
 # from django.db.models import indexes
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+from rdkit import Chem
 
 _MANAGE_MODELS = settings.MANAGE_MODELS
 
 
+# Custom field type for text fields that store json. Once switchint to
+# postgres, replace
+class JSONTextField(models.TextField):
+    def from_db_value(self, value, expression, connection):
+        import json
+
+        return json.loads(value) if value else {}
+
+    def get_prep_value(self, value):
+        import json
+
+        if isinstance(value, dict):
+            return json.dumps(value)
+        return value
+
+
+class RDKitMolField(models.TextField):
+    """
+    Stores RDKit molecules as MolBlock text (SDF format) in DB,
+    but returns RDKit Mol objects in Python.
+    """
+
+    description = 'RDKit molecule stored as MolBlock text'
+
+    # -------------------------
+    # DB → Python (read path)
+    # -------------------------
+    def from_db_value(self, value, expression, connection):
+        if not value:
+            return None
+        return Chem.MolFromMolBlock(value)
+
+    # -------------------------
+    # Python → DB (write path)
+    # -------------------------
+    def get_prep_value(self, value):
+        if value is None:
+            return None
+
+        # Already serialized
+        if isinstance(value, str):
+            return value
+
+        # RDKit Mol → MolBlock
+        if isinstance(value, Chem.Mol):
+            return Chem.MolToMolBlock(value)
+
+        raise TypeError(
+            f'RDKitMolField only accepts RDKit Mol or MolBlock string, got {type(value)}'
+        )
+
+    def deconstruct(self):
+        name, path, args, kwargs = super().deconstruct()
+        return name, path, args, kwargs
+
+
 if settings.MANAGE_MODELS:
     # sqlite3, rdkit field types not available
+    # shouldn't this be binary as well?
     from django.db.models import BinaryField as BfpField
 
-    # shouldn't this be binary as well?
-    from django.db.models import TextField as MolField
+    from .models import RDKitMolField as MolField
 else:
     from django_rdkit.models import BfpField, MolField
 
 
 class BaseModel(models.Model):
-    created_on = models.DateTimeField(null=True, blank=True)
-    updated_on = models.DateTimeField(null=True, blank=True)
+    created_on = models.DateTimeField(null=True, blank=True, default=timezone.now)
+    updated_on = models.DateTimeField(null=True, blank=True, default=timezone.now)
 
     class Meta:
         abstract = True
-        # managed = False
         managed = _MANAGE_MODELS
         app_label = 'designdb'
         default_related_name = '%(class)ss'
@@ -49,11 +110,13 @@ class Target(BaseModel):
         ]
 
 
+# TODO: tautomer hashes
 class Compound(BaseModel):
     id = models.BigAutoField(primary_key=True)
     compound_inchikey = models.TextField(null=True, blank=True)
     compound_alias = models.TextField(null=True, blank=True)
     compound_smiles = models.TextField(null=True, blank=True)
+    compound_hash = models.TextField(null=False, blank=True, default='a')
 
     base_compound = models.ForeignKey(
         'self',
@@ -99,29 +162,30 @@ class Compound(BaseModel):
         db_table = 'compounds'
         constraints = [
             # I believe there were supposed to be changes to these
-            models.UniqueConstraint(
-                fields=[
-                    'compound_alias',
-                ],
-                name='uc_compound_alias',
-            ),
+            # models.UniqueConstraint(
+            #     fields=[
+            #         'compound_alias',
+            #     ],
+            #     name='uc_compound_alias',
+            # ),
             models.UniqueConstraint(
                 fields=[
                     'compound_inchikey',
                 ],
                 name='uc_compound_inchikey',
             ),
-            models.UniqueConstraint(
-                fields=[
-                    'compound_smiles',
-                ],
-                name='uc_compound_smiles',
-            ),
+            # tautomers mess this up
+            # models.UniqueConstraint(
+            #     fields=[
+            #         'compound_smiles',
+            #     ],
+            #     name='uc_compound_smiles',
+            # ),
         ]
         indexes = [
-            models.Index(fields=['base_compound'], name='idx_base_compound_id'),
+            # models.Index(fields=['base_compound'], name='idx_base_compound_id'),
             models.Index(fields=['compound_inchikey'], name='idx_compound_inchikey'),
-            models.Index(fields=['compound_smiles'], name='idx_compound_smiles'),
+            # models.Index(fields=['compound_smiles'], name='idx_compound_smiles'),
             models.Index(fields=['created_on'], name='idx_compound_created'),
         ]
 
@@ -181,7 +245,10 @@ class Pose(BaseModel):
     # this is integer in the db.. pretty sure this cannot be the case?
     pose_fingerprint = models.IntegerField(null=True, blank=True)
 
-    pose_metadata = models.TextField(null=True, blank=True)
+    # dicts dumped into that field, change to JSON?
+    # pose_metadata = models.TextField(null=True, blank=True)
+    pose_metadata = JSONTextField(null=True, blank=True)
+    # pose_metadata = models.JSONField(null=True, blank=True)
     note = models.TextField(null=True, blank=True)
 
     rdkit_version = models.TextField(null=True, blank=True)
@@ -202,6 +269,12 @@ class Pose(BaseModel):
     inspirations = models.ManyToManyField(
         'self',
         through='Inspiration',
+        symmetrical=False,
+    )
+
+    subsites = models.ManyToManyField(
+        Subsite,
+        through='SubsiteTag',
     )
 
     class Meta(BaseModel.Meta):
@@ -219,25 +292,59 @@ class Pose(BaseModel):
             models.Index(fields=['created_on'], name='idx_pose_created'),
         ]
 
+    @property
+    def mol_path(self) -> Path | None:
+        """Get Path to molecule file"""
+        path = Path(self.pose_path)
+        if path.name.endswith('.pdb'):
+            mol_path = path.parent / path.name.replace('_hippo.pdb', '.pdb').replace(
+                '.pdb', '_ligand.mol'
+            )
+            if not mol_path.exists():
+                mol_path = path.parent / path.name.replace(
+                    '_hippo.pdb', '.pdb'
+                ).replace('.pdb', '_ligand.sdf')
+                if not mol_path.exists():
+                    mrich.error('Could not find ligand mol/sdf:', mol_path)
+                    return None
+            return mol_path
+        elif path.name.endswith('.mol'):
+            return path
+        else:
+            raise NotImplementedError
+
+    @property
+    def apo_path(self) -> Path | None:
+        """Get path to apo protein file"""
+        path = Path(self.pose_path)
+        if path.name.endswith('.pdb'):
+            apo_path = path.parent / path.name.replace('_hippo.pdb', '.pdb').replace(
+                '.pdb', '_apo-desolv.pdb'
+            )
+            if not apo_path.exists():
+                return None
+            return apo_path
+        else:
+            raise NotImplementedError
+
 
 class SubsiteTag(BaseModel):
     id = models.BigAutoField(primary_key=True)
-    subsite = models.ForeignKey(
-        Subsite,
-        on_delete=models.RESTRICT,
-        db_column='subsite_id',
-    )
     pose = models.ForeignKey(
         Pose,
         on_delete=models.RESTRICT,
         db_column='pose_id',
+    )
+    subsite = models.ForeignKey(
+        Subsite,
+        on_delete=models.RESTRICT,
+        db_column='subsite_id',
     )
 
     subsite_tag_metadata = models.TextField(null=True, blank=True)
 
     class Meta(BaseModel.Meta):
         db_table = 'subsite_tags'
-        unique_together = ('subsite', 'pose')
         constraints = [
             models.UniqueConstraint(
                 fields=[
@@ -688,42 +795,98 @@ class Reactant(BaseModel):
         ]
 
 
-class Quote(BaseModel):
+class CatalogueCompound(BaseModel):
     id = models.BigAutoField(primary_key=True)
-    quote_smiles = models.TextField(null=True, blank=True)
-    quote_amount = models.FloatField(null=True, blank=True)
-    quote_supplier = models.TextField(null=True, blank=True)
-    quote_catalogue = models.TextField(null=True, blank=True)
-    quote_entry = models.TextField(null=True, blank=True)
-    quote_lead_time = models.IntegerField(null=True, blank=True)
-    quote_price = models.FloatField(null=True, blank=True)
-    quote_currency = models.TextField(null=True, blank=True)
-    quote_purity = models.FloatField(null=True, blank=True)
-    quote_date = models.TextField(null=True, blank=True)
-    compound = models.ForeignKey(
-        Compound,
-        # sql schema speciefies SET_NULL. Doesn't seem right but not sure
-        null=True,
-        on_delete=models.SET_NULL,
-        db_column='compound_id',
-    )
+    catalogue_smiles = models.TextField(null=False, blank=True)
+    catalogue_inchikey = models.TextField(null=False, blank=True)
+    catalogue_hash = models.TextField(null=False, blank=True)
+    rdkit_version = models.TextField(null=True, blank=True)
+    inchi_version = models.TextField(null=True, blank=True)
 
     class Meta(BaseModel.Meta):
-        db_table = 'quotes'
+        db_table = 'catalogue_compounds'
         constraints = [
             models.UniqueConstraint(
                 fields=[
-                    'quote_amount',
-                    'quote_supplier',
-                    'quote_catalogue',
-                    'quote_entry',
+                    'catalogue_smiles',
                 ],
-                name='uc_quote',
+                name='uq_catalogue_compounds_smiles',
+            ),
+            models.CheckConstraint(
+                condition=Q(catalogue_hash__isnull=False) & Q(catalogue_hash__gt=''),
+                name='ck_catalogue_compounds_hash_nonempty',
+            ),
+        ]
+
+
+class CataloguePrice(BaseModel):
+    id = models.BigAutoField(primary_key=True)
+    catalogue_compound = models.ForeignKey(
+        CatalogueCompound,
+        null=True,
+        on_delete=models.CASCADE,
+        db_column='catalogue_id',
+    )
+    vendor = models.TextField(null=False, blank=True)
+    supplier = models.TextField(null=True, blank=True)
+    supplier_id = models.TextField(null=False, blank=True)
+    amount = models.FloatField(null=True, blank=True)
+    price = models.FloatField(null=True, blank=True)
+    currency = models.TextField(null=True, blank=True)
+    purity = models.FloatField(null=True, blank=True)
+    lead_time = models.IntegerField(null=True, blank=True)
+
+    compounds = models.ManyToManyField(
+        Compound,
+        through='CataloguePriceCompoundJunction',
+        related_name='prices',
+    )
+
+    class Meta(BaseModel.Meta):
+        db_table = 'catalogue_prices'
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    'catalogue_compound',
+                    'vendor',
+                    'supplier',
+                    'supplier_id',
+                    'amount',
+                ],
+                name='uc_catalogue_price',
             )
         ]
-        indexes = [
-            models.Index(fields=['compound'], name='idx_quote_compound_id'),
-            models.Index(fields=['created_on'], name='idx_quote_created'),
+
+
+class CataloguePriceCompoundJunction(BaseModel):
+    ipk = models.CompositePrimaryKey('compound_id', 'catalogue_price_id')
+    catalogue_price = models.ForeignKey(
+        CataloguePrice,
+        on_delete=models.CASCADE,
+        db_column='catalogue_price_id',
+    )
+    compound = models.ForeignKey(
+        Compound,
+        on_delete=models.CASCADE,
+        db_column='compound_id',
+    )
+
+    match_hash = models.TextField(null=False, blank=True)
+
+    # Not needed, remove
+    # catalogue_inchikey = models.TextField(null=False, blank=True)
+    # supplier = models.TextField(null=True, blank=True)
+    # amount = models.FloatField(null=True, blank=True)
+    # price = models.FloatField(null=True, blank=True)
+    # lead_time = models.IntegerField(null=True, blank=True)
+
+    class Meta(BaseModel.Meta):
+        db_table = 'compound_catalogue_map'
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(match_hash__isnull=False) & Q(match_hash__gt=''),
+                name='ck_compound_catalogue_map_match_hash_nonempty',
+            )
         ]
 
 

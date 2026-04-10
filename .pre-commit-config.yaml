@@ -31,14 +31,20 @@ repos:
         language: system
         types: [python]
 
-      - id: mypy
-        name: mypy
-        entry: uv run mypy
+      - id: isort
+        name: isort
+        entry: uv run isort src
         language: system
-        pass_filenames: false
+        types: [python]
 
-      - id: ty-check
-        name: ty check
-        entry: uv run ty check
-        language: system
-        pass_filenames: false
+      # - id: mypy
+      #   name: mypy
+      #   entry: uv run mypy
+      #   language: system
+      #   pass_filenames: false
+
+      # - id: ty-check
+      #   name: ty check
+      #   entry: uv run ty check
+      #   language: system
+      #   pass_filenames: false

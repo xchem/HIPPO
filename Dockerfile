@@ -40,6 +40,9 @@ ENV PYTHONPATH="/home/code/HIPPO/.venv/lib/python${PYTHON_VERSION}/site-packages
 # patch rich
 RUN python -c "import mrich; mrich.patch_rich_jupyter_margins()"
 
+# NB! force-install numpy because need newer version
+RUN pip install numpy --upgrade
+
 
 # notebooks
 USER 0

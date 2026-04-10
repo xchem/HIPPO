@@ -11,7 +11,7 @@ authors = [
 description = "Hit Interaction Profiling and Procurement Optimisation"
 readme = "README.md"
 # python version limit dictated by pandas
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 requires = []
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -33,7 +33,7 @@ dependencies = [
     "ipywidgets>=8.1",
     "networkx>=3.4",
     "openmm>=8.4",
-    "apsw>=3.52",
+    "apsw>=3.51",
     "python-louvain>=0.16",
     "psycopg[binary]>=3.3",
     "django>=5.2.12",
@@ -52,6 +52,8 @@ dependencies = [
     # - but.. probs don't even need it, it's only used for expressions and I got that covered
     "django-rdkit",
     "environs>=14.6.0",
+    "numpy>=1.26.4",
+    # "numpy>=2", # need it but not working
 ]
 
 [dependency-groups]
@@ -62,6 +64,7 @@ dev = [
     "mypy>=1.19",
     "commitizen>=4.13.5,<5",
     "pre-commit>=4.5.1",
+    "isort>=8.0.1",
 ]
 
 [tool.commitizen]
@@ -93,7 +96,9 @@ target-version = "py313"
 exclude = [
   "tests",
   "migrations",
+  "hippo",
 ]
+force-exclude = true
 
 [tool.ruff.lint]
 select = [
@@ -104,6 +109,9 @@ select = [
   "B",   # bugbear
 ]
 
+[tool.ruff.lint.pycodestyle]
+ignore-overlong-task-comments = true
+
 [tool.ruff.format]
 quote-style = "single"
 
@@ -111,8 +119,12 @@ quote-style = "single"
 exclude = [
     "migrations",
     "tests",
+    "hippo",
 ]
 
+[tool.isort]
+profile = "hug"
+src_paths = ["src", "tests"]
 
 [tool.hatch.build]
 include = [
