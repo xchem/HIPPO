@@ -1,6 +1,6 @@
-from config import *
-
 import hippo
+
+from config import *
 
 
 def test_calculate_all_scaffolds():
