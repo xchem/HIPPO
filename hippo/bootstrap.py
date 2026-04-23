@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -23,14 +24,14 @@ def configure_django(db_config, manage_models: bool):
         }
     else:
         # postgres, existing installation, don't touch
-        # TODO: pass vars from dbconfig
+
         database = {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'designdb',
-            'USER': 'postgres',
-            'PASSWORD': 's_URzt7CWfWZ.AXD7RcF',
-            'HOST': 'database',
-            'PORT': '5432',
+            'NAME': db_config['DB_NAME'],
+            'USER': db_config['DB_USER'],
+            'PASSWORD': db_config['DB_PASSWORD'],
+            'HOST': db_config['DB_HOST'],
+            'PORT': db_config['POSTGRES_PORT'],
             'OPTIONS': {
                 # sets the schema
                 'options': '-c search_path=rdkit,designdb'
@@ -70,7 +71,15 @@ def load_hippo(
     mrich.var('target_name', target_name, color='arg')
 
     if db is None:
-        db = {}
+        # populate from env
+
+        db = {
+            'DB_NAME': os.environ.get('DB_NAME', ''),
+            'DB_USER': os.environ.get('DB_USER', ''),
+            'DB_PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'DB_HOST': os.environ.get('DB_HOST', ''),
+            'POSTGRES_PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        }
 
     if isinstance(db, str):
         # sqlite db

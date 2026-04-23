@@ -43,21 +43,17 @@ CREATE TABLE IF NOT EXISTS designdb.compounds (
     base_compound_id BIGINT REFERENCES designdb.compounds (id) ON DELETE SET NULL, -- Not populated by code
     -- compound_mol rdkit.mol, -- Replaced by TEXT CTAB below: JDBC showed SMILES text; mol_to_ctab gives a molfile string that Scarab will easily convert to structure.
     compound_mol TEXT, -- V2000 CTAB (mol block) from rdkit.mol_to_ctab(mol_from_smiles(...))
-    -- compound_pattern_bfp bit(2048), -- Postgres RDkit cartridge can calc this, Chemicalite does, not sure if insert by codebase. Currently seems broken
-    -- compound_morgan_bfp bit(2048), -- Postgres cartridge can't calc this. Must be inserted by codebase, but currently its broken
-    -- compound_mol mol, -- V2000 CTAB (mol block) from rdkit.mol_to_ctab(mol_from_smiles(...))
-    compound_pattern_bfp bfp, -- Postgres RDkit cartridge can calc this, Chemicalite does, not sure if insert by codebase. Currently seems broken
-    compound_morgan_bfp bfp, -- Postgres cartridge can't calc this. Must be inserted by codebase, but currently its broken
+    compound_pattern_bfp bit(2048), -- Postgres RDkit cartridge can calc this, Chemicalite does, not sure if insert by codebase. Currently seems broken
+    compound_morgan_bfp bit(2048), -- Postgres cartridge can't calc this. Must be inserted by codebase, but currently its broken
     compound_metadata TEXT, -- currently Null
     note TEXT,  -- New column
     rdkit_version TEXT, -- RDKit version string used when computing compound_hash (application-set; cartridge may also populate)
-    -- inchi_version TEXT NOT NULL, -- InChI software version (rdkit.Chem.inchi.GetInchiVersion)
-    inchi_version TEXT, -- InChI software version (rdkit.Chem.inchi.GetInchiVersion)
+    inchi_version TEXT NOT NULL, -- InChI software version (rdkit.Chem.inchi.GetInchiVersion)
     created_on TIMESTAMPTZ DEFAULT now(),
-    updated_on TIMESTAMPTZ DEFAULT now() --comma thingy
-    -- CONSTRAINT uc_compound_alias UNIQUE (compound_alias),
-    -- CONSTRAINT uc_compound_inchikey UNIQUE (compound_inchikey), -- comma thingy
-    -- CONSTRAINT uc_compound_smiles UNIQUE (compound_smiles)
+    updated_on TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT uc_compound_alias UNIQUE (compound_alias),
+    CONSTRAINT uc_compound_inchikey UNIQUE (compound_inchikey),
+    CONSTRAINT uc_compound_smiles UNIQUE (compound_smiles)
 );
 
 CREATE TABLE IF NOT EXISTS designdb.subsites (
@@ -79,7 +75,7 @@ CREATE TABLE IF NOT EXISTS designdb.poses (
     pose_path TEXT,
     compound_id BIGINT NOT NULL REFERENCES designdb.compounds (id) ON DELETE RESTRICT,
     target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE RESTRICT,
-    pose_mol rdkit.mol, -- Insert by the codebase. Trigger populates pose_inchikey and pose_smiles. Originally, inserted by the codebase and /or Chemicalite/Postgres RDkit cartridge, Check with Kalev!!!!!
+    pose_mol rdkit.mol, -- Insert by codebase. Trigger populates pose_inchikey and pose_smiles via cartridge.
     pose_fingerprint INTEGER, --Not sure if it null or actually calcualated somewhere.
     --pose_energy_score REAL, -- LR - redundant; use designdb.score_values
     --pose_distance_score REAL, -- LR - redundant; use designdb.score_values
@@ -313,6 +309,14 @@ CREATE TABLE IF NOT EXISTS designdb.compound_catalogue_map (
     compound_id BIGINT NOT NULL REFERENCES designdb.compounds (id) ON DELETE CASCADE,
     catalogue_price_id BIGINT NOT NULL REFERENCES designdb.catalogue_prices (id) ON DELETE CASCADE,
     match_hash TEXT NOT NULL,
+    -- Will be deleted automatically from db from here:
+    -- HIPPO temporary columns, remove when HIPPO can handle catalogue_prices and catalogue_compounds:
+    -- catalogue_inchikey TEXT, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- supplier TEXT, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- amount REAL, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- price REAL, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- lead_time INTEGER, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- Will be deleted automatically until here
     created_on TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_on TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (compound_id, catalogue_price_id),
@@ -596,108 +600,108 @@ CREATE INDEX IF NOT EXISTS idx_has_enumeration_methods_created ON designdb.has_e
 CREATE INDEX IF NOT EXISTS idx_has_compound_tag_compound_tag_id ON designdb.has_compound_tags(compound_tag_id);
 CREATE INDEX IF NOT EXISTS idx_has_compound_tag_created ON designdb.has_compound_tags(created_on);
 
--- -- =========================================================
--- -- MATERIALIZED VIEWS
--- -- =========================================================
--- -- designdb.scores_per_pose_pivoted_mv: pose_id, compound_id + one column per (method_name, method_version).
--- -- Pivoted from score_values joined with scoring_methods. Dynamically re-generated when new method added.
+-- =========================================================
+-- MATERIALIZED VIEWS
+-- =========================================================
+-- designdb.scores_per_pose_pivoted_mv: pose_id, compound_id + one column per (method_name, method_version).
+-- Pivoted from score_values joined with scoring_methods. Dynamically re-generated when new method added.
 
--- -- =========================================================
--- -- VIEWS
--- -- =========================================================
+-- =========================================================
+-- VIEWS
+-- =========================================================
 
--- -- Price-line UPDATEs from catalogue_prices_event_audit (JSON keys match catalogue_prices column names)
--- CREATE OR REPLACE VIEW designdb.catalogue_prices_price_changes_v AS
--- SELECT
---   a.id AS catalogue_price_id,
---   (NULLIF(COALESCE(a.new_values->>'catalogue_id', a.old_values->>'catalogue_id'), ''))::BIGINT AS catalogue_id,
---   COALESCE(a.new_values->>'vendor', a.old_values->>'vendor') AS vendor,
---   COALESCE(a.new_values->>'supplier', a.old_values->>'supplier') AS supplier,
---   COALESCE(a.new_values->>'supplier_id', a.old_values->>'supplier_id') AS supplier_id,
---   (NULLIF(COALESCE(a.new_values->>'amount', a.old_values->>'amount'), ''))::DOUBLE PRECISION AS amount,
---   (NULLIF(a.old_values->>'price', ''))::DOUBLE PRECISION AS price_old,
---   (NULLIF(a.new_values->>'price', ''))::DOUBLE PRECISION AS price_new,
---   COALESCE(a.new_values->>'currency', a.old_values->>'currency') AS currency,
---   (NULLIF(COALESCE(a.new_values->>'purity', a.old_values->>'purity'), ''))::DOUBLE PRECISION AS purity,
---   (NULLIF(COALESCE(a.new_values->>'lead_time', a.old_values->>'lead_time'), ''))::INTEGER AS lead_time,
---   a.changed_at
--- FROM designdb.catalogue_prices_event_audit a
--- WHERE a.operation = 'U';
+-- Price-line UPDATEs from catalogue_prices_event_audit (JSON keys match catalogue_prices column names)
+CREATE OR REPLACE VIEW designdb.catalogue_prices_price_changes_v AS
+SELECT
+  a.id AS catalogue_price_id,
+  (NULLIF(COALESCE(a.new_values->>'catalogue_id', a.old_values->>'catalogue_id'), ''))::BIGINT AS catalogue_id,
+  COALESCE(a.new_values->>'vendor', a.old_values->>'vendor') AS vendor,
+  COALESCE(a.new_values->>'supplier', a.old_values->>'supplier') AS supplier,
+  COALESCE(a.new_values->>'supplier_id', a.old_values->>'supplier_id') AS supplier_id,
+  (NULLIF(COALESCE(a.new_values->>'amount', a.old_values->>'amount'), ''))::DOUBLE PRECISION AS amount,
+  (NULLIF(a.old_values->>'price', ''))::DOUBLE PRECISION AS price_old,
+  (NULLIF(a.new_values->>'price', ''))::DOUBLE PRECISION AS price_new,
+  COALESCE(a.new_values->>'currency', a.old_values->>'currency') AS currency,
+  (NULLIF(COALESCE(a.new_values->>'purity', a.old_values->>'purity'), ''))::DOUBLE PRECISION AS purity,
+  (NULLIF(COALESCE(a.new_values->>'lead_time', a.old_values->>'lead_time'), ''))::INTEGER AS lead_time,
+  a.changed_at
+FROM designdb.catalogue_prices_event_audit a
+WHERE a.operation = 'U';
 
--- -- Pose tags: UPDATE events with old/new name, description, note.
--- CREATE OR REPLACE VIEW designdb.pose_tags_changes_v AS
--- SELECT
---   a.id AS pose_tag_id,
---   a.old_values->>'pose_tag_name' AS pose_tag_name_old,
---   a.new_values->>'pose_tag_name' AS pose_tag_name_new,
---   a.old_values->>'pose_tag_description' AS pose_tag_description_old,
---   a.new_values->>'pose_tag_description' AS pose_tag_description_new,
---   a.old_values->>'pose_tag_note' AS pose_tag_note_old,
---   a.new_values->>'pose_tag_note' AS pose_tag_note_new,
---   a.changed_by,
---   a.changed_at
--- FROM designdb.pose_tags_event_audit a
--- WHERE a.operation = 'U';
+-- Pose tags: UPDATE events with old/new name, description, note.
+CREATE OR REPLACE VIEW designdb.pose_tags_changes_v AS
+SELECT
+  a.id AS pose_tag_id,
+  a.old_values->>'pose_tag_name' AS pose_tag_name_old,
+  a.new_values->>'pose_tag_name' AS pose_tag_name_new,
+  a.old_values->>'pose_tag_description' AS pose_tag_description_old,
+  a.new_values->>'pose_tag_description' AS pose_tag_description_new,
+  a.old_values->>'pose_tag_note' AS pose_tag_note_old,
+  a.new_values->>'pose_tag_note' AS pose_tag_note_new,
+  a.changed_by,
+  a.changed_at
+FROM designdb.pose_tags_event_audit a
+WHERE a.operation = 'U';
 
--- -- Compound tags: UPDATE events with old/new name, description, note.
--- CREATE OR REPLACE VIEW designdb.compound_tags_changes_v AS
--- SELECT
---   a.id AS compound_tag_id,
---   a.old_values->>'compound_tag_name' AS compound_tag_name_old,
---   a.new_values->>'compound_tag_name' AS compound_tag_name_new,
---   a.old_values->>'compound_tag_description' AS compound_tag_description_old,
---   a.new_values->>'compound_tag_description' AS compound_tag_description_new,
---   a.old_values->>'compound_tag_note' AS compound_tag_note_old,
---   a.new_values->>'compound_tag_note' AS compound_tag_note_new,
---   a.changed_by,
---   a.changed_at
--- FROM designdb.compound_tags_event_audit a
--- WHERE a.operation = 'U';
+-- Compound tags: UPDATE events with old/new name, description, note.
+CREATE OR REPLACE VIEW designdb.compound_tags_changes_v AS
+SELECT
+  a.id AS compound_tag_id,
+  a.old_values->>'compound_tag_name' AS compound_tag_name_old,
+  a.new_values->>'compound_tag_name' AS compound_tag_name_new,
+  a.old_values->>'compound_tag_description' AS compound_tag_description_old,
+  a.new_values->>'compound_tag_description' AS compound_tag_description_new,
+  a.old_values->>'compound_tag_note' AS compound_tag_note_old,
+  a.new_values->>'compound_tag_note' AS compound_tag_note_new,
+  a.changed_by,
+  a.changed_at
+FROM designdb.compound_tags_event_audit a
+WHERE a.operation = 'U';
 
--- -- Pose methods: UPDATE events with old/new name, description, version, etc.
--- CREATE OR REPLACE VIEW designdb.pose_methods_changes_v AS
--- SELECT
---   a.id AS pose_method_id,
---   a.old_values->>'pose_method_name' AS pose_method_name_old,
---   a.new_values->>'pose_method_name' AS pose_method_name_new,
---   a.old_values->>'pose_method_description' AS pose_method_description_old,
---   a.new_values->>'pose_method_description' AS pose_method_description_new,
---   a.old_values->>'pose_method_version' AS pose_method_version_old,
---   a.new_values->>'pose_method_version' AS pose_method_version_new,
---   a.changed_by,
---   a.changed_at
--- FROM designdb.pose_methods_event_audit a
--- WHERE a.operation = 'U';
+-- Pose methods: UPDATE events with old/new name, description, version, etc.
+CREATE OR REPLACE VIEW designdb.pose_methods_changes_v AS
+SELECT
+  a.id AS pose_method_id,
+  a.old_values->>'pose_method_name' AS pose_method_name_old,
+  a.new_values->>'pose_method_name' AS pose_method_name_new,
+  a.old_values->>'pose_method_description' AS pose_method_description_old,
+  a.new_values->>'pose_method_description' AS pose_method_description_new,
+  a.old_values->>'pose_method_version' AS pose_method_version_old,
+  a.new_values->>'pose_method_version' AS pose_method_version_new,
+  a.changed_by,
+  a.changed_at
+FROM designdb.pose_methods_event_audit a
+WHERE a.operation = 'U';
 
--- -- Enumeration methods: UPDATE events with old/new name, description, version, etc.
--- CREATE OR REPLACE VIEW designdb.enumeration_methods_changes_v AS
--- SELECT
---   a.id AS enumeration_method_id,
---   a.old_values->>'enum_name' AS enum_name_old,
---   a.new_values->>'enum_name' AS enum_name_new,
---   a.old_values->>'enum_description' AS enum_description_old,
---   a.new_values->>'enum_description' AS enum_description_new,
---   a.old_values->>'enum_version' AS enum_version_old,
---   a.new_values->>'enum_version' AS enum_version_new,
---   a.changed_by,
---   a.changed_at
--- FROM designdb.enumeration_methods_event_audit a
--- WHERE a.operation = 'U';
+-- Enumeration methods: UPDATE events with old/new name, description, version, etc.
+CREATE OR REPLACE VIEW designdb.enumeration_methods_changes_v AS
+SELECT
+  a.id AS enumeration_method_id,
+  a.old_values->>'enum_name' AS enum_name_old,
+  a.new_values->>'enum_name' AS enum_name_new,
+  a.old_values->>'enum_description' AS enum_description_old,
+  a.new_values->>'enum_description' AS enum_description_new,
+  a.old_values->>'enum_version' AS enum_version_old,
+  a.new_values->>'enum_version' AS enum_version_new,
+  a.changed_by,
+  a.changed_at
+FROM designdb.enumeration_methods_event_audit a
+WHERE a.operation = 'U';
 
--- -- Scoring methods: UPDATE events with old/new name, description, version, etc.
--- CREATE OR REPLACE VIEW designdb.scoring_methods_changes_v AS
--- SELECT
---   a.id AS scoring_method_id,
---   a.old_values->>'method_name' AS method_name_old,
---   a.new_values->>'method_name' AS method_name_new,
---   a.old_values->>'method_description' AS method_description_old,
---   a.new_values->>'method_description' AS method_description_new,
---   a.old_values->>'method_version' AS method_version_old,
---   a.new_values->>'method_version' AS method_version_new,
---   a.changed_by,
---   a.changed_at
--- FROM designdb.scoring_methods_event_audit a
--- WHERE a.operation = 'U';
+-- Scoring methods: UPDATE events with old/new name, description, version, etc.
+CREATE OR REPLACE VIEW designdb.scoring_methods_changes_v AS
+SELECT
+  a.id AS scoring_method_id,
+  a.old_values->>'method_name' AS method_name_old,
+  a.new_values->>'method_name' AS method_name_new,
+  a.old_values->>'method_description' AS method_description_old,
+  a.new_values->>'method_description' AS method_description_new,
+  a.old_values->>'method_version' AS method_version_old,
+  a.new_values->>'method_version' AS method_version_new,
+  a.changed_by,
+  a.changed_at
+FROM designdb.scoring_methods_event_audit a
+WHERE a.operation = 'U';
 
 -- =========================================================
 -- FUNCTIONS
@@ -706,7 +710,7 @@ CREATE INDEX IF NOT EXISTS idx_has_compound_tag_created ON designdb.has_compound
 -- =========================================================
 -- RDKIT CARTRIDGE – COMPOUND WRAPPERS
 -- =========================================================
--- Schema-qualified wrappers for RDKit mol_from_smiles, mol_to_smiles, mol_inchikey, mol_to_ctab (used by compound, pose, and catalogue_compounds triggers).
+-- Schema-qualified wrappers for RDKit mol_from_smiles, mol_to_smiles, mol_inchikey, mol_to_ctab (compound, pose, catalogue_compounds triggers).
 
 CREATE OR REPLACE FUNCTION designdb.mol_from_smiles(smiles TEXT) RETURNS rdkit.mol
   LANGUAGE SQL AS $$ SELECT rdkit.mol_from_smiles(smiles::cstring); $$;
@@ -852,66 +856,66 @@ CREATE TRIGGER trg_check_score_values_compound_matches_pose
 -- Columns: pose_id, compound_id, then one JSONB column per (method_name, method_version).
 -- Column names use suffix _m{scoring_method_id} to avoid collisions (e.g. vina_1_0_m1).
 -- Value in column: if score is numeric then JSONB number, if text then JSONB string.
--- CREATE OR REPLACE FUNCTION designdb.create_scores_per_pose_pivoted_mv()
--- RETURNS void
--- LANGUAGE plpgsql
--- AS $$
--- DECLARE
---   select_qry text;
---   col text;
---   method_rec record;
---   score_txt text;
---   value_expr text;
---   numeric_pat text := '^\-?[0-9]*\.?[0-9]+([eE][\-+]?[0-9]+)?$';
--- BEGIN
---   select_qry := 'SELECT sv.pose_id, sv.compound_id';
---   FOR method_rec IN
---     SELECT m.id, m.method_name, m.method_version
---     FROM designdb.scoring_methods m
---     ORDER BY m.id
---   LOOP
---     col := regexp_replace(
---       trim(method_rec.method_name) || '_' || coalesce(
---         replace(replace(trim(coalesce(method_rec.method_version, '')), ' ', '_'), '.', '_'),
---         ''
---       ),
---       '[^a-zA-Z0-9_]', '_', 'g'
---     ) || '_m' || method_rec.id;
---     IF col <> '' AND col <> '_' THEN
---       col := quote_ident(col);
---       score_txt := '(sv.score->>' || quote_literal('score') || ')';
---       value_expr := '(CASE WHEN ' || score_txt || ' IS NOT NULL AND ' || score_txt || ' ~ ' || quote_literal(numeric_pat)
---         || ' THEN to_jsonb((' || score_txt || ')::numeric) ELSE to_jsonb(' || score_txt || ') END)';
---       select_qry := select_qry || ', MAX(CASE WHEN sv.scoring_method_id = ' || method_rec.id
---         || ' THEN ' || value_expr || ' END) AS ' || col;
---     END IF;
---   END LOOP;
---   select_qry := select_qry || ' FROM designdb.score_values sv GROUP BY sv.pose_id, sv.compound_id';
---   EXECUTE 'DROP MATERIALIZED VIEW IF EXISTS designdb.scores_per_pose_pivoted_mv CASCADE';
---   EXECUTE 'CREATE MATERIALIZED VIEW designdb.scores_per_pose_pivoted_mv AS ' || select_qry;
---   EXECUTE 'CREATE UNIQUE INDEX ON designdb.scores_per_pose_pivoted_mv (pose_id, compound_id)';
--- END;
--- $$;
+CREATE OR REPLACE FUNCTION designdb.create_scores_per_pose_pivoted_mv()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  select_qry text;
+  col text;
+  method_rec record;
+  score_txt text;
+  value_expr text;
+  numeric_pat text := '^\-?[0-9]*\.?[0-9]+([eE][\-+]?[0-9]+)?$';
+BEGIN
+  select_qry := 'SELECT sv.pose_id, sv.compound_id';
+  FOR method_rec IN
+    SELECT m.id, m.method_name, m.method_version
+    FROM designdb.scoring_methods m
+    ORDER BY m.id
+  LOOP
+    col := regexp_replace(
+      trim(method_rec.method_name) || '_' || coalesce(
+        replace(replace(trim(coalesce(method_rec.method_version, '')), ' ', '_'), '.', '_'),
+        ''
+      ),
+      '[^a-zA-Z0-9_]', '_', 'g'
+    ) || '_m' || method_rec.id;
+    IF col <> '' AND col <> '_' THEN
+      col := quote_ident(col);
+      score_txt := '(sv.score->>' || quote_literal('score') || ')';
+      value_expr := '(CASE WHEN ' || score_txt || ' IS NOT NULL AND ' || score_txt || ' ~ ' || quote_literal(numeric_pat)
+        || ' THEN to_jsonb((' || score_txt || ')::numeric) ELSE to_jsonb(' || score_txt || ') END)';
+      select_qry := select_qry || ', MAX(CASE WHEN sv.scoring_method_id = ' || method_rec.id
+        || ' THEN ' || value_expr || ' END) AS ' || col;
+    END IF;
+  END LOOP;
+  select_qry := select_qry || ' FROM designdb.score_values sv GROUP BY sv.pose_id, sv.compound_id';
+  EXECUTE 'DROP MATERIALIZED VIEW IF EXISTS designdb.scores_per_pose_pivoted_mv CASCADE';
+  EXECUTE 'CREATE MATERIALIZED VIEW designdb.scores_per_pose_pivoted_mv AS ' || select_qry;
+  EXECUTE 'CREATE UNIQUE INDEX ON designdb.scores_per_pose_pivoted_mv (pose_id, compound_id)';
+END;
+$$;
 
--- CREATE OR REPLACE FUNCTION designdb.trg_recreate_scores_pivoted_mv()
--- RETURNS trigger
--- LANGUAGE plpgsql
--- AS $$
--- BEGIN
---   PERFORM designdb.create_scores_per_pose_pivoted_mv();
---   RETURN NULL;
--- END;
--- $$;
+CREATE OR REPLACE FUNCTION designdb.trg_recreate_scores_pivoted_mv()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM designdb.create_scores_per_pose_pivoted_mv();
+  RETURN NULL;
+END;
+$$;
 
--- CREATE OR REPLACE FUNCTION designdb.refresh_scores_per_pose_pivoted_mv()
--- RETURNS trigger
--- LANGUAGE plpgsql
--- AS $$
--- BEGIN
---   REFRESH MATERIALIZED VIEW CONCURRENTLY designdb.scores_per_pose_pivoted_mv;
---   RETURN NULL;
--- END;
--- $$;
+CREATE OR REPLACE FUNCTION designdb.refresh_scores_per_pose_pivoted_mv()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY designdb.scores_per_pose_pivoted_mv;
+  RETURN NULL;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION designdb.update_updated_on()
 RETURNS trigger AS $$
@@ -921,9 +925,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- =========================================================
--- Populate compound_catalogue_map when compounds and/or catalogue prices exist for the same registration hash.
-CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_compound()
+/*
+-- Will be deleted automatically from db from here:
+-- === HIPPO TEMPORARY: denormalized map columns; remove when HIPPO ready ===
+
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_compound_temp()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -935,8 +941,12 @@ BEGIN
         DELETE FROM designdb.compound_catalogue_map WHERE compound_id = NEW.id;
     END IF;
 
-    INSERT INTO designdb.compound_catalogue_map (compound_id, catalogue_price_id, match_hash)
-    SELECT NEW.id, cp.id, NEW.compound_hash
+    INSERT INTO designdb.compound_catalogue_map (
+        compound_id, catalogue_price_id, match_hash,
+        catalogue_inchikey, supplier, amount, price, lead_time
+    )
+    SELECT NEW.id, cp.id, NEW.compound_hash,
+           cat.catalogue_inchikey, cp.supplier, cp.amount, cp.price, cp.lead_time
     FROM designdb.catalogue_prices cp
     JOIN designdb.catalogue_compounds cat ON cat.id = cp.catalogue_id
     WHERE cat.catalogue_hash = NEW.compound_hash
@@ -946,8 +956,7 @@ BEGIN
 END;
 $$;
 
--- When catalogue_hash changes on catalogue_compounds: refresh map rows for all price lines under that compound row.
-CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue()
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_temp()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -962,8 +971,12 @@ BEGIN
         );
     END IF;
 
-    INSERT INTO designdb.compound_catalogue_map (compound_id, catalogue_price_id, match_hash)
-    SELECT c.id, cp.id, c.compound_hash
+    INSERT INTO designdb.compound_catalogue_map (
+        compound_id, catalogue_price_id, match_hash,
+        catalogue_inchikey, supplier, amount, price, lead_time
+    )
+    SELECT c.id, cp.id, c.compound_hash,
+           NEW.catalogue_inchikey, cp.supplier, cp.amount, cp.price, cp.lead_time
     FROM designdb.compounds c
     CROSS JOIN designdb.catalogue_prices cp
     WHERE cp.catalogue_id = NEW.id AND c.compound_hash = NEW.catalogue_hash
@@ -973,8 +986,7 @@ BEGIN
 END;
 $$;
 
--- When a catalogue_price row is inserted or its catalogue_id changes: link compounds by parent hash.
-CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price()
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price_temp()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -986,8 +998,12 @@ BEGIN
         DELETE FROM designdb.compound_catalogue_map WHERE catalogue_price_id = NEW.id;
     END IF;
 
-    INSERT INTO designdb.compound_catalogue_map (compound_id, catalogue_price_id, match_hash)
-    SELECT c.id, NEW.id, c.compound_hash
+    INSERT INTO designdb.compound_catalogue_map (
+        compound_id, catalogue_price_id, match_hash,
+        catalogue_inchikey, supplier, amount, price, lead_time
+    )
+    SELECT c.id, NEW.id, c.compound_hash,
+           cat.catalogue_inchikey, NEW.supplier, NEW.amount, NEW.price, NEW.lead_time
     FROM designdb.compounds c
     JOIN designdb.catalogue_compounds cat ON cat.id = NEW.catalogue_id
     WHERE c.compound_hash = cat.catalogue_hash
@@ -996,6 +1012,44 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE designdb.compound_catalogue_map m
+    SET supplier = NEW.supplier,
+        amount = NEW.amount,
+        price = NEW.price,
+        lead_time = NEW.lead_time,
+        updated_on = now()
+    WHERE m.catalogue_price_id = NEW.id;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        IF OLD.catalogue_inchikey IS NOT DISTINCT FROM NEW.catalogue_inchikey THEN
+            RETURN NEW;
+        END IF;
+    END IF;
+    UPDATE designdb.compound_catalogue_map m
+    SET catalogue_inchikey = NEW.catalogue_inchikey,
+        updated_on = now()
+    WHERE m.catalogue_price_id IN (
+        SELECT id FROM designdb.catalogue_prices WHERE catalogue_id = NEW.id
+    );
+    RETURN NEW;
+END;
+$$;
+-- Will be deleted automatically until here
+*/
 
 -- =========================================================
 -- AUDIT FUNCTIONS
@@ -1097,196 +1151,338 @@ $$ LANGUAGE plpgsql VOLATILE;
 -- TRIGGERS (updated_on)
 -- =========================================================
 
--- DROP TRIGGER IF EXISTS trg_target_updated_on ON designdb.targets;
--- CREATE TRIGGER trg_target_updated_on BEFORE UPDATE ON designdb.targets FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_target_updated_on ON designdb.targets;
+CREATE TRIGGER trg_target_updated_on BEFORE UPDATE ON designdb.targets FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_scoring_method_updated_on ON designdb.scoring_methods;
--- CREATE TRIGGER trg_scoring_method_updated_on BEFORE UPDATE ON designdb.scoring_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_scoring_method_updated_on ON designdb.scoring_methods;
+CREATE TRIGGER trg_scoring_method_updated_on BEFORE UPDATE ON designdb.scoring_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- -- DROP TRIGGER IF EXISTS trg_scoring_method_recreate_pivoted_mv ON designdb.scoring_methods;
--- -- CREATE TRIGGER trg_scoring_method_recreate_pivoted_mv
--- --   AFTER INSERT OR UPDATE OR DELETE ON designdb.scoring_methods
--- --   FOR EACH STATEMENT EXECUTE FUNCTION designdb.trg_recreate_scores_pivoted_mv();
+DROP TRIGGER IF EXISTS trg_scoring_method_recreate_pivoted_mv ON designdb.scoring_methods;
+CREATE TRIGGER trg_scoring_method_recreate_pivoted_mv
+  AFTER INSERT OR UPDATE OR DELETE ON designdb.scoring_methods
+  FOR EACH STATEMENT EXECUTE FUNCTION designdb.trg_recreate_scores_pivoted_mv();
 
--- DROP TRIGGER IF EXISTS trg_enumeration_method_updated_on ON designdb.enumeration_methods;
--- CREATE TRIGGER trg_enumeration_method_updated_on BEFORE UPDATE ON designdb.enumeration_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_enumeration_method_updated_on ON designdb.enumeration_methods;
+CREATE TRIGGER trg_enumeration_method_updated_on BEFORE UPDATE ON designdb.enumeration_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_pose_method_updated_on ON designdb.pose_methods;
--- CREATE TRIGGER trg_pose_method_updated_on BEFORE UPDATE ON designdb.pose_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_pose_method_updated_on ON designdb.pose_methods;
+CREATE TRIGGER trg_pose_method_updated_on BEFORE UPDATE ON designdb.pose_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_compound_updated_on ON designdb.compounds;
--- CREATE TRIGGER trg_compound_updated_on BEFORE UPDATE ON designdb.compounds FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_compound_updated_on ON designdb.compounds;
+CREATE TRIGGER trg_compound_updated_on BEFORE UPDATE ON designdb.compounds FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound ON designdb.compounds;
--- CREATE TRIGGER trg_compound_catalogue_map_sync_compound
---     AFTER INSERT OR UPDATE OF compound_hash ON designdb.compounds
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_compound();
+/*
+-- Will be deleted automatically from db from here:
+-- Production trigger names reserved (see /* */ block at end of file); active temp triggers:
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound ON designdb.compounds;
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound_temp ON designdb.compounds;
+CREATE TRIGGER trg_compound_catalogue_map_sync_compound_temp
+    AFTER INSERT OR UPDATE OF compound_hash ON designdb.compounds
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_compound_temp();
+-- Will be deleted automatically until here
+*/
 
--- DROP TRIGGER IF EXISTS trg_feature_updated_on ON designdb.features;
--- CREATE TRIGGER trg_feature_updated_on BEFORE UPDATE ON designdb.features FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_feature_updated_on ON designdb.features;
+CREATE TRIGGER trg_feature_updated_on BEFORE UPDATE ON designdb.features FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_route_updated_on ON designdb.routes;
--- CREATE TRIGGER trg_route_updated_on BEFORE UPDATE ON designdb.routes FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_route_updated_on ON designdb.routes;
+CREATE TRIGGER trg_route_updated_on BEFORE UPDATE ON designdb.routes FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_reaction_updated_on ON designdb.reactions;
--- CREATE TRIGGER trg_reaction_updated_on BEFORE UPDATE ON designdb.reactions FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_reaction_updated_on ON designdb.reactions;
+CREATE TRIGGER trg_reaction_updated_on BEFORE UPDATE ON designdb.reactions FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_pose_updated_on ON designdb.poses;
--- CREATE TRIGGER trg_pose_updated_on BEFORE UPDATE ON designdb.poses FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_pose_updated_on ON designdb.poses;
+CREATE TRIGGER trg_pose_updated_on BEFORE UPDATE ON designdb.poses FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_score_values_updated_on ON designdb.score_values;
--- CREATE TRIGGER trg_score_values_updated_on BEFORE UPDATE ON designdb.score_values FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_score_values_updated_on ON designdb.score_values;
+CREATE TRIGGER trg_score_values_updated_on BEFORE UPDATE ON designdb.score_values FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- -- DROP TRIGGER IF EXISTS trg_score_values_refresh_pivoted_mv ON designdb.score_values;
--- -- CREATE TRIGGER trg_score_values_refresh_pivoted_mv
--- --   AFTER INSERT OR UPDATE OR DELETE ON designdb.score_values
--- --   FOR EACH STATEMENT EXECUTE FUNCTION designdb.refresh_scores_per_pose_pivoted_mv();
+DROP TRIGGER IF EXISTS trg_score_values_refresh_pivoted_mv ON designdb.score_values;
+CREATE TRIGGER trg_score_values_refresh_pivoted_mv
+  AFTER INSERT OR UPDATE OR DELETE ON designdb.score_values
+  FOR EACH STATEMENT EXECUTE FUNCTION designdb.refresh_scores_per_pose_pivoted_mv();
 
--- DROP TRIGGER IF EXISTS trg_subsite_updated_on ON designdb.subsites;
--- CREATE TRIGGER trg_subsite_updated_on BEFORE UPDATE ON designdb.subsites FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_subsite_updated_on ON designdb.subsites;
+CREATE TRIGGER trg_subsite_updated_on BEFORE UPDATE ON designdb.subsites FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_component_updated_on ON designdb.components;
--- CREATE TRIGGER trg_component_updated_on BEFORE UPDATE ON designdb.components FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_component_updated_on ON designdb.components;
+CREATE TRIGGER trg_component_updated_on BEFORE UPDATE ON designdb.components FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_inspiration_updated_on ON designdb.inspirations;
--- CREATE TRIGGER trg_inspiration_updated_on BEFORE UPDATE ON designdb.inspirations FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_inspiration_updated_on ON designdb.inspirations;
+CREATE TRIGGER trg_inspiration_updated_on BEFORE UPDATE ON designdb.inspirations FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_interaction_updated_on ON designdb.interactions;
--- CREATE TRIGGER trg_interaction_updated_on BEFORE UPDATE ON designdb.interactions FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_interaction_updated_on ON designdb.interactions;
+CREATE TRIGGER trg_interaction_updated_on BEFORE UPDATE ON designdb.interactions FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_catalogue_updated_on ON designdb.catalogue_compounds;
--- CREATE TRIGGER trg_catalogue_updated_on BEFORE UPDATE ON designdb.catalogue_compounds FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_catalogue_updated_on ON designdb.catalogue_compounds;
+CREATE TRIGGER trg_catalogue_updated_on BEFORE UPDATE ON designdb.catalogue_compounds FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_catalogue_price_updated_on ON designdb.catalogue_prices;
--- CREATE TRIGGER trg_catalogue_price_updated_on BEFORE UPDATE ON designdb.catalogue_prices FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_catalogue_price_updated_on ON designdb.catalogue_prices;
+CREATE TRIGGER trg_catalogue_price_updated_on BEFORE UPDATE ON designdb.catalogue_prices FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue ON designdb.catalogue_compounds;
--- CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue
---     AFTER INSERT OR UPDATE OF catalogue_hash ON designdb.catalogue_compounds
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue();
+/*
+-- Will be deleted automatically from db from here:
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue ON designdb.catalogue_compounds;
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_temp ON designdb.catalogue_compounds;
+CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_temp
+    AFTER INSERT OR UPDATE OF catalogue_hash ON designdb.catalogue_compounds
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_temp();
 
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price ON designdb.catalogue_prices;
--- CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_price
---     AFTER INSERT OR UPDATE OF catalogue_id ON designdb.catalogue_prices
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price();
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price ON designdb.catalogue_prices;
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price_temp ON designdb.catalogue_prices;
+CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_price_temp
+    AFTER INSERT OR UPDATE OF catalogue_id ON designdb.catalogue_prices
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price_temp();
 
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_updated_on ON designdb.compound_catalogue_map;
--- CREATE TRIGGER trg_compound_catalogue_map_updated_on BEFORE UPDATE ON designdb.compound_catalogue_map FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_price ON designdb.catalogue_prices;
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp ON designdb.catalogue_prices;
+CREATE TRIGGER trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp
+    AFTER UPDATE OF supplier, amount, price, lead_time ON designdb.catalogue_prices
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp();
 
--- -- =========================================================
--- -- AUDIT TRIGGERS
--- -- =========================================================
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound ON designdb.catalogue_compounds;
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp ON designdb.catalogue_compounds;
+CREATE TRIGGER trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp
+    AFTER UPDATE OF catalogue_inchikey ON designdb.catalogue_compounds
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp();
+-- Will be deleted automatically until here
+*/
 
--- DROP TRIGGER IF EXISTS trg_catalogue_compounds_event_audit ON designdb.catalogue_compounds;
--- CREATE TRIGGER trg_catalogue_compounds_event_audit
---     AFTER INSERT OR UPDATE OR DELETE ON designdb.catalogue_compounds
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.event_audit_trigger(
---         'designdb.catalogue_compounds_event_audit',
---         'id',
---         'created_on,updated_on',
---         ''
---     );
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_updated_on ON designdb.compound_catalogue_map;
+CREATE TRIGGER trg_compound_catalogue_map_updated_on BEFORE UPDATE ON designdb.compound_catalogue_map FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_catalogue_prices_event_audit ON designdb.catalogue_prices;
--- CREATE TRIGGER trg_catalogue_prices_event_audit
---     AFTER INSERT OR UPDATE OR DELETE ON designdb.catalogue_prices
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.event_audit_trigger(
---         'designdb.catalogue_prices_event_audit',
---         'id',
---         'created_on,updated_on',
---         ''
---     );
+-- =========================================================
+-- AUDIT TRIGGERS
+-- =========================================================
 
--- DROP TRIGGER IF EXISTS trg_pose_tags_event_audit ON designdb.pose_tags;
--- CREATE TRIGGER trg_pose_tags_event_audit
---     AFTER INSERT OR UPDATE OR DELETE ON designdb.pose_tags
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.event_audit_trigger(
---         'designdb.pose_tags_event_audit',
---         'id',
---         'created_on,updated_on',
---         ''
---     );
+DROP TRIGGER IF EXISTS trg_catalogue_compounds_event_audit ON designdb.catalogue_compounds;
+CREATE TRIGGER trg_catalogue_compounds_event_audit
+    AFTER INSERT OR UPDATE OR DELETE ON designdb.catalogue_compounds
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.event_audit_trigger(
+        'designdb.catalogue_compounds_event_audit',
+        'id',
+        'created_on,updated_on',
+        ''
+    );
 
--- DROP TRIGGER IF EXISTS trg_compound_tags_event_audit ON designdb.compound_tags;
--- CREATE TRIGGER trg_compound_tags_event_audit
---     AFTER INSERT OR UPDATE OR DELETE ON designdb.compound_tags
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.event_audit_trigger(
---         'designdb.compound_tags_event_audit',
---         'id',
---         'created_on,updated_on',
---         ''
---     );
+DROP TRIGGER IF EXISTS trg_catalogue_prices_event_audit ON designdb.catalogue_prices;
+CREATE TRIGGER trg_catalogue_prices_event_audit
+    AFTER INSERT OR UPDATE OR DELETE ON designdb.catalogue_prices
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.event_audit_trigger(
+        'designdb.catalogue_prices_event_audit',
+        'id',
+        'created_on,updated_on',
+        ''
+    );
 
--- DROP TRIGGER IF EXISTS trg_pose_methods_event_audit ON designdb.pose_methods;
--- CREATE TRIGGER trg_pose_methods_event_audit
---     AFTER INSERT OR UPDATE OR DELETE ON designdb.pose_methods
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.event_audit_trigger(
---         'designdb.pose_methods_event_audit',
---         'id',
---         'created_on,updated_on',
---         ''
---     );
+DROP TRIGGER IF EXISTS trg_pose_tags_event_audit ON designdb.pose_tags;
+CREATE TRIGGER trg_pose_tags_event_audit
+    AFTER INSERT OR UPDATE OR DELETE ON designdb.pose_tags
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.event_audit_trigger(
+        'designdb.pose_tags_event_audit',
+        'id',
+        'created_on,updated_on',
+        ''
+    );
 
--- DROP TRIGGER IF EXISTS trg_enumeration_methods_event_audit ON designdb.enumeration_methods;
--- CREATE TRIGGER trg_enumeration_methods_event_audit
---     AFTER INSERT OR UPDATE OR DELETE ON designdb.enumeration_methods
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.event_audit_trigger(
---         'designdb.enumeration_methods_event_audit',
---         'id',
---         'created_on,updated_on',
---         ''
---     );
+DROP TRIGGER IF EXISTS trg_compound_tags_event_audit ON designdb.compound_tags;
+CREATE TRIGGER trg_compound_tags_event_audit
+    AFTER INSERT OR UPDATE OR DELETE ON designdb.compound_tags
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.event_audit_trigger(
+        'designdb.compound_tags_event_audit',
+        'id',
+        'created_on,updated_on',
+        ''
+    );
 
--- DROP TRIGGER IF EXISTS trg_scoring_methods_event_audit ON designdb.scoring_methods;
--- CREATE TRIGGER trg_scoring_methods_event_audit
---     AFTER INSERT OR UPDATE OR DELETE ON designdb.scoring_methods
---     FOR EACH ROW
---     EXECUTE FUNCTION designdb.event_audit_trigger(
---         'designdb.scoring_methods_event_audit',
---         'id',
---         'created_on,updated_on',
---         ''
---     );
+DROP TRIGGER IF EXISTS trg_pose_methods_event_audit ON designdb.pose_methods;
+CREATE TRIGGER trg_pose_methods_event_audit
+    AFTER INSERT OR UPDATE OR DELETE ON designdb.pose_methods
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.event_audit_trigger(
+        'designdb.pose_methods_event_audit',
+        'id',
+        'created_on,updated_on',
+        ''
+    );
 
--- DROP TRIGGER IF EXISTS trg_reactant_updated_on ON designdb.reactants;
--- CREATE TRIGGER trg_reactant_updated_on BEFORE UPDATE ON designdb.reactants FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_enumeration_methods_event_audit ON designdb.enumeration_methods;
+CREATE TRIGGER trg_enumeration_methods_event_audit
+    AFTER INSERT OR UPDATE OR DELETE ON designdb.enumeration_methods
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.event_audit_trigger(
+        'designdb.enumeration_methods_event_audit',
+        'id',
+        'created_on,updated_on',
+        ''
+    );
 
--- DROP TRIGGER IF EXISTS trg_scaffold_updated_on ON designdb.scaffolds;
--- CREATE TRIGGER trg_scaffold_updated_on BEFORE UPDATE ON designdb.scaffolds FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_scoring_methods_event_audit ON designdb.scoring_methods;
+CREATE TRIGGER trg_scoring_methods_event_audit
+    AFTER INSERT OR UPDATE OR DELETE ON designdb.scoring_methods
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.event_audit_trigger(
+        'designdb.scoring_methods_event_audit',
+        'id',
+        'created_on,updated_on',
+        ''
+    );
 
--- DROP TRIGGER IF EXISTS trg_subsite_tag_updated_on ON designdb.subsite_tags;
--- CREATE TRIGGER trg_subsite_tag_updated_on BEFORE UPDATE ON designdb.subsite_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_reactant_updated_on ON designdb.reactants;
+CREATE TRIGGER trg_reactant_updated_on BEFORE UPDATE ON designdb.reactants FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- -- Removed due to replaced tables
--- -- DROP TRIGGER IF EXISTS trg_tag_updated_on ON designdb.tags;
--- -- CREATE TRIGGER trg_tag_updated_on BEFORE UPDATE ON designdb.tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_scaffold_updated_on ON designdb.scaffolds;
+CREATE TRIGGER trg_scaffold_updated_on BEFORE UPDATE ON designdb.scaffolds FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_pose_tag_updated_on ON designdb.pose_tags;
--- CREATE TRIGGER trg_pose_tag_updated_on BEFORE UPDATE ON designdb.pose_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_subsite_tag_updated_on ON designdb.subsite_tags;
+CREATE TRIGGER trg_subsite_tag_updated_on BEFORE UPDATE ON designdb.subsite_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_compound_tag_updated_on ON designdb.compound_tags;
--- CREATE TRIGGER trg_compound_tag_updated_on BEFORE UPDATE ON designdb.compound_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+-- Removed due to replaced tables
+-- DROP TRIGGER IF EXISTS trg_tag_updated_on ON designdb.tags;
+-- CREATE TRIGGER trg_tag_updated_on BEFORE UPDATE ON designdb.tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_has_pose_tag_updated_on ON designdb.has_pose_tags;
--- CREATE TRIGGER trg_has_pose_tag_updated_on BEFORE UPDATE ON designdb.has_pose_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_pose_tag_updated_on ON designdb.pose_tags;
+CREATE TRIGGER trg_pose_tag_updated_on BEFORE UPDATE ON designdb.pose_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_has_pose_methods_updated_on ON designdb.has_pose_methods;
--- CREATE TRIGGER trg_has_pose_methods_updated_on BEFORE UPDATE ON designdb.has_pose_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_compound_tag_updated_on ON designdb.compound_tags;
+CREATE TRIGGER trg_compound_tag_updated_on BEFORE UPDATE ON designdb.compound_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_has_compound_tag_updated_on ON designdb.has_compound_tags;
--- CREATE TRIGGER trg_has_compound_tag_updated_on BEFORE UPDATE ON designdb.has_compound_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_has_pose_tag_updated_on ON designdb.has_pose_tags;
+CREATE TRIGGER trg_has_pose_tag_updated_on BEFORE UPDATE ON designdb.has_pose_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
--- DROP TRIGGER IF EXISTS trg_has_enumeration_methods_updated_on ON designdb.has_enumeration_methods;
--- CREATE TRIGGER trg_has_enumeration_methods_updated_on BEFORE UPDATE ON designdb.has_enumeration_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+DROP TRIGGER IF EXISTS trg_has_pose_methods_updated_on ON designdb.has_pose_methods;
+CREATE TRIGGER trg_has_pose_methods_updated_on BEFORE UPDATE ON designdb.has_pose_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+
+DROP TRIGGER IF EXISTS trg_has_compound_tag_updated_on ON designdb.has_compound_tags;
+CREATE TRIGGER trg_has_compound_tag_updated_on BEFORE UPDATE ON designdb.has_compound_tags FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
+
+DROP TRIGGER IF EXISTS trg_has_enumeration_methods_updated_on ON designdb.has_enumeration_methods;
+CREATE TRIGGER trg_has_enumeration_methods_updated_on BEFORE UPDATE ON designdb.has_enumeration_methods FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
 -- Pivoted materialized view once at schema load, this will be mapped in Scarab to do the filtering based on any type of scores/methods
--- SELECT designdb.create_scores_per_pose_pivoted_mv();
+SELECT designdb.create_scores_per_pose_pivoted_mv();
+
+-- =============================================================================
+-- HIPPO → production revert (manual step on live DB): strip leading "-- " from the
+-- DROP/ALTER lines below and run in order; then remove the "/*" and "*/" around the
+-- production block so it can be manually executed.
+--
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp ON designdb.catalogue_compounds;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_temp ON designdb.catalogue_compounds;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound_temp ON designdb.compounds;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp ON designdb.catalogue_prices;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price_temp ON designdb.catalogue_prices;
+--
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_catalogue_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_catalogue_price_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_compound_temp();
+--
+-- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS catalogue_inchikey;
+-- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS supplier;
+-- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS amount;
+-- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS price;
+-- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS lead_time;
+-- =============================================================================
+
+-- === PRODUCTION: compound_catalogue_map (INSERT only compound_id, catalogue_price_id, match_hash) ===
+
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_compound()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        IF OLD.compound_hash IS NOT DISTINCT FROM NEW.compound_hash THEN
+            RETURN NEW;
+        END IF;
+        DELETE FROM designdb.compound_catalogue_map WHERE compound_id = NEW.id;
+    END IF;
+
+    INSERT INTO designdb.compound_catalogue_map (compound_id, catalogue_price_id, match_hash)
+    SELECT NEW.id, cp.id, NEW.compound_hash
+    FROM designdb.catalogue_prices cp
+    JOIN designdb.catalogue_compounds cat ON cat.id = cp.catalogue_id
+    WHERE cat.catalogue_hash = NEW.compound_hash
+    ON CONFLICT (compound_id, catalogue_price_id) DO NOTHING;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        IF OLD.catalogue_hash IS NOT DISTINCT FROM NEW.catalogue_hash THEN
+            RETURN NEW;
+        END IF;
+        DELETE FROM designdb.compound_catalogue_map
+        WHERE catalogue_price_id IN (
+            SELECT id FROM designdb.catalogue_prices WHERE catalogue_id = NEW.id
+        );
+    END IF;
+
+    INSERT INTO designdb.compound_catalogue_map (compound_id, catalogue_price_id, match_hash)
+    SELECT c.id, cp.id, c.compound_hash
+    FROM designdb.compounds c
+    CROSS JOIN designdb.catalogue_prices cp
+    WHERE cp.catalogue_id = NEW.id AND c.compound_hash = NEW.catalogue_hash
+    ON CONFLICT (compound_id, catalogue_price_id) DO NOTHING;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND OLD.catalogue_id IS NOT DISTINCT FROM NEW.catalogue_id THEN
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'UPDATE' THEN
+        DELETE FROM designdb.compound_catalogue_map WHERE catalogue_price_id = NEW.id;
+    END IF;
+
+    INSERT INTO designdb.compound_catalogue_map (compound_id, catalogue_price_id, match_hash)
+    SELECT c.id, NEW.id, c.compound_hash
+    FROM designdb.compounds c
+    JOIN designdb.catalogue_compounds cat ON cat.id = NEW.catalogue_id
+    WHERE c.compound_hash = cat.catalogue_hash
+    ON CONFLICT (compound_id, catalogue_price_id) DO NOTHING;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound ON designdb.compounds;
+CREATE TRIGGER trg_compound_catalogue_map_sync_compound
+    AFTER INSERT OR UPDATE OF compound_hash ON designdb.compounds
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_compound();
+
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue ON designdb.catalogue_compounds;
+CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue
+    AFTER INSERT OR UPDATE OF catalogue_hash ON designdb.catalogue_compounds
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue();
+
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price ON designdb.catalogue_prices;
+CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_price
+    AFTER INSERT OR UPDATE OF catalogue_id ON designdb.catalogue_prices
+    FOR EACH ROW
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price();

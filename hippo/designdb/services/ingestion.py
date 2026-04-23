@@ -26,6 +26,7 @@ from designdb.utils import (
     sanitise_smiles,
 )
 from designdb.utils_frag import UnsupportedFragalysisLongcodeError, parse_observation_longcode
+from django.db import connection
 from numpy import isnan
 from pandas import read_pickle
 # from mypackage.services.compound import CompoundService
@@ -317,11 +318,11 @@ class IngestionService:
             # could use a rewrite, it converts smiles back to mol and
             # then to inchikey
             smiles = mp.rdkit.mol_to_smiles(mol)
-            sane_smiles = sanitise_smiles(
-                smiles, verbosity=logger.level == logging.DEBUG
-            )
+            # sane_smiles = sanitise_smiles(
+            #     smiles, verbosity=logger.level == logging.DEBUG
+            # )
             inchikey = inchikey_from_smiles(smiles)
-            sane_inchikey = inchikey_from_smiles(sane_smiles)
+            # sane_inchikey = inchikey_from_smiles(sane_smiles)
 
             # NB! different func if XCA data
             try:
@@ -335,9 +336,10 @@ class IngestionService:
             )
 
             compound, compound_created = CompoundService.create(
-                mol=mol,
-                smiles=sane_smiles,
-                inchikey=sane_inchikey,
+                # mol=mol,
+                # smiles=sane_smiles,
+                smiles=smiles,
+                # inchikey=sane_inchikey,
             )
             compound.tags.add(*compound_tags)
             if compound_created:
@@ -438,6 +440,11 @@ class IngestionService:
             name_col=name_col,
         )
 
+        # temp hack: disable a trigger that runs on every score
+        # insertion and later enable it
+        cursor = connection.cursor()
+        cursor.execute("ALTER TABLE designdb.score_values DISABLE TRIGGER trg_score_values_refresh_pivoted_mv;")
+
         for r in records:
             result.attempts += 1
 
@@ -464,12 +471,13 @@ class IngestionService:
                 continue
 
             inchikey = inchikey_from_smiles(smiles)
-            sane_inchikey = inchikey_from_smiles(sane_smiles)
+            # sane_inchikey = inchikey_from_smiles(sane_smiles)
 
             compound, compound_created = CompoundService.create(
-                mol=r[mol_col],
-                smiles=sane_smiles,
-                inchikey=sane_inchikey,
+                smiles=smiles,
+                # mol=r[mol_col],
+                # smiles=sane_smiles,
+                # inchikey=sane_inchikey,
             )
             compound.tags.add(*compound_tags)
             if compound_created:
@@ -510,6 +518,10 @@ class IngestionService:
             pose.tags.add(*pose_tags)
             pose.inspirations.add(*Pose.objects.filter(pk__in=pose_inspirations))
             scorer.add_scores_from_record(pose=pose, record=r)
+
+        # re-enable trigger and populate matview
+        cursor.execute("ALTER TABLE designdb.score_values ENABLE TRIGGER trg_score_values_refresh_pivoted_mv;")
+        cursor.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY designdb.scores_per_pose_pivoted_mv;")
 
         return result
 
@@ -579,13 +591,13 @@ class IngestionService:
                         # from original code
 
                         smiles = reaction_struct['productSmiles']
-                        sane_smiles = sanitise_smiles(
-                            smiles,
-                            sanitisation_failed='error',
-                        )
+                        # sane_smiles = sanitise_smiles(
+                        #     smiles,
+                        #     sanitisation_failed='error',
+                        # )
 
-                        sane_inchikey = inchikey_from_smiles(sane_smiles)
-                        product = Compound.objects.get(compound_inchikey=sane_inchikey)
+                        # sane_inchikey = inchikey_from_smiles(sane_smiles)
+                        product = CompoundService.get_by_smiles(smiles=smiles)
 
                         mrich.print(i, j, k, reaction_type, product)
 
@@ -597,9 +609,7 @@ class IngestionService:
                         rs = []
                         print('reactant smiles', reaction_struct['reactantSmiles'])
                         for reactant_s in reaction_struct['reactantSmiles']:
-                            reactant_comp, _ = Compound.objects.get_or_create(
-                                compound_smiles=reactant_s,
-                            )
+                            reactant_comp, _ = CompoundService.create(smiles=reactant_s)
                             reactant, _ = Reactant.objects.get_or_create(
                                 compound=reactant_comp,
                                 reaction=reaction,
@@ -626,9 +636,9 @@ class IngestionService:
                 except UnsupportedChemistryError:
                     mrich.warning('Skipping unsupported chemistry:', reaction_type)
                     continue
-                except Exception:
-                    mrich.error('Uncaught error with row', i, 'route', j, 'reaction', k)
-                    continue
+                # except Exception:
+                #     mrich.error('Uncaught error with row', i, 'route', j, 'reaction', k)
+                #     continue
 
                 products.add(Ingredient.from_compound(product, amount=1))
 
@@ -839,7 +849,7 @@ class IngestionService:
             )
 
             # radical?
-            values = CompoundService.create_from_smiles(unique_smiles)
+            values = CompoundService.create_from_smiles_list(unique_smiles)
 
             orig_smiles_to_inchikey = {
                 orig_smiles: inchikey

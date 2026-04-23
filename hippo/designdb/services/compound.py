@@ -3,11 +3,21 @@ import re
 
 import mrich
 import rdkit
-# from rdkit.Chem import inchi
 from designdb.models import Compound, CompoundTag
-from designdb.utils import inchikey_from_smiles, sanitise_smiles
+from designdb.utils import (
+    inchikey_from_smiles,
+    registration_hash_tautomer_insensitive,
+    sanitise_smiles,
+    superparent,
+)
 # from mypackage.services.compound import CompoundService
 from rdkit import Chem
+from rdkit.Chem import RegistrationHash
+from rdkit.Chem import inchi as rdkit_inchi
+from rdkit.Chem.MolStandardize import rdMolStandardize
+
+# from rdkit.Chem import inchi
+
 
 # from .validation.compound import ValidationError, validate_compound_data
 
@@ -26,6 +36,10 @@ PDBID_PATTERN = re.compile(r'^[A-Za-z0-9]{4}-[a-z].sdf$')
 logger = logging.getLogger(__name__)
 
 
+
+
+
+
 class CompoundBatchResult:
     def __init__(self):
         self.created = []
@@ -37,25 +51,26 @@ class CompoundService:
     def create(
         cls,
         *,
-        mol: Chem.rdchem.Mol,
+        # mol: Chem.rdchem.Mol,
         smiles: str,
-        inchikey: str,
+        # inchikey: str,
     ) -> tuple[Compound, bool]:
 
-        # TODO: new fields to consider, fingerprints and tautomer hashes
+        # designdb expects smils as input, so this is the entrypoint
+        # for insertion
+        mol = Chem.MolFromSmiles(smiles, sanitize=True)
+        try:
+            sp = superparent(mol)
+        except Exception as e:
+            raise ValueError(f"SuperParent failed: {e}") from e
 
-        # TODO and SQLITE_RELIC: inchikey is calculated by postgres in
-        # trigger. But I need to calculate it here as well, for
-        # queries. I feel like having two different calculation
-        # methods is not ideal. Are the versions guaranteed to be the
-        # same? And even if I do this in trigger, it's already here,
-        # why not just insert it?
+        h = registration_hash_tautomer_insensitive(sp)
 
         compound, created = Compound.objects.get_or_create(
-            compound_inchikey=inchikey,
-            # compound_smiles=smiles,
+            compound_hash=h,
             defaults={
-                'compound_mol': mol,
+                # 'compound_mol': mol,
+                # 'compound_inchikey': inchikey,
                 'compound_smiles': smiles,
                 'rdkit_version': rdkit.__version__,
                 'inchi_version': Chem.inchi.GetInchiVersion(),
@@ -63,7 +78,7 @@ class CompoundService:
         )
         if not created and logger.level == logging.DEBUG:
             mrich.warning(
-                f'Skipping compound {inchikey}, {smiles}, duplicate of {compound.pk}'
+                f'Skipping compound {h}, duplicate of {compound.pk}'
             )
 
         # there's a following block in the original code
@@ -98,8 +113,17 @@ class CompoundService:
 
         return compound, created
 
+    # @classmethod
+    # def create_from_smiles(
+    #     cls,
+    #     smiles: str,
+    # ) -> tuple[Compound, bool]:
+    #     mol = Chem.MolFromSmiles(smiles, sanitize=True)
+    #     compound, created = cls.create(mol=mol)
+    #     return compound, created
+
     @classmethod
-    def create_from_smiles(
+    def create_from_smiles_list(
         cls,
         smiles_list: list[str],
     ) -> list[tuple[str, str]]:
@@ -108,18 +132,25 @@ class CompoundService:
             sane_smiles = sanitise_smiles(
                 smiles, verbosity=logger.level == logging.DEBUG
             )
-            mol = Chem.MolFromSmiles(sane_smiles)
-            sane_inchikey = inchikey_from_smiles(sane_smiles)
-
-            cls.create(
-                mol=mol,
-                smiles=sane_smiles,
-                inchikey=sane_inchikey,
-            )
-
-            result.append((sane_inchikey, sane_smiles))
+            # compound, _ = cls.create_from_smiles(sane_smiles)
+            compound, _ = cls.create(smiles=sane_smiles)
+            result.append((compound.compound_inchikey, compound.compound_smiles))
 
         return result
+
+
+    @classmethod
+    def get_by_smiles(cls, smiles: str) -> Compound | None:
+        mol = Chem.MolFromSmiles(smiles, sanitize=True)
+        try:
+            sp = superparent(mol)
+        except Exception as e:
+            raise ValueError(f"SuperParent failed: {e}") from e
+
+        h = registration_hash_tautomer_insensitive(sp)
+
+        return Compound.objects.get(compound_hash=h)
+
 
 
 class CompoundTagService:

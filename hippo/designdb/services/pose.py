@@ -69,6 +69,7 @@ class PoseService:
                 pose_smiles=smiles,  # SQLITE_RELIC
                 pose_metadata=json.dumps(metadata),
                 pose_mol=mol,
+                # pose_mol=Chem.MolToMolBlock(mol),
                 rdkit_version=rdkit.__version__,
                 inchi_version=Chem.inchi.GetInchiVersion(),
                 pose_reference=reference,

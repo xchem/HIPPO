@@ -51,4 +51,5 @@ USER ${NB_USER}
 WORKDIR "/home/code/HIPPO"
 
 # NB! force-install numpy because need newer version
-RUN pip install numpy --upgrade
+# RUN pip install numpy --upgrade
+RUN pip install numpy==2.2.4

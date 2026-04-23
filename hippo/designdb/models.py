@@ -6,7 +6,10 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from pandas._libs.hashtable import objects_are_equal
 from rdkit import Chem
+
+from .managers import CompoundManager
 
 _MANAGE_MODELS = settings.MANAGE_MODELS
 
@@ -72,7 +75,7 @@ if settings.MANAGE_MODELS:
     # shouldn't this be binary as well?
     from django.db.models import BinaryField as BfpField
 
-    from .models import RDKitMolField as MolField
+    # from .models import RDKitMolField as MolField
 else:
     from django_rdkit.models import BfpField, MolField
 
@@ -110,7 +113,6 @@ class Target(BaseModel):
         ]
 
 
-# TODO: tautomer hashes
 class Compound(BaseModel):
     id = models.BigAutoField(primary_key=True)
     compound_inchikey = models.TextField(null=True, blank=True)
@@ -130,9 +132,12 @@ class Compound(BaseModel):
     # compound_mol = models.TextField(null=True, blank=True)
     # compound_pattern_bfp = models.TextField(null=True, blank=True)
     # compound_morgan_bfp = models.TextField(null=True, blank=True)
-    compound_mol = MolField(null=True)
-    compound_pattern_bfp = BfpField(null=True)
-    compound_morgan_bfp = BfpField(null=True)
+    # compound_mol = MolField(null=True)
+    compound_mol = models.TextField(null=True, blank=True)
+    # compound_pattern_bfp = BfpField(null=True)
+    # compound_morgan_bfp = BfpField(null=True)
+    compound_pattern_bfp = models.BinaryField(max_length=2048, null=True)
+    compound_morgan_bfp = models.BinaryField(max_length=2048, null=True)
 
     compound_metadata = models.TextField(null=True, blank=True)
     note = models.TextField(null=True, blank=True)
@@ -157,6 +162,9 @@ class Compound(BaseModel):
         'self',
         through='Scaffold',
     )
+
+    objects = models.Manager()
+    compound_filter = CompoundManager()
 
     class Meta(BaseModel.Meta):
         db_table = 'compounds'

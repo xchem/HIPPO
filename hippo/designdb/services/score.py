@@ -61,7 +61,7 @@ class ScoreService:
                 pose=pose,
                 compound=pose.compound,
                 scoring_method=method,
-                score=score_value,
+                score={'score': score_value},
             )
             score.save()
 

@@ -51,7 +51,6 @@ dependencies = [
     # - can use conda install in container
     # - but.. probs don't even need it, it's only used for expressions and I got that covered
     "django-rdkit",
-    "environs>=14.6.0",
     "numpy>=1.26.4",
     # "numpy>=2", # need it but not working
 ]

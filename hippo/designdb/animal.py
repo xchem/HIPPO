@@ -9,7 +9,7 @@ import mrich
 import pandas as pd
 from django.db import transaction
 
-from .models import Pose, Target
+from .models import Compound, Pose, Target
 from .services.ingestion import IngestionBatchResult, IngestionService
 from .sets.pose import PoseSet
 from .utils import make_warn_once_per_key
@@ -76,6 +76,11 @@ class HIPPO:
         """Return pose instances for this target"""
         # return Pose.objects.filter(target=self._target)
         return PoseSet(Pose.objects.filter(target=self._target))
+
+    @property
+    def compounds(self):
+        """Return compound instances for this target"""
+        return Compound.compound_filter.all()
 
     @property
     def num_poses(self) -> int:

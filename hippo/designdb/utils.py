@@ -13,10 +13,10 @@ import numpy as np
 from django.db.models import Aggregate, OuterRef, Subquery
 from molparse.rdkit import mol_from_smiles
 from rdkit import Chem
-from rdkit.Chem import AddHs, MolFromSmiles, MolToSmiles, RemoveHs
+from rdkit.Chem import AddHs, MolFromSmiles, MolToSmiles, RegistrationHash, RemoveHs
+from rdkit.Chem import inchi as rdkit_inchi
 from rdkit.Chem.inchi import MolToInchiKey
-
-from .models import Pose, ScoreValue
+from rdkit.Chem.MolStandardize import rdMolStandardize
 
 
 def strip_sql(sql) -> str:
@@ -211,11 +211,15 @@ def sanitise_mol(m: Chem.rdchem.Mol) -> Chem.rdchem.Mol:
     return MolFromMolBlock(MolToMolBlock(m))
 
 
-def pose_gap(a: Pose, b: Pose) -> float:
+def pose_gap(a: 'Pose', b: 'Pose') -> float:
     """Calculate minimum distance between two :class:`.Pose` objects"""
 
     from molparse.rdkit import mol_to_AtomGroup
     from numpy.linalg import norm
+
+    # avoiding circular imports
+    from .models import Pose, ScoreValue
+
 
     min_dist = None
 
@@ -286,8 +290,11 @@ def make_warn_once_per_key():
     return warn
 
 
+# TODO: move
 class ScoreSubquery(Subquery):
     def __init__(self, scoring_method):
+        # avoiding circular imports
+        from .models import Pose, ScoreValue
         query = ScoreValue.objects.filter(
             pose=OuterRef('pk'),
             compound=OuterRef('compound'),
@@ -339,3 +346,19 @@ def normalize_string_list(x):
         except Exception:
             pass
     return []
+
+
+def superparent(mol: Chem.Mol) -> Chem.Mol:
+    return rdMolStandardize.SuperParent(mol)
+
+
+def registration_hash_tautomer_insensitive(mol: Chem.Mol) -> str:
+    layers = RegistrationHash.GetMolLayers(
+        mol,
+        escape="",
+        enable_tautomer_hash_v2=True,
+    )
+    return RegistrationHash.GetMolHash(
+        layers,
+        RegistrationHash.HashScheme.TAUTOMER_INSENSITIVE_LAYERS,
+    )
