@@ -17,7 +17,7 @@ WORKDIR "/home/code/HIPPO"
 COPY . ./
 
 # need this from conda. See comment in pyproject.toml, possibly can get rid of this
-RUN mamba install --yes \
+RUN mamba install --yes -c conda-forge \
     chemicalite=2024.05.1 && \
     mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
@@ -51,5 +51,4 @@ USER ${NB_USER}
 WORKDIR "/home/code/HIPPO"
 
 # NB! force-install numpy because need newer version
-# RUN pip install numpy --upgrade
 RUN pip install numpy==2.2.4
