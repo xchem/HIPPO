@@ -34,6 +34,11 @@ Thumbs.db
 
 # Virtual environment
 .venv
+venv
 
 #Python cache files
 __pycache__
+*.pyc
+
+dist
+build

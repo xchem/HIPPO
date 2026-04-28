@@ -43,12 +43,8 @@ CREATE TABLE IF NOT EXISTS designdb.compounds (
     base_compound_id BIGINT REFERENCES designdb.compounds (id) ON DELETE SET NULL, -- Not populated by code
     -- compound_mol rdkit.mol, -- Replaced by TEXT CTAB below: JDBC showed SMILES text; mol_to_ctab gives a molfile string that Scarab will easily convert to structure.
     compound_mol TEXT, -- V2000 CTAB (mol block) from rdkit.mol_to_ctab(mol_from_smiles(...))
-    -- compound_pattern_bfp bit(2048), -- Postgres RDkit cartridge can calc this, Chemicalite does, not sure if insert by codebase. Currently seems broken
-    -- compound_morgan_bfp bit(2048), -- Postgres cartridge can't calc this. Must be inserted by codebase, but currently its broken
-
-    compound_pattern_bfp bfp, -- Postgres RDkit cartridge can calc this, Chemicalite does, not sure if insert by codebase. Currently seems broken
-    compound_morgan_bfp bfp, -- Postgres cartridge can't calc this. Must be inserted by codebase, but currently its broken
-
+    compound_pattern_bfp bit(2048), -- Postgres RDkit cartridge can calc this, Chemicalite does, not sure if insert by codebase. Currently seems broken
+    compound_morgan_bfp bit(2048), -- Postgres cartridge can't calc this. Must be inserted by codebase, but currently its broken
     compound_metadata TEXT, -- currently Null
     note TEXT,  -- New column
     rdkit_version TEXT, -- RDKit version string used when computing compound_hash (application-set; cartridge may also populate)
@@ -79,7 +75,7 @@ CREATE TABLE IF NOT EXISTS designdb.poses (
     pose_path TEXT,
     compound_id BIGINT NOT NULL REFERENCES designdb.compounds (id) ON DELETE RESTRICT,
     target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE RESTRICT,
-    pose_mol rdkit.mol, -- Insert by the codebase. Trigger populates pose_inchikey and pose_smiles. Originally, inserted by the codebase and /or Chemicalite/Postgres RDkit cartridge, Check with Kalev!!!!!
+    pose_mol rdkit.mol, -- Insert by codebase. Trigger populates pose_inchikey and pose_smiles via cartridge.
     pose_fingerprint INTEGER, --Not sure if it null or actually calcualated somewhere.
     --pose_energy_score REAL, -- LR - redundant; use designdb.score_values
     --pose_distance_score REAL, -- LR - redundant; use designdb.score_values
@@ -315,11 +311,11 @@ CREATE TABLE IF NOT EXISTS designdb.compound_catalogue_map (
     match_hash TEXT NOT NULL,
     -- Will be deleted automatically from db from here:
     -- HIPPO temporary columns, remove when HIPPO can handle catalogue_prices and catalogue_compounds:
-    catalogue_inchikey TEXT, --Needs to be removed when HIPPO codebase ready to handle prices properly.
-    supplier TEXT, --Needs to be removed when HIPPO codebase ready to handle prices properly.
-    amount REAL, --Needs to be removed when HIPPO codebase ready to handle prices properly.
-    price REAL, --Needs to be removed when HIPPO codebase ready to handle prices properly.
-    lead_time INTEGER, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- catalogue_inchikey TEXT, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- supplier TEXT, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- amount REAL, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- price REAL, --Needs to be removed when HIPPO codebase ready to handle prices properly.
+    -- lead_time INTEGER, --Needs to be removed when HIPPO codebase ready to handle prices properly.
     -- Will be deleted automatically until here
     created_on TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_on TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -714,7 +710,7 @@ WHERE a.operation = 'U';
 -- =========================================================
 -- RDKIT CARTRIDGE – COMPOUND WRAPPERS
 -- =========================================================
--- Schema-qualified wrappers for RDKit mol_from_smiles, mol_to_smiles, mol_inchikey, mol_to_ctab (used by compound, pose, and catalogue_compounds triggers).
+-- Schema-qualified wrappers for RDKit mol_from_smiles, mol_to_smiles, mol_inchikey, mol_to_ctab (compound, pose, catalogue_compounds triggers).
 
 CREATE OR REPLACE FUNCTION designdb.mol_from_smiles(smiles TEXT) RETURNS rdkit.mol
   LANGUAGE SQL AS $$ SELECT rdkit.mol_from_smiles(smiles::cstring); $$;
@@ -890,8 +886,8 @@ BEGIN
       score_txt := '(sv.score->>' || quote_literal('score') || ')';
       value_expr := '(CASE WHEN ' || score_txt || ' IS NOT NULL AND ' || score_txt || ' ~ ' || quote_literal(numeric_pat)
         || ' THEN to_jsonb((' || score_txt || ')::numeric) ELSE to_jsonb(' || score_txt || ') END)';
-      select_qry := select_qry || ', (array_agg(' || value_expr
-        || ') FILTER (WHERE sv.scoring_method_id = ' || method_rec.id || '))[1] AS ' || col;
+      select_qry := select_qry || ', MAX(CASE WHEN sv.scoring_method_id = ' || method_rec.id
+        || ' THEN ' || value_expr || ' END) AS ' || col;
     END IF;
   END LOOP;
   select_qry := select_qry || ' FROM designdb.score_values sv GROUP BY sv.pose_id, sv.compound_id';
@@ -929,10 +925,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+/*
 -- Will be deleted automatically from db from here:
 -- === HIPPO TEMPORARY: denormalized map columns; remove when HIPPO ready ===
 
-CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_compound_hippo_temp()
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_compound_temp()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -959,7 +956,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_hippo_temp()
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_temp()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -989,7 +986,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price_hippo_temp()
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price_temp()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -1016,7 +1013,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_hippo_temp()
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -1032,7 +1029,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_hippo_temp()
+CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -1052,6 +1049,7 @@ BEGIN
 END;
 $$;
 -- Will be deleted automatically until here
+*/
 
 -- =========================================================
 -- AUDIT FUNCTIONS
@@ -1173,15 +1171,17 @@ CREATE TRIGGER trg_pose_method_updated_on BEFORE UPDATE ON designdb.pose_methods
 DROP TRIGGER IF EXISTS trg_compound_updated_on ON designdb.compounds;
 CREATE TRIGGER trg_compound_updated_on BEFORE UPDATE ON designdb.compounds FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
+/*
 -- Will be deleted automatically from db from here:
--- Production trigger names reserved (see /* */ block at end of file); active HIPPO temp triggers:
+-- Production trigger names reserved (see /* */ block at end of file); active temp triggers:
 DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound ON designdb.compounds;
-DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound_hippo_temp ON designdb.compounds;
-CREATE TRIGGER trg_compound_catalogue_map_sync_compound_hippo_temp
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound_temp ON designdb.compounds;
+CREATE TRIGGER trg_compound_catalogue_map_sync_compound_temp
     AFTER INSERT OR UPDATE OF compound_hash ON designdb.compounds
     FOR EACH ROW
-    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_compound_hippo_temp();
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_compound_temp();
 -- Will be deleted automatically until here
+*/
 
 DROP TRIGGER IF EXISTS trg_feature_updated_on ON designdb.features;
 CREATE TRIGGER trg_feature_updated_on BEFORE UPDATE ON designdb.features FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
@@ -1221,35 +1221,37 @@ CREATE TRIGGER trg_catalogue_updated_on BEFORE UPDATE ON designdb.catalogue_comp
 DROP TRIGGER IF EXISTS trg_catalogue_price_updated_on ON designdb.catalogue_prices;
 CREATE TRIGGER trg_catalogue_price_updated_on BEFORE UPDATE ON designdb.catalogue_prices FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
 
+/*
 -- Will be deleted automatically from db from here:
 DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue ON designdb.catalogue_compounds;
-DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_hippo_temp ON designdb.catalogue_compounds;
-CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_hippo_temp
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_temp ON designdb.catalogue_compounds;
+CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_temp
     AFTER INSERT OR UPDATE OF catalogue_hash ON designdb.catalogue_compounds
     FOR EACH ROW
-    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_hippo_temp();
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_temp();
 
 DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price ON designdb.catalogue_prices;
-DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price_hippo_temp ON designdb.catalogue_prices;
-CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_price_hippo_temp
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price_temp ON designdb.catalogue_prices;
+CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_price_temp
     AFTER INSERT OR UPDATE OF catalogue_id ON designdb.catalogue_prices
     FOR EACH ROW
-    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price_hippo_temp();
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price_temp();
 
 DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_price ON designdb.catalogue_prices;
-DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_hippo_temp ON designdb.catalogue_prices;
-CREATE TRIGGER trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_hippo_temp
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp ON designdb.catalogue_prices;
+CREATE TRIGGER trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp
     AFTER UPDATE OF supplier, amount, price, lead_time ON designdb.catalogue_prices
     FOR EACH ROW
-    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_hippo_temp();
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp();
 
 DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound ON designdb.catalogue_compounds;
-DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_hippo_temp ON designdb.catalogue_compounds;
-CREATE TRIGGER trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_hippo_temp
+DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp ON designdb.catalogue_compounds;
+CREATE TRIGGER trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp
     AFTER UPDATE OF catalogue_inchikey ON designdb.catalogue_compounds
     FOR EACH ROW
-    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_hippo_temp();
+    EXECUTE FUNCTION designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp();
 -- Will be deleted automatically until here
+*/
 
 DROP TRIGGER IF EXISTS trg_compound_catalogue_map_updated_on ON designdb.compound_catalogue_map;
 CREATE TRIGGER trg_compound_catalogue_map_updated_on BEFORE UPDATE ON designdb.compound_catalogue_map FOR EACH ROW EXECUTE FUNCTION designdb.update_updated_on();
@@ -1374,17 +1376,17 @@ SELECT designdb.create_scores_per_pose_pivoted_mv();
 -- DROP/ALTER lines below and run in order; then remove the "/*" and "*/" around the
 -- production block so it can be manually executed.
 --
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_hippo_temp ON designdb.catalogue_compounds;
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_hippo_temp ON designdb.catalogue_compounds;
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound_hippo_temp ON designdb.compounds;
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_hippo_temp ON designdb.catalogue_prices;
--- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price_hippo_temp ON designdb.catalogue_prices;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp ON designdb.catalogue_compounds;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_temp ON designdb.catalogue_compounds;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_compound_temp ON designdb.compounds;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp ON designdb.catalogue_prices;
+-- DROP TRIGGER IF EXISTS trg_compound_catalogue_map_sync_catalogue_price_temp ON designdb.catalogue_prices;
 --
--- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_hippo_temp();
--- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_catalogue_hippo_temp();
--- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_hippo_temp();
--- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_catalogue_price_hippo_temp();
--- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_compound_hippo_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_compound_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_catalogue_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_refresh_denorm_from_catalogue_price_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_catalogue_price_temp();
+-- DROP FUNCTION IF EXISTS designdb.trg_compound_catalogue_map_from_compound_temp();
 --
 -- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS catalogue_inchikey;
 -- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS supplier;
@@ -1392,7 +1394,7 @@ SELECT designdb.create_scores_per_pose_pivoted_mv();
 -- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS price;
 -- ALTER TABLE designdb.compound_catalogue_map DROP COLUMN IF EXISTS lead_time;
 -- =============================================================================
-/*
+
 -- === PRODUCTION: compound_catalogue_map (INSERT only compound_id, catalogue_price_id, match_hash) ===
 
 CREATE OR REPLACE FUNCTION designdb.trg_compound_catalogue_map_from_compound()
@@ -1484,4 +1486,3 @@ CREATE TRIGGER trg_compound_catalogue_map_sync_catalogue_price
     AFTER INSERT OR UPDATE OF catalogue_id ON designdb.catalogue_prices
     FOR EACH ROW
     EXECUTE FUNCTION designdb.trg_compound_catalogue_map_from_catalogue_price();
-*/

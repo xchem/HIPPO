@@ -1,6 +1,6 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# [build-system]
+# requires = ["hatchling"]
+# build-backend = "hatchling.build"
 [project]
 name = "xchem-hippo"
 version = "1.0.0"
@@ -38,7 +38,6 @@ dependencies = [
     "psycopg[binary]>=3.3",
     "django>=5.2.12",
     "syndirella>=5.0.7a0",
-    # "syndirella==4.0.1a0",# have to pin that apparently
     "typer>=0.24.1",      # used?
     "neo4j>=6.1.0",
     "gemmi>=0.7.5",
@@ -125,10 +124,10 @@ exclude = [
 profile = "hug"
 src_paths = ["src", "tests"]
 
-[tool.hatch.build]
-include = [
-    "hippo/*.py",
-]
+# [tool.hatch.build]
+# include = [
+#     "hippo/*.py",
+# ]
 
 [tool.uv.sources]
 django-rdkit = { git = "https://github.com/rdkit/django-rdkit" }
