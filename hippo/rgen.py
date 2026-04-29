@@ -9,6 +9,9 @@ from .tools import dt_hash
 from .recipe import Recipe, Route
 from .cset import CompoundSet, IngredientSet
 from random import shuffle as shuffle_func
+from .compound import Ingredient
+
+from typing import List
 
 
 class RRGMixin:
@@ -579,13 +582,13 @@ class RandomSelectionGenerator(RRGMixin):
                 )
                 return self._compound_pool
 
-            # get all compounds that have a quote
+            # get all compounds that have a quote from a given supplier
 
             sql = f"""
             SELECT quote_id, quote_compound, quote_amount, quote_supplier, MIN(quote_price) 
             FROM {self.db.SQL_SCHEMA_PREFIX}quote
             WHERE quote_amount >= {self.amount}
-            AND quote_supplier IN {self.suppliers}
+            AND quote_supplier IN {self.suppliers_str}
             GROUP BY quote_compound
             """
 
@@ -812,9 +815,10 @@ class RandomRecipeSelectionGenerator(RRGMixin):
             *,
             max_lead_time=None,
             suppliers: list | None = None,
-            start_with: Recipe | CompoundSet | IngredientSet | None = None,
+            start_with: Recipe | None = None,
             route_pool: "RouteSet | None" = None,
             compounds: CompoundSet | None = None,
+            amount: float = 1.0,  # in mg
             out_key: str | None = None,
     ):
 
@@ -853,11 +857,98 @@ class RandomRecipeSelectionGenerator(RRGMixin):
             path.mkdir()
         self._recipe_dir = path
 
-        rgen = RandomRecipeGenerator(db, suppliers=suppliers, route_pool=route_pool)
-        sgen = RandomSelectionGenerator(db, suppliers=suppliers, compounds=compounds)
+        self._rgen = RandomRecipeGenerator(db, suppliers=suppliers, route_pool=route_pool)
+        self._sgen = RandomSelectionGenerator(
+            db,
+            suppliers=suppliers,
+            compounds=compounds,
+            amount=amount
+        )
 
-        self.compound_and_route_pool = [ingredient for ingredient in sgen.compound_pool]
-        self.compound_and_route_pool.extend([route for route in rgen.route_pool])
+        self._compound_and_route_pool = [ingredient for ingredient in self._sgen.compound_pool]
+        self._compound_and_route_pool.extend([route for route in self._rgen.route_pool])
+
+        self.dump_data()
+
+    ### FACTORIES
+
+    @classmethod
+    def from_json(cls,
+                  db: "Database",
+                  path: "Path | str",
+                  rgen_path: "Path | str",
+                  sgen_path: "Path | str"):
+        """Construct the RandomRecipeSelectionGenerator from a JSON file"""
+
+        data = json.load(open(path, "rt"))
+        rgen_data = json.load(open(rgen_path, "rt"))
+        sgen_data = json.load(open(sgen_path, "rt"))
+
+        self = cls.__new__(cls)
+
+        self._db_path = Path(data["db_path"])
+        self._recipe_dir = Path(data["recipe_dir"])
+        self._max_lead_time = rgen_data["max_lead_time"]
+        self._suppliers = data["suppliers"]
+        self._amount = sgen_data["amount"]
+
+        self._starting_recipe = Recipe.from_json(
+            db=db,
+            path=None,
+            data=data["starting_recipe"],
+            allow_db_mismatch=True,
+        )
+
+        mrich.var("database", self.db_path)
+        mrich.var("max_lead_time", self.max_lead_time)
+        mrich.var("suppliers", self.suppliers)
+        mrich.var("starting_recipe", self.starting_recipe)
+
+        self._db = db
+
+        # JSON I/O set up
+        self._data_path = Path(path)
+
+        # Route and compound pool
+        self._rgen = RandomRecipeGenerator.from_json(db, rgen_path)
+        self._sgen = RandomSelectionGenerator.from_json(db, sgen_path)
+
+        self._compound_and_route_pool = [ingredient for ingredient in self.sgen.compound_pool]
+        self._compound_and_route_pool.extend([route for route in self.rgen.route_pool])
+
+        return self
+
+    ### PROPERTIES
+
+    @property
+    def rgen(self) -> RandomRecipeGenerator:
+        """Random recipe generator"""
+        return self._rgen
+
+    @property
+    def sgen(self) -> RandomSelectionGenerator:
+        """Random selection generator"""
+        return self._sgen
+
+    @property
+    def compound_and_route_pool(self) -> List[Ingredient | Route]:
+        """Compound and route pool"""
+        return self._compound_and_route_pool
+
+    ### METHODS
+
+    def dump_data(self):
+        """Dump data to JSON"""
+
+        data = {}
+
+        data["db_path"] = str(self.db_path.resolve())
+        data["recipe_dir"] = str(self.recipe_dir.resolve())
+        data["suppliers"] = self.suppliers
+        data["starting_recipe"] = self.starting_recipe.get_dict(serialise_price=True)
+
+        mrich.writing(self.data_path)
+        json.dump(data, open(self.data_path, "wt"), indent=4)
 
     def generate(
             self,
