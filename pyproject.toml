@@ -131,3 +131,9 @@ src_paths = ["src", "tests"]
 
 [tool.uv.sources]
 django-rdkit = { git = "https://github.com/rdkit/django-rdkit" }
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]

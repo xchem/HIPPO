@@ -39,11 +39,11 @@ RUN python -c "import mrich; mrich.patch_rich_jupyter_margins()"
 
 
 # notebooks
-# USER 0
 RUN chown ${NB_USER} "/home/code" && sudo apt update && sudo apt install screen -y
 
-# force update numpy
-RUN /opt/conda/bin/python -m pip install -v --upgrade numpy==2.4.4
+# force numpy update. since there's now a new venv, make sure conda is
+# used (othewise numpy will be invisible)
+RUN /opt/conda/bin/python -m pip install --upgrade numpy==2.4.4
 USER ${NB_USER}
 
 
