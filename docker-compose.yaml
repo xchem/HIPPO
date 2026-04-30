@@ -54,8 +54,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-    - .:/home/code/HIPPO
+    # volumes:
+    # - .:/home/code/HIPPO
     env_file:
       - .env
     ports:
