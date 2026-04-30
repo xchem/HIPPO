@@ -1052,7 +1052,7 @@ class PoseSet:
             )
 
             if not values.exists():
-                rich.debug('no inspirations, quitting')
+                mrich.debug('no inspirations, quitting')
                 logger.warning('no inspirations, quitting')
                 return
 
