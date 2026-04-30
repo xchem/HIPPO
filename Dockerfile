@@ -23,7 +23,9 @@ COPY uv.lock pyproject.toml ./
 RUN pip install --upgrade pip && python -m pip install uv
 
 # install all dependencies into active environment without updating lockfile
-RUN uv sync --frozen --quiet --active
+# RUN uv sync --frozen --active
+RUN uv venv /home/code/HIPPO/.venv
+RUN uv sync --frozen --python /home/code/HIPPO/.venv/bin/python
 
 # now add venv python to path so conda python can find it
 ENV PATH="/home/code/HIPPO/.venv/bin:$PATH"
