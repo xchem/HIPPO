@@ -153,7 +153,7 @@ class RandomRecipeGenerator(RRGMixin):
         self = cls.__new__(cls)
 
         self._db_path = Path(data["db_path"])
-        self._recipe_dir = Path(data["recipe_dir"])
+        self._recipe_dir = Path(data["recipe_dir"]) if data["recipe_dir"] else None
         self._max_lead_time = data["max_lead_time"]
         self._suppliers = data["suppliers"]
 
@@ -504,7 +504,7 @@ class RandomSelectionGenerator(RRGMixin):
         self = cls.__new__(cls)
 
         self._db_path = Path(data["db_path"])
-        self._recipe_dir = Path(data["recipe_dir"])
+        self._recipe_dir = Path(data["recipe_dir"]) if data["recipe_dir"] else None
         # self._max_lead_time = data["max_lead_time"]
         self._suppliers = data["suppliers"]
         self._amount = data["amount"]
