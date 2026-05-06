@@ -84,6 +84,7 @@ class RandomRecipeGenerator(RRGMixin):
         start_with: Recipe | CompoundSet | IngredientSet | None = None,
         route_pool: "RouteSet | None" = None,
         out_key: str | None = None,
+        skip_directory_creation: bool = False,
     ):
         """RandomRecipeGenerator initialisation"""
 
@@ -118,11 +119,14 @@ class RandomRecipeGenerator(RRGMixin):
         if self.data_path.exists():
             mrich.warning(f"Will overwrite existing rgen data file: {self.data_path}")
 
-        # Recipe I/O set up
-        path = Path(f"{out_key}_recipes")
-        if not path.exists():
-            mrich.writing(f"{path}/")
-            path.mkdir()
+        if skip_directory_creation:
+            path = None
+        else:
+            # Recipe I/O set up
+            path = Path(f"{out_key}_recipes")
+            if not path.exists():
+                mrich.writing(f"{path}/")
+                path.mkdir()
         self._recipe_dir = path
 
         # Route pool
@@ -255,7 +259,10 @@ class RandomRecipeGenerator(RRGMixin):
         data = {}
 
         data["db_path"] = str(self.db_path.resolve())
-        data["recipe_dir"] = str(self.recipe_dir.resolve())
+        if self.recipe_dir:
+            data["recipe_dir"] = str(self.recipe_dir.resolve())
+        else:
+            data["recipe_dir"] = None
         data["max_lead_time"] = self.max_lead_time
         data["suppliers"] = self.suppliers
         data["starting_recipe"] = self.starting_recipe.get_dict(serialise_price=True)
@@ -441,6 +448,7 @@ class RandomSelectionGenerator(RRGMixin):
         start_with: Recipe | CompoundSet | IngredientSet = None,
         compounds: CompoundSet | None = None,
         quoted_only: bool = True,
+        skip_directory_creation: bool = False,
     ):
         """RandomSelectionGenerator initialisation"""
 
@@ -466,10 +474,14 @@ class RandomSelectionGenerator(RRGMixin):
         if self.data_path.exists():
             mrich.warning(f"Will overwrite existing rgen data file: {self.data_path}")
 
-        # Recipe I/O set up
-        path = Path(str(self.db_path.name).replace(".sqlite", "_selections"))
-        mrich.writing(f"{path}/")
-        path.mkdir(exist_ok=True)
+        if skip_directory_creation:
+            path = None
+        else:
+            # Recipe I/O set up
+            path = Path(str(self.db_path.name).replace(".sqlite", "_selections"))
+            if not path.exists():
+                mrich.writing(f"{path}/")
+                path.mkdir(exist_ok=True)
         self._recipe_dir = path
 
         with mrich.spinner("Getting compound pool"):
@@ -653,7 +665,10 @@ class RandomSelectionGenerator(RRGMixin):
         data = {}
 
         data["db_path"] = str(self.db_path.resolve())
-        data["recipe_dir"] = str(self.recipe_dir.resolve())
+        if self.recipe_dir:
+            data["recipe_dir"] = str(self.recipe_dir.resolve())
+        else:
+            data["recipe_dir"] = None
         # data["max_lead_time"] = self.max_lead_time
         data["amount"] = self.amount
         data["suppliers"] = self.suppliers
@@ -857,12 +872,19 @@ class RandomRecipeSelectionGenerator(RRGMixin):
             path.mkdir()
         self._recipe_dir = path
 
-        self._rgen = RandomRecipeGenerator(db, suppliers=suppliers, route_pool=route_pool)
+        self._rgen = RandomRecipeGenerator(
+            db,
+            suppliers=suppliers,
+            route_pool=route_pool,
+            skip_directory_creation=True
+        )
+
         self._sgen = RandomSelectionGenerator(
             db,
             suppliers=suppliers,
             compounds=compounds,
-            amount=amount
+            amount=amount,
+            skip_directory_creation=True
         )
 
         self._compound_and_route_pool = [ingredient for ingredient in self._sgen.compound_pool]
