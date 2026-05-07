@@ -2251,7 +2251,7 @@ class PoseSet:
 
                 apo_path = source_path.parent / source_path.name.replace(
                     "_hippo.pdb", ".pdb"
-                ).replace(".pdb", "_apo-desolv.pdb")
+                ).replace(".pdb", "_delig-desolv.pdb")
 
                 if not apo_path.exists():
                     sys = mp.parse(source_path).protein_system

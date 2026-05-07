@@ -445,7 +445,7 @@ class HIPPO:
                         p
                         for p in path.glob("*.pdb")
                         if "_ligand" not in p.name
-                        and "_apo" not in p.name
+                        and "_delig" not in p.name
                         and "_hippo" not in p.name
                     ]
 
@@ -1173,7 +1173,7 @@ class HIPPO:
         (template_path,) = template_paths
         template_path = Path(template_path)
         mrich.var("template_path", template_path)
-        base_name = template_path.name.removesuffix(".pdb").removesuffix("_apo-desolv")
+        base_name = template_path.name.removesuffix(".pdb").removesuffix("_delig-desolv")
         reference = self.poses[base_name]
         assert reference, "Could not determine reference structure"
         mrich.var("reference", reference)

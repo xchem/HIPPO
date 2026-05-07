@@ -624,7 +624,7 @@ class Pose:
         path = Path(self.path)
         if path.name.endswith(".pdb"):
             apo_path = path.parent / path.name.replace("_hippo.pdb", ".pdb").replace(
-                ".pdb", "_apo-desolv.pdb"
+                ".pdb", "_delig-desolv.pdb"
             )
             if not apo_path.exists():
                 return None
