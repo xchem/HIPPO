@@ -2249,19 +2249,19 @@ class PoseSet:
             for ref_alias in pose_df["ref_pdb"].values:
                 source_path = Path(lookup[ref_alias])
 
-                apo_path = source_path.parent / source_path.name.replace(
+                delig_path = source_path.parent / source_path.name.replace(
                     "_hippo.pdb", ".pdb"
                 ).replace(".pdb", "_delig-desolv.pdb")
 
-                if not apo_path.exists():
+                if not delig_path.exists():
                     sys = mp.parse(source_path).protein_system
-                    sys.write(apo_path, verbosity=0)
+                    sys.write(delig_path, verbosity=0)
 
                 target_path = pdb_dir / f"{ref_alias}.pdb"
 
                 if not target_path.exists():
                     mrich.writing(target_path)
-                    shutil.copy(apo_path, target_path)
+                    shutil.copy(delig_path, target_path)
 
                 zips.add(target_path)
 
@@ -2440,7 +2440,7 @@ class PoseSet:
                 if aligned_files_dir:
 
                     mol = str(pose.mol_path)
-                    pdb = str(pose.apo_path)
+                    pdb = str(pose.delig_path)
 
                     assert "aligned_files" in mol
                     assert "aligned_files" in pdb
@@ -2455,7 +2455,7 @@ class PoseSet:
 
                 else:
                     mol = relpath(pose.mol_path, path_root)
-                    pdb = relpath(pose.apo_path, path_root)
+                    pdb = relpath(pose.delig_path, path_root)
 
                 data = [pose.alias, pose.compound.smiles, mol, pdb]
 
@@ -2547,10 +2547,10 @@ class PoseSet:
         templates = PoseSet(self.db, [i for i, in records])
 
         for ref in templates:
-            template = template_dir / ref.apo_path.name
+            template = template_dir / ref.delig_path.name
             if not template.exists():
                 mrich.writing(template)
-                shutil.copy(ref.apo_path, template)
+                shutil.copy(ref.delig_path, template)
 
         ### Inspirations
 

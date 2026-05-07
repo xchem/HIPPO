@@ -2084,13 +2084,13 @@ class Recipe:
         df["template"] = df["reference_id"].apply(lambda x: ref_lookup[x])
 
         for ref_pose in references:
-            assert ref_pose.apo_path, f"Reference {ref_pose} has no apo_path"
+            assert ref_pose.delig_path, f"Reference {ref_pose} has no delig_path"
 
-            template = template_dir / ref_pose.apo_path.name
+            template = template_dir / ref_pose.delig_path.name
 
             if not template.exists():
                 mrich.writing(template)
-                shutil.copy(ref_pose.apo_path, template)
+                shutil.copy(ref_pose.delig_path, template)
 
         ## INSPIRATIONS
 
