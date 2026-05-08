@@ -627,11 +627,13 @@ class Pose:
                 ".pdb", "_delig-desolv.pdb"
             )
             if not delig_path.exists():
-                delig_path = path.parent / path.name.replace("_hippo.pdb", ".pdb").replace(
-                ".pdb", "_apo-desolv.pdb"
-                )
+                delig_path = path.parent / path.name.replace(
+                    "_hippo.pdb", ".pdb"
+                ).replace(".pdb", "_apo-desolv.pdb")
                 if delig_path.exists():
-                    mrich.warning(f'Could not find "delig-desolv.pdb" for {self}, using "apo-desolv.pdb" instead (which is deprecated in new versions of fragalysis downloads)')
+                    mrich.warning(
+                        f'Could not find "delig-desolv.pdb" for {self}, using "apo-desolv.pdb" instead (which is deprecated in new versions of fragalysis downloads)'
+                    )
                     return delig_path
                 else:
                     return None

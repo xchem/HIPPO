@@ -61,7 +61,8 @@ def parse_observation_longcode(longcode: str) -> dict[str]:
     import re
 
     match = re.search(
-        r"(.*)_([A-z]_[0-9]*_[A-Z0-9]_[0-9])_(.*)\+([A-z]\+[0-9]*\+[0-9]\+[0-9])_.LIG", longcode
+        r"(.*)_([A-z]_[0-9]*_[A-Z0-9]_[0-9])_(.*)\+([A-z]\+[0-9]*\+[0-9]\+[0-9])_.LIG",
+        longcode,
     )
     if not match:
         match = re.search(
@@ -71,7 +72,9 @@ def parse_observation_longcode(longcode: str) -> dict[str]:
         if not match:
             raise UnsupportedFragalysisLongcodeError(longcode)
         else:
-            mrich.warning(f"Fragalysis longcode ({longcode}) formatting matches format from previous version of Fragalysis downloads")
+            mrich.warning(
+                f"Fragalysis longcode ({longcode}) formatting matches format from previous version of Fragalysis downloads"
+            )
 
     cryst_str, lig_str, _, _ = match.groups()
 

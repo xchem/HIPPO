@@ -445,7 +445,8 @@ class HIPPO:
                         p
                         for p in path.glob("*.pdb")
                         if "_ligand" not in p.name
-                        and "_apo" not in p.name    # Previous naming convention for "delig" structures. Keep for previous versions of Fragalysis downloads.
+                        and "_apo"
+                        not in p.name  # Previous naming convention for "delig" structures. Keep for previous versions of Fragalysis downloads.
                         and "_delig" not in p.name
                         and "_hippo" not in p.name
                     ]
@@ -1174,7 +1175,11 @@ class HIPPO:
         (template_path,) = template_paths
         template_path = Path(template_path)
         mrich.var("template_path", template_path)
-        base_name = template_path.name.removesuffix(".pdb").removesuffix("_delig-desolv") if "delig-desolv" in template_path.name else template_path.name.removesuffix(".pdb").removesuffix("_apo-desolv")  # Previous naming convention for "delig" structures. Keep for previous versions of Fragalysis downloads. 
+        base_name = (
+            template_path.name.removesuffix(".pdb").removesuffix("_delig-desolv")
+            if "delig-desolv" in template_path.name
+            else template_path.name.removesuffix(".pdb").removesuffix("_apo-desolv")
+        )  # Previous naming convention for "delig" structures. Keep for previous versions of Fragalysis downloads.
         reference = self.poses[base_name]
         assert reference, "Could not determine reference structure"
         mrich.var("reference", reference)
