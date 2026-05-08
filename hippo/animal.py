@@ -445,7 +445,9 @@ class HIPPO:
                         p
                         for p in path.glob("*.pdb")
                         if "_ligand" not in p.name
-                        and "_apo" not in p.name
+                        and "_apo"
+                        not in p.name  # Previous naming convention for "delig" structures. Keep for previous versions of Fragalysis downloads.
+                        and "_delig" not in p.name
                         and "_hippo" not in p.name
                     ]
 
@@ -1173,7 +1175,11 @@ class HIPPO:
         (template_path,) = template_paths
         template_path = Path(template_path)
         mrich.var("template_path", template_path)
-        base_name = template_path.name.removesuffix(".pdb").removesuffix("_apo-desolv")
+        base_name = (
+            template_path.name.removesuffix(".pdb").removesuffix("_delig-desolv")
+            if "delig-desolv" in template_path.name
+            else template_path.name.removesuffix(".pdb").removesuffix("_apo-desolv")
+        )  # Previous naming convention for "delig" structures. Keep for previous versions of Fragalysis downloads.
         reference = self.poses[base_name]
         assert reference, "Could not determine reference structure"
         mrich.var("reference", reference)
@@ -3135,14 +3141,14 @@ class HIPPO:
     #     mrich.var("n_cores", n_cores)
     #     mrich.var("timeout", timeout)
     #     mrich.var("scratch_dir", scratch_dir)
-    #     mrich.var("protein_path", reference.apo_path)
+    #     mrich.var("protein_path", reference.delig_path)
     #     mrich.var("bulkdock_csv", bulkdock_csv)
 
     #     from .fstein import setup_wictor_laboratory, pure_merge
 
     #     lab = setup_wictor_laboratory(
     #         scratch_dir=scratch_dir,
-    #         protein_path=reference.apo_path,
+    #         protein_path=reference.delig_path,
     #     )
 
     #     df = pure_merge(
