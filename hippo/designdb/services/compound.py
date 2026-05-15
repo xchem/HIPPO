@@ -3,7 +3,7 @@ import re
 
 import mrich
 import rdkit
-from designdb.models import Compound, CompoundTag
+from designdb.models import CompoundModel, CompoundTagModel
 from designdb.utils import (
     inchikey_from_smiles,
     registration_hash_tautomer_insensitive,
@@ -54,7 +54,7 @@ class CompoundService:
         # mol: Chem.rdchem.Mol,
         smiles: str,
         # inchikey: str,
-    ) -> tuple[Compound, bool]:
+    ) -> tuple[CompoundModel, bool]:
 
         # designdb expects smils as input, so this is the entrypoint
         # for insertion
@@ -66,7 +66,7 @@ class CompoundService:
 
         h = registration_hash_tautomer_insensitive(sp)
 
-        compound, created = Compound.objects.get_or_create(
+        compound, created = CompoundModel.objects.get_or_create(
             compound_hash=h,
             defaults={
                 # 'compound_mol': mol,
@@ -100,7 +100,7 @@ class CompoundService:
 
         #     if not compound:
         #         mrich.error(
-        #             'Compound exists in database but could not be found by inchikey'
+        #             'CompoundModel exists in database but could not be found by inchikey'
         #         )
         #         mrich.var('smiles', smiles)
         #         mrich.var('inchikey', inchikey)
@@ -117,7 +117,7 @@ class CompoundService:
     # def create_from_smiles(
     #     cls,
     #     smiles: str,
-    # ) -> tuple[Compound, bool]:
+    # ) -> tuple[CompoundModel, bool]:
     #     mol = Chem.MolFromSmiles(smiles, sanitize=True)
     #     compound, created = cls.create(mol=mol)
     #     return compound, created
@@ -140,7 +140,7 @@ class CompoundService:
 
 
     @classmethod
-    def get_by_smiles(cls, smiles: str) -> Compound | None:
+    def get_by_smiles(cls, smiles: str) -> CompoundModel | None:
         mol = Chem.MolFromSmiles(smiles, sanitize=True)
         try:
             sp = superparent(mol)
@@ -149,7 +149,7 @@ class CompoundService:
 
         h = registration_hash_tautomer_insensitive(sp)
 
-        return Compound.objects.get(compound_hash=h)
+        return CompoundModel.objects.get(compound_hash=h)
 
 
 
@@ -158,9 +158,9 @@ class CompoundTagService:
     def tags_from_list(tag_list: list[str]):
         assert tag_list is not None, '"None" passed as tag_list'
 
-        CompoundTag.objects.bulk_create(
-            [CompoundTag(compound_tag_name=k.strip()) for k in tag_list if k.strip()],
+        CompoundTagModel.objects.bulk_create(
+            [CompoundTagModel(compound_tag_name=k.strip()) for k in tag_list if k.strip()],
             ignore_conflicts=True,
         )
-        tags = CompoundTag.objects.filter(compound_tag_name__in=tag_list)
+        tags = CompoundTagModel.objects.filter(compound_tag_name__in=tag_list)
         return tags

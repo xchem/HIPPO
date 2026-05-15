@@ -3,7 +3,7 @@ import re
 
 # from mypackage.services.compound import CompoundService
 # from rdkit.Chem import inchi
-from designdb.models import Pose, ScoreValue, ScoringMethod
+from designdb.models import PoseModel, ScoreValueModel, ScoringMethodModel
 
 # from .validation.compound import ValidationError, validate_compound_data
 
@@ -33,7 +33,7 @@ class ScoreService:
 
         # if self._scoring_method_list:
         #     for m in self._scoring_method_list:
-        #         sm, _ = ScoringMethod.objects.get_or_create(
+        #         sm, _ = ScoringMethodModel.objects.get_or_create(
         #             method_name=m,
         #         )
         #         self._score_map[sm.method_name] = sm
@@ -41,7 +41,7 @@ class ScoreService:
     def add_scores_from_record(
         self,
         *,
-        pose: Pose,
+        pose: PoseModel,
         record: dict[str, str | float],
     ):
 
@@ -53,11 +53,11 @@ class ScoreService:
                 method = self.scoring_methods[method_name]
             except KeyError:
                 # there's so many more fields, should I really be creating them?
-                method, _ = ScoringMethod.objects.get_or_create(
+                method, _ = ScoringMethodModel.objects.get_or_create(
                     method_name=method_name,
                 )
 
-            score = ScoreValue(
+            score = ScoreValueModel(
                 pose=pose,
                 compound=pose.compound,
                 scoring_method=method,
@@ -70,5 +70,5 @@ class ScoreService:
     #     pass
 
     @property
-    def scoring_methods(self) -> dict[str, ScoringMethod]:
+    def scoring_methods(self) -> dict[str, ScoringMethodModel]:
         return self._scoring_method_cache

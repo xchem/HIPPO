@@ -9,7 +9,7 @@ import mrich
 import pandas as pd
 from django.db import transaction
 
-from .models import Compound, Pose, Target
+from .models import CompoundModel, PoseModel, TargetModel
 from .services.ingestion import IngestionBatchResult, IngestionService
 from .sets.pose import PoseSet
 from .utils import make_warn_once_per_key
@@ -29,7 +29,7 @@ class HIPPO:
     ) -> None:
 
         # TODO: user- or project based targets
-        self._target, _ = Target.objects.get_or_create(target_name=target_name)
+        self._target, _ = TargetModel.objects.get_or_create(target_name=target_name)
 
         # TODO: the way this worked previously was it gave the HIPPO
         # instance full access to the pose table. When working with
@@ -39,7 +39,7 @@ class HIPPO:
         # along this target?
 
         # self._compounds = CompoundTable(self.db)
-        # self._poses = PoseSet(Pose.objects.all())  # <- NB! for testing
+        # self._poses = PoseSet(PoseModel.objects.all())  # <- NB! for testing
         # self._tags = TagTable(self.db)
         # self._reactions = ReactionTable(self.db)
 
@@ -59,7 +59,7 @@ class HIPPO:
     #     return self._name
 
     @property
-    def target(self) -> Target:
+    def target(self) -> TargetModel:
         """Returns the target instance"""
         return self._target
 
@@ -74,13 +74,13 @@ class HIPPO:
     @property
     def poses(self):
         """Return pose instances for this target"""
-        # return Pose.objects.filter(target=self._target)
-        return PoseSet(Pose.objects.filter(target=self._target))
+        # return PoseModel.objects.filter(target=self._target)
+        return PoseSet(PoseModel.objects.filter(target=self._target))
 
     @property
     def compounds(self):
         """Return compound instances for this target"""
-        return Compound.compound_filter.all()
+        return CompoundModel.compound_filter.all()
 
     @property
     def num_poses(self) -> int:
@@ -105,7 +105,7 @@ class HIPPO:
         For an XChemAlign dataset the `aligned_directory`
         should point to the `aligned_files`.
 
-        :param target_name: Name of this protein :class:`.Target`
+        :param target_name: Name of this protein :class:`.TargetModel`
         :param metadata_csv: Path to the metadata.csv from the Fragalysis download
         :param aligned_directory: Path to the aligned_files directory
             from the Fragalysis download
@@ -194,7 +194,7 @@ class HIPPO:
         mrich.var('#valid observations', result.attempts)
 
         # n_poses = self.num_poses
-        # n_poses = Pose.objects.count()
+        # n_poses = PoseModel.objects.count()
 
         mrich.var('#directories parsed', result.attempts)
         mrich.var('#compounds registered', result.compounds_created)
@@ -204,7 +204,7 @@ class HIPPO:
         self,
         *,
         path: str | Path,
-        reference: int | Pose | None = None,
+        reference: int | PoseModel | None = None,
         inspirations: list[int] | PoseSet | None = None,
         compound_tags: None | list[str] = None,
         pose_tags: None | list[str] = None,
@@ -219,24 +219,24 @@ class HIPPO:
     ) -> None:
         """Add posed virtual hits from an SDF into the database.
 
-        :param target: Name of the protein :class:`.Target`
+        :param target: Name of the protein :class:`.TargetModel`
         :param path: Path to the SDF
-        :param reference: Optional single reference :class:`.Pose` to use as the protein conformation for all poses, defaults to ``None``
-        :param reference_col: Column that contains reference :class:`.Pose` aliases or ID's
+        :param reference: Optional single reference :class:`.PoseModel` to use as the protein conformation for all poses, defaults to ``None``
+        :param reference_col: Column that contains reference :class:`.PoseModel` aliases or ID's
         :param compound_tags: List of string Tags to assign to all created compounds, defaults to ``None``
         :param pose_tags: List of string Tags to assign to all created poses, defaults to ``None``
         :param mol_col: Name of the column containing the ``rdkit.ROMol`` ligands, defaults to ``"ROMol"``
         :param name_col: Name of the column containing the ligand name/alias, defaults to ``"ID"``
         :param inspirations: Optional single set of inspirations :class:`.PoseSet` object or list of IDs to assign as inspirations to all inserted poses, defaults to ``None``
-        :param inspiration_col: Name of the column containing the list of inspiration :class:`.Pose` names or ID's, defaults to ``"ref_mols"``
-        :param inspiration_map: Optional dictionary or callable mapping between inspiration strings found in ``inspiration_col`` and :class:`.Pose` ids
+        :param inspiration_col: Name of the column containing the list of inspiration :class:`.PoseModel` names or ID's, defaults to ``"ref_mols"``
+        :param inspiration_map: Optional dictionary or callable mapping between inspiration strings found in ``inspiration_col`` and :class:`.PoseModel` ids
         :param energy_score_col: Name of the column containing the list of energy scores ``"energy_score"``
         :param distance_score_col: Name of the column containing the list of distance scores, defaults to ``"distance_score"``
         :param convert_floats: Try to convert all values to ``float``, defaults to ``True``
         :param skip_equal_dict: Skip rows where ``any(row[key] == value for key, value in skip_equal_dict.items())``, defaults to ``None``
         :param skip_not_equal_dict: Skip rows where ``any(row[key] != value for key, value in skip_not_equal_dict.items())``, defaults to ``None``
 
-        All non-name columns are added to the Pose metadata.
+        All non-name columns are added to the PoseModel metadata.
         N.B. separate .mol files are not created. The molecule binary will only be stored in the .sqlite file and fake paths are added to the database.
         """
         # TODO: original code reads sdf into data frame. I don't see
@@ -262,7 +262,7 @@ class HIPPO:
         else:
             inspiration_list = []
 
-        if reference and isinstance(reference, Pose):
+        if reference and isinstance(reference, PoseModel):
             reference_id = reference.id
         else:
             reference_id = None
@@ -350,8 +350,8 @@ class HIPPO:
         reject_flags: list[str] | None = None,
         register_reactions: bool = True,
         dry_run: bool = False,
-        scaffold_route: 'Route | None' = None,
-        scaffold_compound: 'Compound | None' = None,
+        scaffold_route: 'RouteModel | None' = None,
+        scaffold_compound: 'CompoundModel | None' = None,
         pose_tags: list[str] | None = None,
         product_tags: list[str] | None = None,
     ) -> pd.DataFrame:
@@ -364,7 +364,7 @@ class HIPPO:
         :param require_intra_geometry_pass: Filter out poses with falsy `intra_geometry_pass` values
         :param reject_flags: Filter out rows flagged with strings from this list (default = ["one_of_multiple_products", "selectivity_issue_contains_reaction_atoms_of_both_reactants"])
         :param scaffold_route: Supply a known single-step route to the scaffold product to use if scaffold placements are missing
-        :param scaffold_compound: Supply a :class:`.Compound` for the scaffold product to use if scaffold placements are missing
+        :param scaffold_compound: Supply a :class:`.CompoundModel` for the scaffold product to use if scaffold placements are missing
         :param dry_run: Don't insert new records into the database (for debugging/testing)
         :param pose_tags: Add these tags to all inserted poses, defaults to ["syndirella_product", "syndirella_placed"]
         :param product_tags: Add these tags to all inserted product compounds, defaults to ["syndirella_product"]

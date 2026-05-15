@@ -3,7 +3,7 @@ import logging
 import mrich
 # from mypackage.services.compound import CompoundService
 # from rdkit.Chem import inchi
-from designdb.models import Compound, Reactant, Reaction
+from designdb.models import CompoundModel, ReactantModel, ReactionModel
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class ReactionService:
         non_duplicates = {}
 
         # not entirely sure how the original query was meant to work
-        qs = Reactant.objects.filter(compound__pk__in=product_ids)
+        qs = ReactantModel.objects.filter(compound__pk__in=product_ids)
         existing = {}
         for r in qs:
             reaction_type = r.reaction.reaction_type
@@ -72,10 +72,10 @@ class ReactionService:
             return None
 
         for reaction_type, product_id in non_duplicates.keys():
-            compound = Compound.objects.get(pk=product_id)
+            compound = CompoundModel.objects.get(pk=product_id)
             # if I understand the original procedure correctly, it
             # should have already weeded out the duplicates
-            reaction, _ = Reaction.objects.get_or_create(
+            reaction, _ = ReactionModel.objects.get_or_create(
                 reaction_type=reaction_type,
                 product_compound=compound,
                 reaction_product_yield=1.0,
@@ -90,17 +90,17 @@ class ReactionService:
                 payload.append((reaction_id, reactant_id))
 
         for reaction_id, reactant_id in payload:
-            reaction = Reaction.objects.get(pk=reaction_id)
-            compound = Compound.objects.get(pk=reactant_id)
-            reaction, _ = Reactant.objects.get_or_create(
+            reaction = ReactionModel.objects.get(pk=reaction_id)
+            compound = CompoundModel.objects.get(pk=reactant_id)
+            reaction, _ = ReactantModel.objects.get_or_create(
                 reaction=reaction,
                 compound=compound,
                 reactant_amount=1.0,
             )
 
         # delete orphaned reactions, srsly??
-        Reaction.objects.filter(
-            pk__in=Reactant.objects.filter(
+        ReactionModel.objects.filter(
+            pk__in=ReactantModel.objects.filter(
                 compound__isnull=True,
             ).values('reaction'),
         ).delete()

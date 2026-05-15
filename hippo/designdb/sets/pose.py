@@ -17,15 +17,15 @@ import mrich
 import networkx as nx
 import pandas as pd
 from designdb.models import (
-    Compound,
-    Inspiration,
-    Interaction,
-    Pose,
-    PoseTag,
-    PoseTagJunction,
-    Subsite,
-    SubsiteTag,
-    Target,
+    CompoundModel,
+    InspirationModel,
+    InteractionModel,
+    PoseModel,
+    PoseTagJunctionModel,
+    PoseTagModel,
+    SubsiteModel,
+    SubsiteTagModel,
+    TargetModel,
 )
 from designdb.sets.interaction import InteractionSet
 from designdb.utils import ScoreSubquery, normalize_string_list
@@ -83,7 +83,7 @@ class PoseSet:
     Use as an iterable
     ==================
 
-    Iterate through :class:`.Pose` objects in the set:
+    Iterate through :class:`.PoseModel` objects in the set:
 
     ::
 
@@ -95,7 +95,7 @@ class PoseSet:
     Check membership
     ================
 
-    To determine if a :class:`.Pose` is present in the set:
+    To determine if a :class:`.PoseModel` is present in the set:
 
     ::
 
@@ -133,7 +133,7 @@ class PoseSet:
         if queryset:
             self._queryset = queryset
         else:
-            self._queryset = Pose.objects.none()
+            self._queryset = PoseModel.objects.none()
 
         self._name = name
         if sort:
@@ -174,7 +174,7 @@ class PoseSet:
     def __getitem__(
         self,
         key: int | slice,
-    ) -> 'Pose | PoseSet':
+    ) -> 'PoseModel | PoseSet':
         """Get poses or subsets thereof from this set
 
         :param key: integer index or slice of indices
@@ -183,15 +183,15 @@ class PoseSet:
         match key:
             case int():
                 try:
-                    pose = Pose.objects.get(pk=key)
-                except Pose.DoesNotExist as exc:
+                    pose = PoseModel.objects.get(pk=key)
+                except PoseModel.DoesNotExist as exc:
                     mrich.error(f'list index out of range: {key=} for {self}')
-                    raise Pose.DoesNotExist from exc
+                    raise PoseModel.DoesNotExist from exc
 
                 return pose
 
             case slice():
-                return PoseSet(Pose.objects.filter(pk__in=key))
+                return PoseSet(PoseModel.objects.filter(pk__in=key))
 
             case _:
                 raise NotImplementedError
@@ -203,14 +203,14 @@ class PoseSet:
         """Add a :class:`.PoseSet` to this set"""
         if isinstance(other, PoseSet):
             return PoseSet(
-                Pose.objects.filter(
+                PoseModel.objects.filter(
                     Q(pk__in=self._queryset) | Q(pk__in=other.queryset)
                 ),
                 sort=False,
             )
-        elif isinstance(other, Pose):
+        elif isinstance(other, PoseModel):
             return PoseSet(
-                Pose.objects.filter(Q(pk__in=self._queryset) | Q(pk=other.pk)),
+                PoseModel.objects.filter(Q(pk__in=self._queryset) | Q(pk=other.pk)),
                 sort=False,
             )
         else:
@@ -224,14 +224,14 @@ class PoseSet:
         match other:
             case PoseSet():
                 return PoseSet(
-                    Pose.objects.filter(
+                    PoseModel.objects.filter(
                         Q(pk__in=self._queryset) & ~Q(pk__in=other.queryset)
                     ),
                     sort=False,
                 )
             case int():
                 return PoseSet(
-                    Pose.objects.filter(Q(pk__in=self._queryset) & ~Q(pk=other.pk)),
+                    PoseModel.objects.filter(Q(pk__in=self._queryset) & ~Q(pk=other.pk)),
                     sort=False,
                 )
 
@@ -241,7 +241,7 @@ class PoseSet:
         match other:
             case PoseSet():
                 return PoseSet(
-                    Pose.objects.filter(
+                    PoseModel.objects.filter(
                         Q(pk__in=self._queryset) & Q(pk__in=other.queryset)
                     ),
                     sort=False,
@@ -256,7 +256,7 @@ class PoseSet:
         match other:
             case PoseSet():
                 return PoseSet(
-                    Pose.objects.filter(
+                    PoseModel.objects.filter(
                         Q(pk__in=self._queryset) | Q(pk__in=other.queryset)
                     ),
                     sort=False,
@@ -271,7 +271,7 @@ class PoseSet:
         match other:
             case PoseSet():
                 return PoseSet(
-                    Pose.objects.filter(
+                    PoseModel.objects.filter(
                         Q(Q(pk__in=self._queryset) | Q(pk__in=other.queryset))
                         & ~Q(Q(pk__in=self._queryset) & Q(pk__in=other.queryset))
                     ),
@@ -288,29 +288,29 @@ class PoseSet:
         target: int = None,
         subsite: int = None,
     ) -> 'PoseSet':
-        """Filter poses by a given tag, Subsite ID, or target ID. See :meth:`.PoseSet.get_by_tag`, :meth:`.PoseSet.get_by_target`, amd :meth:`.PoseSet.get_by_subsite`"""
+        """Filter poses by a given tag, SubsiteModel ID, or target ID. See :meth:`.PoseSet.get_by_tag`, :meth:`.PoseSet.get_by_target`, amd :meth:`.PoseSet.get_by_subsite`"""
 
         if tag:
             return self.get_by_tag(tag)
         elif target:
-            return self.get_by_target(target=Target.objects.get(pk=target))
+            return self.get_by_target(target=TargetModel.objects.get(pk=target))
         elif subsite:
-            return self.get_by_subsite(subsite=Subsite.objects.get(pk=subsite))
+            return self.get_by_subsite(subsite=SubsiteModel.objects.get(pk=subsite))
         else:
             raise NotImplementedError
 
     @classmethod
     def get_by_references(cls, poseset: 'PoseSet') -> 'PoseSet':
         return PoseSet(
-            Pose.objects.filter(pk__in=poseset._queryset.values('pose_reference'))
+            PoseModel.objects.filter(pk__in=poseset._queryset.values('pose_reference'))
         )
 
     # there's a method get_by_inspiration
     @classmethod
     def get_by_inspirations(cls, poseset: 'PoseSet') -> 'PoseSet':
         return PoseSet(
-            Pose.objects.filter(
-                pk__in=Inspiration.objects.filter(
+            PoseModel.objects.filter(
+                pk__in=InspirationModel.objects.filter(
                     derivative_pose__in=self._queryset,
                 ).values(
                     'original_pose',
@@ -333,7 +333,7 @@ class PoseSet:
         """
         self._queryset = self._queryset.annotate(
             has_tag=Exists(
-                PoseTagJunction.objects.filter(
+                PoseTagJunctionModel.objects.filter(
                     pose=OuterRef('pk'),
                     pose_tag__pose_tag_name=tag,
                 ),
@@ -374,16 +374,16 @@ class PoseSet:
                 self._queryset.filter(pose_metadata__contains=f'"{key}: {value}"'),
             )
 
-    def get_by_inspiration(self, inspiration: Pose, inverse: bool = False):
+    def get_by_inspiration(self, inspiration: PoseModel, inverse: bool = False):
         """Get all child poses with with this inspiration.
 
-        :param inspiration: inspiration :class:`.Pose` ID or object
+        :param inspiration: inspiration :class:`.PoseModel` ID or object
         :param inverse: invert the selection (Default value = False)
 
         """
         # not entirely sure which way the filtering should go
         qs = (
-            Inspiration.objects.filter(
+            InspirationModel.objects.filter(
                 derivative_pose=inspiration,
             ).values('original_pose'),
         )
@@ -425,9 +425,9 @@ class PoseSet:
         :param inchikey: include InChIKey column (Default value = True)
         :param alias: include alias column (Default value = True)
         :param name: include name column (Default value = True)
-        :param compound_id: include :class:`.Compound` ID column (Default value = False)
-        :param reference_id: include reference :class:`.Pose` ID column (Default value = False)
-        :param target_id: include reference :class:`.Target` ID column (Default value = False)
+        :param compound_id: include :class:`.CompoundModel` ID column (Default value = False)
+        :param reference_id: include reference :class:`.PoseModel` ID column (Default value = False)
+        :param target_id: include reference :class:`.TargetModel` ID column (Default value = False)
         :param path: include path column (Default value = False)
         :param mol: include ``rdkit.Chem.Mol`` in output (Default value = False)
         :param energy_score: include energy_score column (Default value = False)
@@ -435,9 +435,9 @@ class PoseSet:
         :param inspiration_score: include inspiration_score column (Default value = False)
         :param metadata: include metadata in output (Default value = False)
         :param expand_metadata: create separate column for each metadata key (Default value = True)
-        :param inspiration_ids: include inspiration :class:`.Pose` ID column
-        :param inspiration_aliases: include inspiration :class:`.Pose` alias column
-        :param derivative_ids: include derivative :class:`.Pose` ID column
+        :param inspiration_ids: include inspiration :class:`.PoseModel` ID column
+        :param inspiration_aliases: include inspiration :class:`.PoseModel` alias column
+        :param derivative_ids: include derivative :class:`.PoseModel` ID column
         :param tags: include tags column
         :param subsites: include subsites column
         """
@@ -476,7 +476,7 @@ class PoseSet:
                 'reference_alias',
                 'reference_alias',
                 Subquery(
-                    Pose.objects.filter(
+                    PoseModel.objects.filter(
                         pk=OuterRef('pose_reference'),
                     ).values('pose_alias')[0:1]
                 ),
@@ -600,7 +600,7 @@ class PoseSet:
     ) -> 'PoseSet | None':
         """Get poses with a certain reference id
 
-        :param ref_id: reference :class:`.Pose` ID
+        :param ref_id: reference :class:`.PoseModel` ID
 
         """
         qs = self._queryset.filter(pose_reference=ref_id)
@@ -613,17 +613,17 @@ class PoseSet:
     def get_by_compound(
         self,
         *,
-        compound: 'int | Compound | CompoundSet',
+        compound: 'int | CompoundModel | CompoundSet',
     ) -> 'PoseSet | None':
-        """Select a subset of this :class:`.PoseSet` by the associated :class:`.Compound`.
+        """Select a subset of this :class:`.PoseSet` by the associated :class:`.CompoundModel`.
 
-        :param compound: :class:`.Compound` object or ID
+        :param compound: :class:`.CompoundModel` object or ID
         :returns: a :class:`.PoseSet` of the selection
 
         """
         if isinstance(compound, int):
             return PoseSet(self._queryset.filter(compound__id=compound))
-        elif isinstance(compound, Compound):
+        elif isinstance(compound, CompoundModel):
             return PoseSet(self._queryset.filter(compound=compound))
         else:
             # possible crash point: assuming CompoundSet but not
@@ -634,11 +634,11 @@ class PoseSet:
     def get_by_target(
         self,
         *,
-        target: Target,
+        target: TargetModel,
     ) -> 'PoseSet | None':
-        """Select a subset of this :class:`.PoseSet` by the associated :class:`.Target`.
+        """Select a subset of this :class:`.PoseSet` by the associated :class:`.TargetModel`.
 
-        :param id: :class:`.Target` ID
+        :param id: :class:`.TargetModel` ID
         :returns: a :class:`.PoseSet` of the selection
 
         """
@@ -649,16 +649,16 @@ class PoseSet:
     def get_by_subsite(
         self,
         *,
-        subsite: Subsite,
+        subsite: SubsiteModel,
     ) -> 'PoseSet | None':
-        """Select a subset of this :class:`.PoseSet` by the associated :class:`.Subsite`.
+        """Select a subset of this :class:`.PoseSet` by the associated :class:`.SubsiteModel`.
 
-        :param id: :class:`.Subsite` ID
+        :param id: :class:`.SubsiteModel` ID
         :returns: a :class:`.PoseSet` of the selection
 
         """
         qs = self._queryset.filter(
-            id__in=SubsiteTag.objects.filter(
+            id__in=SubsiteTagModel.objects.filter(
                 subsite=subsite,
             ).values('pose'),
         )
@@ -737,18 +737,18 @@ class PoseSet:
 
         assert isinstance(tag, str)
 
-        pose_tag = PoseTag(pose_tag_name=tag)
+        pose_tag = PoseTagModel(pose_tag_name=tag)
         pose_tag.save()
 
-        PoseTagJunction.objects.bulk_create(
-            [PoseTagJunction(pose=pose, pose_tag=pose_tag) for pose in self._queryset],
+        PoseTagJunctionModel.objects.bulk_create(
+            [PoseTagJunctionModel(pose=pose, pose_tag=pose_tag) for pose in self._queryset],
             ignore_conflicts=True,
         )
 
         mrich.print(f'Tagged {self} w/ "{tag}"')
 
         # refetch in case was evaluated
-        self._queryset = Pose.objects.filter(pk__in=self._queryset.values('pk'))
+        self._queryset = PoseModel.objects.filter(pk__in=self._queryset.values('pk'))
 
         # NB! I'm now realizing this is potentially a huge
         # problem. with every evaluation and refretch some attributes
@@ -775,7 +775,7 @@ class PoseSet:
                 mrich.error(f'Could not append to metadata {key=}. Not a list?')
 
             pose.save()
-        self._queryset = Pose.objects.filter(pk__in=self._queryset.values('pk'))
+        self._queryset = PoseModel.objects.filter(pk__in=self._queryset.values('pk'))
 
     def set_subsites_from_metadata_field(self, field='CanonSites alias') -> None:
         """Create and assign subsite entries from a metadata field
@@ -793,11 +793,11 @@ class PoseSet:
             # I'm still not entirely clear can you really have
             # posesets from different target, if not, and it really
             # seems that not, this should be a single subsite
-            subsite, _ = Subsite.get_or_create(target=pose.target, subsite_name=key)
-            subsite_tag = SubsiteTag(subsite=subsite, pose=pose)
+            subsite, _ = SubsiteModel.get_or_create(target=pose.target, subsite_name=key)
+            subsite_tag = SubsiteTagModel(subsite=subsite, pose=pose)
             subsite_tag.save()
 
-        self._queryset = Pose.objects.filter(pk__in=self._queryset.values('pk'))
+        self._queryset = PoseModel.objects.filter(pk__in=self._queryset.values('pk'))
 
     # TODO: implement scores
     # def calculate_inspiration_scores(
@@ -866,7 +866,7 @@ class PoseSet:
     def split_by_reference(self) -> 'dict[int,PoseSet]':
         """Split this :class:`.PoseSet` into subsets grouped by reference ID
 
-        :returns: a dictionary with reference :class:`.Pose` IDs as keys and :class:`.PoseSet` subsets as values
+        :returns: a dictionary with reference :class:`.PoseModel` IDs as keys and :class:`.PoseSet` subsets as values
 
         """
         sets = {}
@@ -897,17 +897,17 @@ class PoseSet:
 
         if single_set:
             return PoseSet(
-                Pose.objects.filter(
+                PoseModel.objects.filter(
                     pk__in=[id for s in sets.values() for id in s.ids],
                     sort=False,
                 )
             )
 
-        self._queryset = Pose.objects.filter(pk__in=self._queryset.values('pk'))
+        self._queryset = PoseModel.objects.filter(pk__in=self._queryset.values('pk'))
 
         return {
-            PoseSet(Pose.objects.filter(pk__in=insp_ids)): PoseSet(
-                Pose.objects.filter(pk__in=pose_ids)
+            PoseSet(PoseModel.objects.filter(pk__in=insp_ids)): PoseSet(
+                PoseModel.objects.filter(pk__in=pose_ids)
             )
             for insp_ids, pose_ids in sets.items()
         }
@@ -926,8 +926,8 @@ class PoseSet:
 
         :param out_path: filepath of the output
         :param name_col: pose property to use as the name column, can be ``["name", "alias", "inchikey", "id"]`` (Default value = 'name')
-        :param inspiration_ids: include inspiration :class:`.Pose` ID column
-        :param inspiration_aliases: include inspiration :class:`.Pose` alias column
+        :param inspiration_ids: include inspiration :class:`.PoseModel` ID column
+        :param inspiration_aliases: include inspiration :class:`.PoseModel` alias column
         :param fragalysis_inspirations: create inspirations column "ref_mols"
         """
 
@@ -1045,7 +1045,7 @@ class PoseSet:
             if not poses:
                 poses = self
 
-            values = Inspiration.objects.filter(
+            values = InspirationModel.objects.filter(
                 derivative_pose__in=self._queryset,
             ).values(
                 'derivative_pose',
@@ -1056,7 +1056,7 @@ class PoseSet:
                 logger.warning('no inspirations, quitting')
                 return
 
-            poses = PoseSet(Pose.objects.filter(pk__in=values))
+            poses = PoseSet(PoseModel.objects.filter(pk__in=values))
 
             mrich.debug(len(poses), 'remaining after skipping null inspirations')
 
@@ -1071,7 +1071,7 @@ class PoseSet:
         # TODO: this should not go through the df
 
         # Scope issue - this code expect access to all poses in the db
-        self._queryset = Pose.objects.all()
+        self._queryset = PoseModel.objects.all()
 
         pose_df = poses.get_df(
             mol=True,
@@ -1150,8 +1150,8 @@ class PoseSet:
         pose_df.rename(
             inplace=True,
             columns={
-                'id': 'HIPPO Pose ID',
-                'compound_id': 'HIPPO Compound ID',
+                'id': 'HIPPO PoseModel ID',
+                'compound_id': 'HIPPO CompoundModel ID',
                 'mol': mol_col,
                 # "smiles": "original SMILES",
                 # "compound_id": "compound inchikey",
@@ -1159,8 +1159,8 @@ class PoseSet:
         )
 
         extras = {
-            'HIPPO Pose ID': 'HIPPO Pose ID',
-            'HIPPO Compound ID': 'HIPPO Compound ID',
+            'HIPPO PoseModel ID': 'HIPPO PoseModel ID',
+            'HIPPO CompoundModel ID': 'HIPPO CompoundModel ID',
             'smiles': 'smiles',
             'ref_pdb': 'protein reference',
             'ref_mols': 'fragment inspirations',
@@ -1366,7 +1366,7 @@ class PoseSet:
         from pathlib import Path
 
         for i, (ref_id, poses) in enumerate(self.split_by_reference().items()):
-            ref_pose = Pose.objects.get(id=ref_id)
+            ref_pose = PoseModel.objects.get(id=ref_id)
             ref_name = ref_pose.pose_alias or ref_id
 
             # create the subdirectory
@@ -1550,7 +1550,7 @@ class PoseSet:
         templates = df['template'].unique()
 
         # records = self._queryset.filter(pose_alias__in=templates)
-        records = Pose.objects.filter(
+        records = PoseModel.objects.filter(
             target__in=self.targets,
             pose_alias__in=templates,
         )
@@ -1567,7 +1567,7 @@ class PoseSet:
         print('all inspirations', all_inspirations)
         # records = self._queryset.filter(pose_alias__in=all_inspirations)
         # isn't this overwriting the one few lines above??
-        records = Pose.objects.filter(
+        records = PoseModel.objects.filter(
             target__in=self.targets, pose_alias__in=all_inspirations
         )
 
@@ -1609,8 +1609,8 @@ class PoseSet:
     ):
         """Interactive widget to navigate compounds in the table
 
-        :param print_name: print the :class:`.Pose` name  (Default value = True)
-        :param method: pass the name of a :class:`.Pose` method to interactively display. Keyword arguments to interactive() will be passed through (Default value = None)
+        :param print_name: print the :class:`.PoseModel` name  (Default value = True)
+        :param method: pass the name of a :class:`.PoseModel` method to interactively display. Keyword arguments to interactive() will be passed through (Default value = None)
         :param function: pass a callable which will be called as `function(pose)`
 
         """
@@ -1633,7 +1633,7 @@ class PoseSet:
                     min=0,
                     max=len(self) - 1,
                     step=1,
-                    description='Pose:',
+                    description='PoseModel:',
                     disabled=False,
                 ),
             )
@@ -1654,7 +1654,7 @@ class PoseSet:
                     min=0,
                     max=len(self) - 1,
                     step=1,
-                    description='Pose:',
+                    description='PoseModel:',
                     disabled=False,
                 ),
             )
@@ -1665,7 +1665,7 @@ class PoseSet:
                 min=0,
                 max=len(self) - 1,
                 step=1,
-                description=f'Pose (/{len(self)}):',
+                description=f'PoseModel (/{len(self)}):',
                 disabled=False,
             )
 
@@ -1674,7 +1674,7 @@ class PoseSet:
             h = Checkbox(description='Tags', value=False)
             i = Checkbox(description='Subsites', value=False)
             d = Checkbox(description='2D (Comp.)', value=False)
-            e = Checkbox(description='2D (Pose)', value=False)
+            e = Checkbox(description='2D (PoseModel)', value=False)
             f = Checkbox(description='3D', value=True)
             g = Checkbox(description='Metadata', value=False)
 
@@ -1793,7 +1793,7 @@ class PoseSet:
     def get_interaction_overlaps(self, return_pairs: bool = False) -> int:
         """Count the number of member pose pairs which share at least one but not all interactions"""
 
-        records = Interaction.objects.filter(
+        records = InteractionModel.objects.filter(
             pose__in=self._queryset,
         ).values(
             'pose',
@@ -1829,7 +1829,7 @@ class PoseSet:
                 pairs.add((pose_j, pose_k))
 
         if return_pairs:
-            return [PoseSet(Pose.objects.filter(pk__in[a, b])) for a, b in pairs]
+            return [PoseSet(PoseModel.objects.filter(pk__in[a, b])) for a, b in pairs]
 
         return count
 
@@ -1847,7 +1847,7 @@ class PoseSet:
         """
 
         records = self.db.execute(sql).fetchall()
-        records = Interaction.objects.filter(
+        records = InteractionModel.objects.filter(
             pose__in=self._queryset,
         ).values(
             'pose',
@@ -1895,7 +1895,7 @@ class PoseSet:
         # create the PoseSets
 
         psets = {
-            i: PoseSet(Pose.objects.filter(pk__in=ids), name=f'Cluster {i}')
+            i: PoseSet(PoseModel.objects.filter(pk__in=ids), name=f'Cluster {i}')
             for i, ids in enumerate(clusters.values())
         }
 
@@ -1925,7 +1925,7 @@ class PoseSet:
         # unclustered
         unclustered = set(i for i in self.ids if i not in all_ids)
         psets[None] = PoseSet(
-            Pose.objects.filter(pk__in=unclustered), name='Unclustered'
+            PoseModel.objects.filter(pk__in=unclustered), name='Unclustered'
         )
 
         return psets
@@ -1933,7 +1933,7 @@ class PoseSet:
     ### PROPERTIES
 
     @property
-    def queryset(self) -> QuerySet[Pose]:
+    def queryset(self) -> QuerySet[PoseModel]:
         """Returns the ids of poses in this set"""
         return self._queryset
 
@@ -1970,7 +1970,7 @@ class PoseSet:
     @property
     def id_name_dict(self) -> dict:
         """Return a dictionary mapping pose ID's to their name"""
-        return {p.pk: p.pose_alias for p in Pose.objects.all()}
+        return {p.pk: p.pose_alias for p in PoseModel.objects.all()}
 
     @property
     def smiles(self) -> list[str]:
@@ -2026,14 +2026,14 @@ class PoseSet:
 
     @property
     def reference_ids(self) -> set[int]:
-        """Return a set of :class:`.Pose` ID's of the all the distinct references in this :class:`.PoseSet`"""
+        """Return a set of :class:`.PoseModel` ID's of the all the distinct references in this :class:`.PoseSet`"""
         return self.get_by_references(self).values_list('pk', flat=True)
 
     @property
     def inspiration_sets(self) -> list[set[int]]:
-        """Return a list of unique sets of inspiration :class:`.Pose` IDs"""
+        """Return a list of unique sets of inspiration :class:`.PoseModel` IDs"""
 
-        pairs = Inspiration.objects.filter(derivative_pose__in=self._queryset)
+        pairs = InspirationModel.objects.filter(derivative_pose__in=self._queryset)
         data = {}
         for p in pairs:
             if p.derivative_pose not in data:
@@ -2055,7 +2055,7 @@ class PoseSet:
     def num_inspirations(self) -> int:
         """Return the number of unique inspirations for poses in this set"""
         # fmt: off
-        return Inspiration.objects.filter(
+        return InspirationModel.objects.filter(
             derivative_pose__in=self._queryset,
         ).values(
             'original_pose',
@@ -2069,26 +2069,26 @@ class PoseSet:
 
     # @property
     # def str_ids(self) -> str:
-    #     """Return an SQL formatted tuple string of the :class:`.Pose` IDs"""
+    #     """Return an SQL formatted tuple string of the :class:`.PoseModel` IDs"""
     #     return str(tuple(self.ids)).replace(',)', ')')
 
     @property
-    def targets(self) -> QuerySet[Target]:
-        """Returns the :class:`.Target` objects of poses in this set"""
-        return Target.objects.filter(pk__in=self._queryset.values('target'))
+    def targets(self) -> QuerySet[TargetModel]:
+        """Returns the :class:`.TargetModel` objects of poses in this set"""
+        return TargetModel.objects.filter(pk__in=self._queryset.values('target'))
 
     @property
     def target_names(self) -> list[str]:
-        """Returns the :class:`.Target` objects of poses in this set"""
+        """Returns the :class:`.TargetModel` objects of poses in this set"""
         return self.targets.values_list('target_name', flat=True)
 
     @property
     def target_ids(self) -> list[int]:
-        """Returns the :class:`.Target` objects ID's of poses in this set"""
+        """Returns the :class:`.TargetModel` objects ID's of poses in this set"""
         return self.targets.values_list('id', flat=True)
 
     @property
-    def best_placed_pose(self) -> Pose:
+    def best_placed_pose(self) -> PoseModel:
         """Returns the pose with the best distance_score in this subset"""
         return self._queryset.get(pk=self.best_placed_pose_id)
 
@@ -2110,7 +2110,7 @@ class PoseSet:
 
     @property
     def interactions(self) -> 'InteractionSet':
-        """Get a :class:`.InteractionSet` for this :class:`.Pose`"""
+        """Get a :class:`.InteractionSet` for this :class:`.PoseModel`"""
         if self._interactions is None:
             self._interactions = InteractionSet.from_pose(self)
         return self._interactions
@@ -2133,7 +2133,7 @@ class PoseSet:
     @property
     def num_subsites(self) -> int:
         """Count the number of subsites that poses in this set come into contact with"""
-        return Subsite.objects.filter(pose__in=self._queryset).distinct().count()
+        return SubsiteModel.objects.filter(pose__in=self._queryset).distinct().count()
 
     @property
     def subsite_balance(self) -> float:
@@ -2158,8 +2158,8 @@ class PoseSet:
     @property
     def subsite_ids(self) -> set[int]:
         """Return a list of subsite id's of member poses"""
-        return Subsite.objects.filter(
-            pk__in=SubsiteTag.objects.filter(
+        return SubsiteModel.objects.filter(
+            pk__in=SubsiteTagModel.objects.filter(
                 pose__in=self._queryset,
             ).values(subsite),
         ).values_list('pk', flat=True)
@@ -2201,8 +2201,8 @@ class PoseSet:
     def derivatives(self) -> 'PoseSet':
         """Get the :class:`.PoseSet` of derivatives"""
         return PoseSet(
-            Pose.objects.filter(
-                pk__in=Inspiration.objects.filter(
+            PoseModel.objects.filter(
+                pk__in=InspirationModel.objects.filter(
                     original_pose__in=self._queryset,
                 ).values(
                     'derivative_pose',
@@ -2233,10 +2233,10 @@ class PoseSet:
 
         try:
             with transaction.atomic():
-                Inspiration.objects.filter(original_pose__in=self._queryset).delete()
-                Inspiration.objects.filter(derivative_pose__in=self._queryset).delete()
-                SubsiteTag.objects.filter(pose__in=self._queryset).delete()
-                Interaction.objects.filter(pose__in=self._queryset).delete()
+                InspirationModel.objects.filter(original_pose__in=self._queryset).delete()
+                InspirationModel.objects.filter(derivative_pose__in=self._queryset).delete()
+                SubsiteTagModel.objects.filter(pose__in=self._queryset).delete()
+                InteractionModel.objects.filter(pose__in=self._queryset).delete()
                 self._queryset.delete()
         except IntegrityError as exc:
             mrich.error(exc)

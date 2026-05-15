@@ -5,16 +5,16 @@ from pathlib import Path
 import mcol
 import mrich
 import pandas as pd
-from designdb.ingredient import Ingredient
+from designdb.components.compound import Ingredient
+from designdb.components.price import Price
 from designdb.models import (
-    CataloguePrice,
-    Compound,
-    CompoundTag,
-    CompoundTagJunction,
-    Reactant,
-    Reaction,
+    CataloguePriceModel,
+    CompoundModel,
+    CompoundTagJunctionModel,
+    CompoundTagModel,
+    ReactantModel,
+    ReactionModel,
 )
-from designdb.price import Price
 from django.db.models import Exists, OuterRef, Q
 from pandas import DataFrame, concat, isna
 from rdkit import Chem
@@ -32,7 +32,7 @@ class CompoundSet:
     Use as an iterable
     ==================
 
-    Iterate through :class:`.Compound` objects in the set:
+    Iterate through :class:`.CompoundModel` objects in the set:
 
     ::
 
@@ -44,7 +44,7 @@ class CompoundSet:
     Check membership
     ================
 
-    To determine if a :class:`.Compound` is present in the set:
+    To determine if a :class:`.CompoundModel` is present in the set:
 
     ::
 
@@ -87,11 +87,11 @@ class CompoundSet:
 
         if queryset:
             if isinstance(queryset, list):
-                self._queryset = Compound.objects.filter(pk__in=queryset)
+                self._queryset = CompoundModel.objects.filter(pk__in=queryset)
             else:
                 self._queryset = queryset
         else:
-            self._queryset = Compound.objects.none()
+            self._queryset = CompoundModel.objects.none()
 
         if sort:
             self._queryset = self._queryset.order_by('pk')
@@ -111,7 +111,7 @@ class CompoundSet:
     def __getitem__(
         self,
         key: int | slice,
-    ) -> 'Compound | CompoundSet':
+    ) -> 'CompoundModel | CompoundSet':
         """Get compounds or subsets thereof from this set
 
         :param key: integer index or slice of indices
@@ -121,46 +121,46 @@ class CompoundSet:
             case int():
                 index = self.indices[key]
                 try:
-                    return Compound.objects.get(id=index)
-                except Compound.DoesNotExist:
-                    raise Compound.DoesNotExist from exc
+                    return CompoundModel.objects.get(id=index)
+                except CompoundModel.DoesNotExist:
+                    raise CompoundModel.DoesNotExist from exc
 
             case slice():
-                return CompoundSet(Compound.objects.filter(pk__in=key))
+                return CompoundSet(CompoundModel.objects.filter(pk__in=key))
 
             case _:
                 raise NotImplementedError
 
     def __sub__(
         self,
-        other: 'Compound | CompoundSet | IngredientSet',
+        other: 'CompoundModel | CompoundSet | IngredientSet',
     ) -> 'CompoundSet':
-        """Subtract a :class:`.Compound` object or ID from this set, or subtract multiple at once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
+        """Subtract a :class:`.CompoundModel` object or ID from this set, or subtract multiple at once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
 
         match other:
             case CompoundSet():
                 return CompoundSet(
-                    Compound.objects.filter(
+                    CompoundModel.objects.filter(
                         Q(pk__in=self._queryset) & ~Q(pk__in=other.queryset)
                     ),
                     sort=False,
                 )
             case int():
                 return CompoundSet(
-                    Compound.objects.filter(Q(pk__in=self._queryset) & ~Q(pk=other.pk)),
+                    CompoundModel.objects.filter(Q(pk__in=self._queryset) & ~Q(pk=other.pk)),
                     sort=False,
                 )
 
     def __add__(
         self,
-        other: 'Compound | CompoundSet | IngredientSet | int',
+        other: 'CompoundModel | CompoundSet | IngredientSet | int',
     ) -> 'CompoundSet':
-        """Add a :class:`.Compound` object or ID to this set, or add multiple at once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
+        """Add a :class:`.CompoundModel` object or ID to this set, or add multiple at once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
 
         match other:
-            case Compound():
+            case CompoundModel():
                 return CompoundSet(
-                    Compound.objects.filter(
+                    CompoundModel.objects.filter(
                         Q(pk__in=self._queryset) | Q(pk__in=other._queryset)
                     ),
                     sort=False,
@@ -168,7 +168,7 @@ class CompoundSet:
 
             case int():
                 return CompoundSet(
-                    Compound.objects.filter(
+                    CompoundModel.objects.filter(
                         Q(pk__in=self._queryset) | Q(pk__in=other._queryset)
                     ),
                     sort=False,
@@ -176,7 +176,7 @@ class CompoundSet:
 
             case CompoundSet():
                 return CompoundSet(
-                    Compound.objects.filter(
+                    CompoundModel.objects.filter(
                         Q(pk__in=self._queryset) | Q(pk__in=other._queryset)
                     ),
                     sort=False,
@@ -184,7 +184,7 @@ class CompoundSet:
 
             case IngredientSet():
                 return CompoundSet(
-                    Compound.objects.filter(
+                    CompoundModel.objects.filter(
                         Q(pk__in=self._queryset) | Q(pk__in=other._queryset)
                     ),
                     sort=False,
@@ -199,7 +199,7 @@ class CompoundSet:
         match other:
             case CompoundSet():
                 return CompoundSet(
-                    Compound.objects.filter(
+                    CompoundModel.objects.filter(
                         Q(pk__in=self._queryset) & Q(pk__in=other.queryset)
                     ),
                     sort=False,
@@ -214,7 +214,7 @@ class CompoundSet:
         match other:
             case CompoundSet():
                 return CompoundSet(
-                    Compound.objects.filter(
+                    CompoundModel.objects.filter(
                         Q(pk__in=self._queryset) | Q(pk__in=other.queryset)
                     ),
                     sort=False,
@@ -229,7 +229,7 @@ class CompoundSet:
         match other:
             case CompoundSet():
                 return CompoundSet(
-                    Compound.objects.filter(
+                    CompoundModel.objects.filter(
                         Q(Q(pk__in=self._queryset) | Q(pk__in=other.queryset))
                         & ~Q(Q(pk__in=self._queryset) & Q(pk__in=other.queryset))
                     ),
@@ -259,10 +259,10 @@ class CompoundSet:
         """Representation for mrich"""
         return f'[bold underline]{self}'
 
-    def __contains__(self, other: Compound | int):
+    def __contains__(self, other: CompoundModel | int):
         """Check if compound or ingredient is a member of this set"""
         match other:
-            case Compound():
+            case CompoundModel():
                 ik = other.pk
             case int():
                 pk = other
@@ -280,7 +280,7 @@ class CompoundSet:
 
         self._queryset = self._queryset.annotate(
             has_tag=Exists(
-                CompoundTagJunction.objects.filter(
+                CompoundTagJunctionModel.objects.filter(
                     pose=OuterRef('pk'),
                     pose_tag__pose_tag_name=tag,
                 ),
@@ -302,18 +302,18 @@ class CompoundSet:
         if value:
             q = Q(compound_metadata__key=value)
 
-        qs = Compound.objects.filter(q)
+        qs = CompoundModel.objects.filter(q)
 
         return CompoundSet(qs)
 
     def get_by_scaffold(
         self,
-        scaffold: Compound | int,
+        scaffold: CompoundModel | int,
         none: str = 'error',
     ) -> 'CompoundSet':
         """Get all compounds that elaborate the given scaffold compound
 
-        :param scaffold: :class:`.Compound` object or ID to search by
+        :param scaffold: :class:`.CompoundModel` object or ID to search by
 
         """
 
@@ -344,8 +344,8 @@ class CompoundSet:
 
         """
 
-        qs = Compound.objects.filter(
-            pk__in=Reactant.objects.filter(
+        qs = CompoundModel.objects.filter(
+            pk__in=ReactantModel.objects.filter(
                 reaction__in=self._queryset,
             ),
         )
@@ -356,8 +356,8 @@ class CompoundSet:
         while frontier:
             new = (
                 set(
-                    Compound.objects.filter(
-                        pk__in=Reactant.objects.filter(
+                    CompoundModel.objects.filter(
+                        pk__in=ReactantModel.objects.filter(
                             reaction__in=self._queryset,
                         ),
                     ).values_list('pk', flat=True)
@@ -368,7 +368,7 @@ class CompoundSet:
             seen |= new
             frontier = new
 
-        return CompoundSet(Compound.objects.filter(pk__in=seen))
+        return CompoundSet(CompoundModel.objects.filter(pk__in=seen))
 
     def get_all_possible_reactions(
         self,
@@ -379,8 +379,8 @@ class CompoundSet:
         :param debug: Increased verbosity for debugging (Default value = False)
 
         """
-        qs = Compound.objects.filter(
-            pk__in=Reactant.objects.filter(
+        qs = CompoundModel.objects.filter(
+            pk__in=ReactantModel.objects.filter(
                 reaction__in=self._queryset,
             ),
         )
@@ -391,8 +391,8 @@ class CompoundSet:
         while frontier:
             new = (
                 set(
-                    Compound.objects.filter(
-                        pk__in=Reactant.objects.filter(
+                    CompoundModel.objects.filter(
+                        pk__in=ReactantModel.objects.filter(
                             reaction__in=self._queryset,
                         ),
                     ).values_list('pk', flat=True)
@@ -403,7 +403,7 @@ class CompoundSet:
             seen |= new
             frontier = new
 
-        return Reaction.objects.filter(product__compound__in=seen)
+        return ReactionModel.objects.filter(product__compound__in=seen)
 
     def get_risk_diversity(self, debug: bool = False) -> float:
         """Calculate the average spread of risk (#atoms added) for each scaffold in this set
@@ -456,7 +456,7 @@ class CompoundSet:
         """
         return self._queryset.annotate(
             has_tag=Exists(
-                CompoundTag.objects.filter(
+                CompoundTagModel.objects.filter(
                     compound=OuterRef('pk'),
                     compound_tag__compound_tag_name=tag,
                 ),
@@ -755,7 +755,7 @@ class CompoundSet:
         """
 
         # avoiding circular imports
-        from designdb.recipe import Recipe
+        from designdb.components.recipe import Recipe
 
         return Recipe.from_compounds(
             self,
@@ -847,7 +847,7 @@ class CompoundSet:
                 for (route_id,) in mrich.track(records, prefix='Getting routes')
             ]
 
-        from .recipe import RouteSet
+        from .route import RouteSet
 
         return RouteSet(self.db, routes)
 
@@ -861,7 +861,7 @@ class CompoundSet:
         copy.shuffle()
         return copy
 
-    def pop(self) -> Compound:
+    def pop(self) -> CompoundModel:
         """Pop the last compound in this set"""
         c_id = self.pop_id()
         return self.db.get_compound(id=c_id)
@@ -1272,7 +1272,7 @@ class CompoundSet:
         """
 
         # avoiding circular imports
-        from designdb.recipe import Recipe
+        from designdb.components.recipe import Recipe
 
         file = str(Path(file).resolve())
 
@@ -1458,8 +1458,6 @@ class CompoundSet:
         """Calculate missing routes to compounds in this set"""
 
         if missing_only:
-            from .cset import CompoundSet
-
             records = self.db.select_where(
                 table='route',
                 key=f'route_product IN {self.str_ids}',
@@ -1585,7 +1583,7 @@ class CompoundSet:
     @property
     def poses(self) -> 'PoseSet':
         """Get the poses associated to this set of compounds"""
-        from .pset import PoseSet
+        from .pose import PoseSet
 
         ids = self.db.select_where(
             query='pose_id',
@@ -1604,7 +1602,7 @@ class CompoundSet:
     @property
     def best_placed_poses(self) -> 'PoseSet':
         """Get the best placed pose for each compound in this set"""
-        from .pset import PoseSet
+        from .pose import PoseSet
 
         query = self.db.select_where(
             table='pose',
@@ -1617,7 +1615,7 @@ class CompoundSet:
 
     @property
     def str_ids(self) -> str:
-        """Return an SQL formatted tuple string of the :class:`.Compound` IDs"""
+        """Return an SQL formatted tuple string of the :class:`.CompoundModel` IDs"""
         return str(tuple(self.ids)).replace(',)', ')')
 
     @property
@@ -1760,7 +1758,7 @@ class CompoundSet:
 
     @property
     def scaffold_ids(self) -> list[int]:
-        """Return a list of :class:`.Compound` ID's for scaffolds of this set"""
+        """Return a list of :class:`.CompoundModel` ID's for scaffolds of this set"""
         scaffold_ids = self.db.execute(
             f"""
                 SELECT DISTINCT scaffold_base FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
@@ -1796,8 +1794,6 @@ class CompoundSet:
             return None
 
         ids = [q for (q,) in ids]
-        from .cset import CompoundSet
-
         return CompoundSet(self.db, ids)
 
     @property
@@ -1865,7 +1861,7 @@ class CompoundSet:
 
     @property
     def reaction_ids(self) -> list[int]:
-        """Returns a list of :class:`.Reaction` IDs that result in members of this set"""
+        """Returns a list of :class:`.ReactionModel` IDs that result in members of this set"""
         records = self.db.select_where(
             table='reaction',
             query='reaction_id',
@@ -1878,7 +1874,7 @@ class CompoundSet:
 
 
 class IngredientSet:
-    """An :class:`.Ingredient` is a :class:`.Compound` with a fixed quanitity and an attached quote, the :class:`.IngredientSet` is a object representing multiple ingredients.
+    """An :class:`.Ingredient` is a :class:`.CompoundModel` with a fixed quanitity and an attached quote, the :class:`.IngredientSet` is a object representing multiple ingredients.
 
     .. attention::
 
@@ -1893,7 +1889,7 @@ class IngredientSet:
 
             ingredient = ingredient_set[0] # first ingredient
 
-    To get the ingredient for a specific :class:`.Compound` ID:
+    To get the ingredient for a specific :class:`.CompoundModel` ID:
 
     ::
 
@@ -2018,10 +2014,10 @@ class IngredientSet:
         """For missing attributes try getting from associated :class:`.CompoundSet`"""
         return getattr(self.compounds, key)
 
-    def __contains__(self, other: Compound | Ingredient | int):
+    def __contains__(self, other: CompoundModel | Ingredient | int):
         """Check if compound or ingredient is a member of this set"""
         match other:
-            case Compound():
+            case CompoundModel():
                 id = other.id
             case Ingredient():
                 id = other.compound_id
@@ -2111,7 +2107,7 @@ class IngredientSet:
         """Create an :class:`.IngredientSet` from a :class:`.CompoundSet` or IDs
 
         :param compounds: :class:`.CompoundSet` to use, if ``None`` must provide ``ids`` and ``db`` (Default value = None)
-        :param ids: Compound IDs (Default value = None)
+        :param ids: CompoundModel IDs (Default value = None)
         :param db: HIPPO Database (Default value = None)
         :param amount: Amount(s) in ``mg`` (Default value = 1)
         :param supplier: supplier to use for all quoting, (Default value = ``None``)
@@ -2154,7 +2150,7 @@ class IngredientSet:
             mrich.debug('quote_ids', quote_ids)
 
         if quote_ids:
-            qs = CataloguePrice.objects.filter(pk__in=quote_ids)
+            qs = CataloguePriceModel.objects.filter(pk__in=quote_ids)
 
             if supplier:
                 qs = qs.filter(quote_supplier=supplier)
@@ -2234,7 +2230,7 @@ class IngredientSet:
         """Add an :class:`.Ingredient` to this set
 
         :param ingredient: :class:`.Ingredient` to be added, if ``None`` must specify other parameters, (Default value = None)
-        :param compound_id: :class:`.Compound` ID (Default value = None)
+        :param compound_id: :class:`.CompoundModel` ID (Default value = None)
         :param amount: amount in ``mg`` (Default value = None)
         :param quote_id: :class:`.Quote` ID (Default value = None)
         :param supplier: supplier name string or list (Default value = None)
@@ -2345,7 +2341,7 @@ class IngredientSet:
             q_id = None
 
         return Ingredient(
-            compound=Compound.objects.get(pk=series['compound_id']),
+            compound=CompoundModel.objects.get(pk=series['compound_id']),
             amount=series['amount'],
             quote=q_id,
             supplier=series['supplier'],
@@ -2392,7 +2388,7 @@ class IngredientSet:
         # """
         # ).fetchall()
 
-        qs = CataloguePrice.objects.filter(
+        qs = CataloguePriceModel.objects.filter(
             compound__pk__in=self.compound_ids,
             quote_amount__gte=amount,
         )
@@ -2464,7 +2460,7 @@ class IngredientSet:
     def smiles(self) -> list[str]:
         """SMILES for all ingredients"""
         compound_ids = list(self.df['compound_id'])
-        return Compound.objects.filter(
+        return CompoundModel.objects.filter(
             pk__in=compound_ids,
         ).values_list('compound_smiles', flat=True)
 
@@ -2472,18 +2468,18 @@ class IngredientSet:
     def inchikeys(self) -> list[str]:
         """InChI-keys for all ingredients"""
         compound_ids = list(self.df['compound_id'])
-        return Compound.objects.filter(
+        return CompoundModel.objects.filter(
             pk__in=compound_ids,
         ).values_list('compound_inchikeys', flat=True)
 
     @property
     def compound_ids(self) -> list[int]:
-        """Compound IDs for all ingredients"""
+        """CompoundModel IDs for all ingredients"""
         return list(self.df['compound_id'].values)
 
     @property
     def ids(self) -> list[int]:
-        """Compound IDs for all ingredients"""
+        """CompoundModel IDs for all ingredients"""
         return self.compound_ids
 
     @property
@@ -2495,7 +2491,7 @@ class IngredientSet:
 
     @property
     def str_compound_ids(self) -> str:
-        """Return an SQL formatted tuple string of the :class:`.Compound` IDs"""
+        """Return an SQL formatted tuple string of the :class:`.CompoundModel` IDs"""
         return str(tuple(self.df['compound_id'].values)).replace(',)', ')')
 
     @property

@@ -1,8 +1,8 @@
 # from mypackage.services.compound import CompoundService
 
 # from rdkit.Chem import inchi
-from designdb.models import Component, Route
-from designdb.recipe import Recipe
+from designdb.components.recipe import Recipe
+from designdb.models import ComponentModel, RouteModel
 
 
 class RouteService:
@@ -11,9 +11,9 @@ class RouteService:
         cls,
         *,
         recipe: Recipe,
-    ) -> tuple[Route, bool]:
+    ) -> tuple[RouteModel, bool]:
 
-        route, created = Route.objects.get_or_create(
+        route, created = RouteModel.objects.get_or_create(
             product_compound=recipe.product.compound
         )
 
@@ -24,7 +24,7 @@ class RouteService:
         components = []
         components.extend(
             [
-                Component(route=route, component_type=1, component_ref=ref.pk)
+                ComponentModel(route=route, component_type=1, component_ref=ref.pk)
                 for ref in recipe.reactions
             ],
         )
@@ -40,7 +40,7 @@ class RouteService:
 
         components.extend(
             [
-                Component(
+                ComponentModel(
                     route=route,
                     component_type=1,
                     component_ref=ref,
@@ -58,7 +58,7 @@ class RouteService:
 
         components.extend(
             [
-                Component(
+                ComponentModel(
                     route=route,
                     component_type=1,
                     component_ref=ref,
@@ -68,7 +68,7 @@ class RouteService:
             ],
         )
 
-        Component.objects.bulk_create(components, ignore_conflicts=True)
+        ComponentModel.objects.bulk_create(components, ignore_conflicts=True)
 
         return route, created
 

@@ -2,11 +2,11 @@
 
 import mcol
 import mrich
-from designdb.models import Interaction
+from designdb.models import InteractionModel
 
 
 class InteractionTable:
-    """Class representing all :class:`.Interaction` objects in the 'interaction' table of the :class:`.Database`.
+    """Class representing all :class:`.InteractionModel` objects in the 'interaction' table of the :class:`.Database`.
 
     .. attention::
 
@@ -70,11 +70,11 @@ class InteractionTable:
 
 
 class InteractionSet:
-    """Class representing a subset of the :class:`.Interaction` objects in the 'interaction' table of the :class:`.Database`.
+    """Class representing a subset of the :class:`.InteractionModel` objects in the 'interaction' table of the :class:`.Database`.
 
     .. attention::
 
-            :class:`.InteractionSet` objects should not be created directly. Instead use :meth:`.Pose.interactions`, or :meth:`.PoseSet.interactions` methods.
+            :class:`.InteractionSet` objects should not be created directly. Instead use :meth:`.PoseModel.interactions`, or :meth:`.PoseSet.interactions` methods.
 
     """
 
@@ -93,22 +93,22 @@ class InteractionSet:
 
         self._indices = sorted(list(set(indices)))
         self._df = None
-        self._qs = Interaction.objects.filter(pk__in=indices)
+        self._qs = InteractionModel.objects.filter(pk__in=indices)
 
     ### FACTORIES
 
     @classmethod
     def from_pose(
         cls,
-        pose: 'Pose | PoseSet',
+        pose: 'PoseModel | PoseSet',
         table: str = 'interaction',
         db: 'Database | None' = None,
     ) -> 'InteractionSet':
         """Construct a :class:`.InteractionSet` from one or more poses.
 
-        :param pose: a :class:`.Pose` or :class:`.PoseSet` object
+        :param pose: a :class:`.PoseModel` or :class:`.PoseSet` object
         :param table: Database table name
-        :param db: Use this instead of Pose's Database
+        :param db: Use this instead of PoseModel's Database
         :returns: an :class:`.InteractionSet`
         """
 
@@ -118,7 +118,7 @@ class InteractionSet:
 
         ### get the ID's
 
-        from .pset import PoseSet
+        from .pose import PoseSet
 
         if isinstance(pose, PoseSet):
             # check if all poses have fingerprints
@@ -161,7 +161,7 @@ class InteractionSet:
         """
 
         # bit of a round-trip
-        ids = Interaction.objects.values_list('pk', flat=True)
+        ids = InteractionModel.objects.values_list('pk', flat=True)
         self = cls.__new__(cls)
         self.__init__(ids)
 
@@ -173,22 +173,22 @@ class InteractionSet:
         db: 'Database',
         residue_number: int,
         chain: None | str = None,
-        target: 'Target | int' = 1,
+        target: 'TargetModel | int' = 1,
     ) -> 'InteractionSet':
         """Get the set of interactions for a given residue number (and chain)
 
         :param db: HIPPO :class:`.Database`
         :param residue_number: the residue number
         :param chain: the chain name / letter, defaults to any chain
-        :param target: the protein :class:`.Target` object or ID, defaults to first target in database
+        :param target: the protein :class:`.TargetModel` object or ID, defaults to first target in database
         :returns: a :class:`.InteractionSet` object
         """
 
-        from .target import Target
+        from designdb.models import TargetModel
 
         self = cls.__new__(cls)
 
-        if isinstance(target, Target):
+        if isinstance(target, TargetModel):
             target = target.id
 
         sql = f"""
@@ -245,12 +245,12 @@ class InteractionSet:
 
     @property
     def str_ids(self) -> str:
-        """Return an SQL formatted tuple string of the :class:`.Interaction` IDs"""
+        """Return an SQL formatted tuple string of the :class:`.InteractionModel` IDs"""
         return str(tuple(self.ids)).replace(',)', ')')
 
     @property
     def feature_ids(self) -> list[int]:
-        """Return a list of :class:`.Feature` ID's"""
+        """Return a list of :class:`.FeatureModel` ID's"""
         records = self.db.select_where(
             query='DISTINCT interaction_feature',
             table=self.table,
@@ -261,7 +261,7 @@ class InteractionSet:
 
     @property
     def classic_fingerprint(self) -> dict:
-        """Classic HIPPO fingerprint dictionary, mapping protein :class:`.Feature` ID's to the number of corresponding ligand features (from any :class:`.Pose`)"""
+        """Classic HIPPO fingerprint dictionary, mapping protein :class:`.FeatureModel` ID's to the number of corresponding ligand features (from any :class:`.PoseModel`)"""
         return self.get_classic_fingerprint()
 
     @property
@@ -381,7 +381,7 @@ class InteractionSet:
 
     @property
     def num_features(self) -> int:
-        """Count the funmber of protein :class:`.Feature`s with which interactions are formed"""
+        """Count the funmber of protein :class:`.FeatureModel`s with which interactions are formed"""
 
         (count,) = self.db.execute(
             f"""
@@ -394,7 +394,7 @@ class InteractionSet:
 
     @property
     def avg_num_interactions_per_feature(self) -> float:
-        """Average number of interactions formed with each protein :class:`.Feature`"""
+        """Average number of interactions formed with each protein :class:`.FeatureModel`"""
 
         (count,) = self.db.execute(
             f"""
@@ -413,7 +413,7 @@ class InteractionSet:
 
     @property
     def per_feature_count_hirsch(self) -> float:
-        """A measure for how evenly protein :class:`.Feature`s are being interacted with"""
+        """A measure for how evenly protein :class:`.FeatureModel`s are being interacted with"""
 
         counts = self.db.execute(
             f"""
@@ -456,7 +456,7 @@ class InteractionSet:
             mrich.var(s, f'{interaction.distance:.1f}', 'Å')
 
     def get_classic_fingerprint(self) -> dict:
-        """Classic HIPPO fingerprint dictionary, mapping protein :class:`.Feature` ID's to the number of corresponding ligand features (from any :class:`.Pose`)"""
+        """Classic HIPPO fingerprint dictionary, mapping protein :class:`.FeatureModel` ID's to the number of corresponding ligand features (from any :class:`.PoseModel`)"""
 
         pairs = self.db.execute(
             f"""
@@ -722,7 +722,7 @@ class InteractionSet:
             self.db.get_interaction(id=i, table=self.table) for i in self.indices
         )
 
-    def __getitem__(self, key) -> 'Interaction | InteractionSet':
+    def __getitem__(self, key) -> 'InteractionModel | InteractionSet':
         """Get interaction or subsets thereof from this set"""
         match key:
             case int():

@@ -6,7 +6,7 @@ import re
 def parse_observation_longcode(longcode: str) -> dict[str]:
     """Parse an XChemAlign longcode and try to extract the following information:
 
-    - Target name (target)
+    - TargetModel name (target)
     - Crystal/dataset code (crystal)
     - Chain letter (chain)
     - Residue number (residue_number)

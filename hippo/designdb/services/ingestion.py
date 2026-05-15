@@ -8,10 +8,16 @@ import molparse as mp
 import mrich
 import pandas as pd
 from designdb.chem import InvalidChemistryError, UnsupportedChemistryError, check_chemistry
-from designdb.ingredient import Ingredient
-from designdb.models import Compound, Pose, Reactant, Reaction, Scaffold, Target
-from designdb.recipe import Recipe
-from designdb.route import RouteObj
+from designdb.components.compound import Ingredient
+from designdb.components.recipe import Recipe, Route
+from designdb.models import (
+    CompoundModel,
+    PoseModel,
+    ReactantModel,
+    ReactionModel,
+    ScaffoldModel,
+    TargetModel,
+)
 from designdb.services.compound import CompoundService, CompoundTagService
 from designdb.services.pose import PoseService, PoseTagService
 from designdb.services.reaction import ReactionService
@@ -296,7 +302,7 @@ class IngestionService:
         cls,
         *,
         root_path: Path,
-        target: Target,
+        target: TargetModel,
         skip_records: list[str],
         compound_tag_list: list[str],
         metadata_file: Path | str,
@@ -394,7 +400,7 @@ class IngestionService:
         name_col: str,
         inspiration_col: str | None = None,
         inspirations: list[int],
-        inspiration_map: dict[str, Pose],
+        inspiration_map: dict[str, PoseModel],
         reference: int | None,
         reference_col: str,
         skip_equal,
@@ -516,7 +522,7 @@ class IngestionService:
                 result.poses_created += 1
 
             pose.tags.add(*pose_tags)
-            pose.inspirations.add(*Pose.objects.filter(pk__in=pose_inspirations))
+            pose.inspirations.add(*PoseModel.objects.filter(pk__in=pose_inspirations))
             scorer.add_scores_from_record(pose=pose, record=r)
 
         # re-enable trigger and populate matview
@@ -579,8 +585,8 @@ class IngestionService:
                 intermediates = IngredientSet()
                 products = IngredientSet()
 
-                # new models include Reaction, Reactant and
-                # Component. Should use these instead?
+                # new models include ReactionModel, ReactantModel and
+                # ComponentModel. Should use these instead?
 
                 try:
                     for k, reaction_struct in enumerate(route):
@@ -601,7 +607,7 @@ class IngestionService:
 
                         mrich.print(i, j, k, reaction_type, product)
 
-                        reaction, _ = Reaction.objects.get_or_create(
+                        reaction, _ = ReactionModel.objects.get_or_create(
                             reaction_type=reaction_type,
                             product_compound=product,
                         )
@@ -610,7 +616,7 @@ class IngestionService:
                         print('reactant smiles', reaction_struct['reactantSmiles'])
                         for reactant_s in reaction_struct['reactantSmiles']:
                             reactant_comp, _ = CompoundService.create(smiles=reactant_s)
-                            reactant, _ = Reactant.objects.get_or_create(
+                            reactant, _ = ReactantModel.objects.get_or_create(
                                 compound=reactant_comp,
                                 reaction=reaction,
                             )
@@ -665,7 +671,7 @@ class IngestionService:
         cls,
         *,
         df: pd.DataFrame,
-        target: Target,
+        target: TargetModel,
         reject_flags: list[str],
         pose_tag_list: list[str],
         product_tag_list: list[str],
@@ -673,8 +679,8 @@ class IngestionService:
         max_distance_score: float,
         require_intra_geometry_pass: bool,
         register_reactions: bool,
-        scaffold_route: RouteObj | None = None,
-        scaffold_compound: Compound | None = None,
+        scaffold_route: Route | None = None,
+        scaffold_compound: CompoundModel | None = None,
     ) -> pd.DataFrame:
 
         # work out number of reaction steps
@@ -739,7 +745,7 @@ class IngestionService:
 
         (inspiration_set,) = inspiration_sets
 
-        inspirations = Pose.objects.filter(
+        inspirations = PoseModel.objects.filter(
             pose_alias__in=inspiration_set,
             target=target,
         )
@@ -760,7 +766,7 @@ class IngestionService:
         # reference = self.poses[base_name]
 
         # TODO: error handling
-        reference = Pose.objects.get(
+        reference = PoseModel.objects.get(
             pose_alias=base_name,
             target=target,
         )
@@ -865,7 +871,7 @@ class IngestionService:
             # get associated IDs
             compound_inchikey_id_dict = {
                 k.compound_inchikey: k.pk
-                for k in Compound.objects.filter(compound_smiles__in=unique_smiles)
+                for k in CompoundModel.objects.filter(compound_smiles__in=unique_smiles)
             }
             df[compound_id_col] = df[inchikey_col].apply(
                 lambda x: compound_inchikey_id_dict.get(x)
@@ -927,7 +933,7 @@ class IngestionService:
         # tag product compounds:
 
         product_ids = list(df[f'{num_steps}_product_compound_id'].dropna().unique())
-        products = Compound.objects.filter(pk__in=product_ids)
+        products = CompoundModel.objects.filter(pk__in=product_ids)
         product_tags = CompoundTagService.tags_from_list(product_tag_list)
         for compound in products:
             compound.tags.add(*product_tags)
@@ -969,9 +975,9 @@ class IngestionService:
 
                 # comp service?
                 for superstructure_id in superstructure_ids:
-                    base = Compound.objects.get(pk=scaffold_id)
-                    superstructure = Compound.objects.get(pk=int(superstructure_id))
-                    Scaffold.objects.get_or_create(
+                    base = CompoundModel.objects.get(pk=scaffold_id)
+                    superstructure = CompoundModel.objects.get(pk=int(superstructure_id))
+                    ScaffoldModel.objects.get_or_create(
                         base_compound=base,
                         superstructure_compound=superstructure,
                     )
@@ -1047,18 +1053,18 @@ class IngestionService:
             mrich.warning('No valid poses')
             return None
 
-        poses = Pose.objects.filter(pk__in=pose_ids)
+        poses = PoseModel.objects.filter(pk__in=pose_ids)
         mrich.success('Registered', poses.count(), 'new poses')
 
         # query relevant poses (also previously registered)
         paths = poses.values_list('path', flat=True)
 
         # what the hell is this??
-        records = Pose.objects.filter(
+        records = PoseModel.objects.filter(
             path__in=paths,
         )
         for pose in records:
-            # pose.inspirations.add(*Pose.objects.filter(pk__in=inspiration.ids))
+            # pose.inspirations.add(*PoseModel.objects.filter(pk__in=inspiration.ids))
             pose.inspirations.add(*inspirations.queryset)
 
         # if pose_tags:

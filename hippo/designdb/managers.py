@@ -17,8 +17,8 @@ from .utils import registration_hash_tautomer_insensitive, superparent
 
 class CompoundQueryset(QuerySet):
     def filter_qs(self):
-        Compound = apps.get_model("designdb", "Compound")
-        qs = Compound.objects.all()
+        CompoundModel = apps.get_model("designdb", "CompoundModel")
+        qs = CompoundModel.objects.all()
         return qs
 
 
