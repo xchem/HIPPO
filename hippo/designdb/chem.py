@@ -1,7 +1,7 @@
 """functions for validating chemistry"""
 
 import mrich
-from designdb.models import Compound
+from designdb.models import CompoundModel
 
 """
 
@@ -156,7 +156,7 @@ def check_reaction_types(types: list[str]) -> None:
 def check_chemistry(
     reaction_type: str,
     reactants: 'CompoundSet',
-    product: Compound,
+    product: CompoundModel,
     debug: bool = False,
 ) -> bool:
     """Check chemistry of given reaction"""
@@ -201,7 +201,7 @@ def check_count_diff(
     check_type: str,
     reaction_type: str,
     reactants: 'CompoundSet',
-    product: 'Compound',
+    product: 'CompoundModel',
     debug: bool = False,
 ):
     """Check integer difference"""
@@ -251,7 +251,7 @@ def check_count_diff(
 def check_atomtype_diff(
     reaction_type: str,
     reactants: 'CompoundSet',
-    product: 'Compound',
+    product: 'CompoundModel',
     debug: bool = False,
 ) -> bool:
     """check atomtypes"""
@@ -290,8 +290,8 @@ def check_atomtype_diff(
 
 def check_specific_atomtype_diff(
     reaction_type: str,
-    prod: 'Compound',
-    reac: 'Compound',
+    prod: 'CompoundModel',
+    reac: 'CompoundModel',
     removal: bool = False,
     debug: bool = False,
 ) -> bool:

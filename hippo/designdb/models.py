@@ -91,7 +91,7 @@ class BaseModel(models.Model):
         default_related_name = '%(class)ss'
 
 
-class Target(BaseModel):
+class TargetModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     external_target_id = models.BigIntegerField(null=True, blank=True)
     target_name = models.TextField()
@@ -113,7 +113,7 @@ class Target(BaseModel):
         ]
 
 
-class Compound(BaseModel):
+class CompoundModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     compound_inchikey = models.TextField(null=True, blank=True)
     compound_alias = models.TextField(null=True, blank=True)
@@ -145,14 +145,14 @@ class Compound(BaseModel):
     inchi_version = models.TextField(null=True, blank=True)
 
     tags = models.ManyToManyField(
-        'CompoundTag',
-        through='CompoundTagJunction',
+        'CompoundTagModel',
+        through='CompoundTagJunctionModel',
         related_name='compounds',
     )
 
     enumeration_methods = models.ManyToManyField(
-        'EnumerationMethod',
-        through='CompoundEnumerationMethodJunction',
+        'EnumerationMethodModel',
+        through='CompoundEnumerationMethodJunctionModel',
         related_name='compounds',
     )
 
@@ -160,7 +160,7 @@ class Compound(BaseModel):
     # to keep it
     scaffolds = models.ManyToManyField(
         'self',
-        through='Scaffold',
+        through='ScaffoldModel',
     )
 
     objects = models.Manager()
@@ -198,10 +198,10 @@ class Compound(BaseModel):
         ]
 
 
-class Subsite(BaseModel):
+class SubsiteModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     target = models.ForeignKey(
-        Target,
+        TargetModel,
         on_delete=models.RESTRICT,
         db_column='target_id',
     )
@@ -226,7 +226,7 @@ class Subsite(BaseModel):
         ]
 
 
-class Pose(BaseModel):
+class PoseModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
 
     pose_inchikey = models.TextField(null=True, blank=True)
@@ -237,13 +237,13 @@ class Pose(BaseModel):
     pose_path = models.TextField(null=True, blank=True)
 
     compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         on_delete=models.RESTRICT,
         db_column='compound_id',
     )
 
     target = models.ForeignKey(
-        Target,
+        TargetModel,
         on_delete=models.RESTRICT,
         db_column='target_id',
     )
@@ -263,26 +263,26 @@ class Pose(BaseModel):
     inchi_version = models.TextField(null=True, blank=True)
 
     methods = models.ManyToManyField(
-        'PoseMethod',
-        through='PoseMethodJunction',
+        'PoseMethodModel',
+        through='PoseMethodJunctionModel',
         related_name='poses',
     )
     tags = models.ManyToManyField(
-        'PoseTag',
-        through='PoseTagJunction',
+        'PoseTagModel',
+        through='PoseTagJunctionModel',
         related_name='poses',
     )
     # unlike others, this wasn't clearly defined as m2m. may not want
     # to keep it
     inspirations = models.ManyToManyField(
         'self',
-        through='Inspiration',
+        through='InspirationModel',
         symmetrical=False,
     )
 
     subsites = models.ManyToManyField(
-        Subsite,
-        through='SubsiteTag',
+        SubsiteModel,
+        through='SubsiteTagModel',
     )
 
     class Meta(BaseModel.Meta):
@@ -336,15 +336,15 @@ class Pose(BaseModel):
             raise NotImplementedError
 
 
-class SubsiteTag(BaseModel):
+class SubsiteTagModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     pose = models.ForeignKey(
-        Pose,
+        PoseModel,
         on_delete=models.RESTRICT,
         db_column='pose_id',
     )
     subsite = models.ForeignKey(
-        Subsite,
+        SubsiteModel,
         on_delete=models.RESTRICT,
         db_column='subsite_id',
     )
@@ -369,7 +369,7 @@ class SubsiteTag(BaseModel):
         ]
 
 
-class PoseMethod(BaseModel):
+class PoseMethodModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     pose_method_name = models.TextField(null=True, blank=True)
     pose_method_description = models.TextField(null=True, blank=True)
@@ -396,16 +396,16 @@ class PoseMethod(BaseModel):
         ]
 
 
-class PoseMethodJunction(BaseModel):
+class PoseMethodJunctionModel(BaseModel):
     pk = models.CompositePrimaryKey('pose_id', 'pose_method_id')
     pose = models.ForeignKey(
-        'Pose',
+        'PoseModel',
         on_delete=models.CASCADE,
         db_column='pose_id',
     )
 
     pose_method = models.ForeignKey(
-        'PoseMethod',
+        'PoseMethodModel',
         on_delete=models.CASCADE,
         db_column='pose_method_id',
     )
@@ -422,7 +422,7 @@ class PoseMethodJunction(BaseModel):
         ]
 
 
-class PoseTag(BaseModel):
+class PoseTagModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     pose_tag_name = models.TextField()
     pose_tag_description = models.TextField(null=True, blank=True)
@@ -443,15 +443,15 @@ class PoseTag(BaseModel):
         ]
 
 
-class PoseTagJunction(BaseModel):
+class PoseTagJunctionModel(BaseModel):
     pk = models.CompositePrimaryKey('pose_id', 'pose_tag_id')
     pose = models.ForeignKey(
-        Pose,
+        PoseModel,
         on_delete=models.CASCADE,
         db_column='pose_id',
     )
     pose_tag = models.ForeignKey(
-        PoseTag,
+        PoseTagModel,
         on_delete=models.CASCADE,
         db_column='pose_tag_id',
     )
@@ -465,20 +465,20 @@ class PoseTagJunction(BaseModel):
 
 
 # this was missing.. is this a m2m table as well? really looks like it
-class Inspiration(BaseModel):
+class InspirationModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     # original behaviour described in schema was SET_NULL but I don't
     # see how that makes sense. if either original or derivative is
     # deleted, you'll have orphaned entries
     original_pose = models.ForeignKey(
-        Pose,
+        PoseModel,
         # on_delete=models.SET_NULL,
         on_delete=models.CASCADE,
         db_column='original_pose_id',
         related_name='+',
     )
     derivative_pose = models.ForeignKey(
-        Pose,
+        PoseModel,
         # on_delete=models.SET_NULL,
         on_delete=models.CASCADE,
         db_column='derivative_pose_id',
@@ -507,11 +507,11 @@ class Inspiration(BaseModel):
         ]
 
 
-class Feature(BaseModel):
+class FeatureModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     feature_family = models.TextField(null=True, blank=True)
     target = models.ForeignKey(
-        Target,
+        TargetModel,
         on_delete=models.RESTRICT,
         db_column='target_id',
     )
@@ -542,15 +542,15 @@ class Feature(BaseModel):
         ]
 
 
-class Interaction(BaseModel):
+class InteractionModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     feature = models.ForeignKey(
-        Feature,
+        FeatureModel,
         on_delete=models.RESTRICT,
         db_column='feature_id',
     )
     pose = models.ForeignKey(
-        Pose,
+        PoseModel,
         on_delete=models.RESTRICT,
         db_column='pose_id',
     )
@@ -588,7 +588,7 @@ class Interaction(BaseModel):
         ]
 
 
-class CompoundTag(BaseModel):
+class CompoundTagModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     compound_tag_name = models.TextField()
     compound_tag_description = models.TextField(null=True, blank=True)
@@ -609,15 +609,15 @@ class CompoundTag(BaseModel):
         ]
 
 
-class CompoundTagJunction(BaseModel):
+class CompoundTagJunctionModel(BaseModel):
     pk = models.CompositePrimaryKey('compound_id', 'compound_tag_id')
     compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         on_delete=models.CASCADE,
         db_column='compound_id',
     )
     compound_tag = models.ForeignKey(
-        CompoundTag,
+        CompoundTagModel,
         on_delete=models.CASCADE,
         db_column='compound_tag_id',
     )
@@ -632,7 +632,7 @@ class CompoundTagJunction(BaseModel):
         ]
 
 
-class EnumerationMethod(BaseModel):
+class EnumerationMethodModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     enum_name = models.TextField(null=True, blank=True)
     enum_description = models.TextField(null=True, blank=True)
@@ -659,15 +659,15 @@ class EnumerationMethod(BaseModel):
         ]
 
 
-class CompoundEnumerationMethodJunction(BaseModel):
+class CompoundEnumerationMethodJunctionModel(BaseModel):
     pk = models.CompositePrimaryKey('compound_id', 'enumeration_method_id')
     compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         on_delete=models.CASCADE,
         db_column='compound_id',
     )
     enumeration_method = models.ForeignKey(
-        EnumerationMethod,
+        EnumerationMethodModel,
         on_delete=models.CASCADE,
         db_column='enumeration_method_id',
     )
@@ -685,7 +685,7 @@ class CompoundEnumerationMethodJunction(BaseModel):
         ]
 
 
-class ScoringMethod(BaseModel):
+class ScoringMethodModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     method_name = models.TextField(null=True, blank=True)
     method_description = models.TextField(null=True, blank=True)
@@ -712,24 +712,24 @@ class ScoringMethod(BaseModel):
         ]
 
 
-class ScoreValue(BaseModel):
+class ScoreValueModel(BaseModel):
     pk = models.CompositePrimaryKey('pose_id', 'compound_id', 'scoring_method_id')
     pose = models.ForeignKey(
-        Pose,
+        PoseModel,
         on_delete=models.RESTRICT,
         db_column='pose_id',
         related_name='scores',
     )
 
     compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         on_delete=models.RESTRICT,
         db_column='compound_id',
         related_name='scores',
     )
 
     scoring_method = models.ForeignKey(
-        ScoringMethod,
+        ScoringMethodModel,
         on_delete=models.RESTRICT,
         db_column='scoring_method_id',
         related_name='scores',
@@ -749,11 +749,11 @@ class ScoreValue(BaseModel):
         ]
 
 
-class Reaction(BaseModel):
+class ReactionModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     reaction_type = models.TextField(null=True, blank=True)
     product_compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         on_delete=models.RESTRICT,
         db_column='product_compound_id',
     )
@@ -771,16 +771,17 @@ class Reaction(BaseModel):
         ]
 
 
-class Reactant(BaseModel):
+class ReactantModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     reactant_amount = models.FloatField(null=True, blank=True)
     reaction = models.ForeignKey(
-        Reaction,
+        ReactionModel,
         on_delete=models.CASCADE,
         db_column='reaction_id',
+        related_name='reactants',
     )
     compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         on_delete=models.RESTRICT,
         db_column='compound_id',
     )
@@ -803,7 +804,7 @@ class Reactant(BaseModel):
         ]
 
 
-class CatalogueCompound(BaseModel):
+class CatalogueCompoundModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     catalogue_smiles = models.TextField(null=False, blank=True)
     catalogue_inchikey = models.TextField(null=False, blank=True)
@@ -827,10 +828,10 @@ class CatalogueCompound(BaseModel):
         ]
 
 
-class CataloguePrice(BaseModel):
+class CataloguePriceModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     catalogue_compound = models.ForeignKey(
-        CatalogueCompound,
+        CatalogueCompoundModel,
         null=True,
         on_delete=models.CASCADE,
         db_column='catalogue_id',
@@ -845,8 +846,8 @@ class CataloguePrice(BaseModel):
     lead_time = models.IntegerField(null=True, blank=True)
 
     compounds = models.ManyToManyField(
-        Compound,
-        through='CataloguePriceCompoundJunction',
+        CompoundModel,
+        through='CataloguePriceCompoundJunctionModel',
         related_name='prices',
     )
 
@@ -866,15 +867,15 @@ class CataloguePrice(BaseModel):
         ]
 
 
-class CataloguePriceCompoundJunction(BaseModel):
+class CataloguePriceCompoundJunctionModel(BaseModel):
     ipk = models.CompositePrimaryKey('compound_id', 'catalogue_price_id')
     catalogue_price = models.ForeignKey(
-        CataloguePrice,
+        CataloguePriceModel,
         on_delete=models.CASCADE,
         db_column='catalogue_price_id',
     )
     compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         on_delete=models.CASCADE,
         db_column='compound_id',
     )
@@ -898,19 +899,19 @@ class CataloguePriceCompoundJunction(BaseModel):
         ]
 
 
-class Scaffold(BaseModel):
+class ScaffoldModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     # same comment as with inspiratons. original schema says SET_NULL
     # but doesn't seem right
     base_compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         # on_delete=models.SET_NULL,
         on_delete=models.CASCADE,
         db_column='base_compound_id',
         related_name='scaffold_bases',
     )
     superstructure_compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         # on_delete=models.SET_NULL,
         on_delete=models.CASCADE,
         db_column='superstructure_compound_id',
@@ -940,10 +941,10 @@ class Scaffold(BaseModel):
         ]
 
 
-class Route(BaseModel):
+class RouteModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     product_compound = models.ForeignKey(
-        Compound,
+        CompoundModel,
         on_delete=models.RESTRICT,
         db_column='product_compound_id',
     )
@@ -958,10 +959,10 @@ class Route(BaseModel):
         ]
 
 
-class Component(BaseModel):
+class ComponentModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     route = models.ForeignKey(
-        Route,
+        RouteModel,
         on_delete=models.RESTRICT,
         db_column='route_id',
     )

@@ -1,9 +1,9 @@
-"""Classes for working with sets of :class:`.Reaction` objects"""
+"""Classes for working with sets of :class:`.ReactionModel` objects"""
 
 import mcol
 import mrich
 import pandas as pd
-from designdb.models import Compound, Reactant, Reaction
+from designdb.models import CompoundModel, ReactantModel, ReactionModel
 from designdb.sets.compound import CompoundSet
 from django.db.models import Q
 from IPython.display import display
@@ -20,7 +20,7 @@ class ReactionSet:
     Use as an iterable
     ==================
 
-    Iterate through :class:`.Reaction` objects in the set:
+    Iterate through :class:`.ReactionModel` objects in the set:
 
     ::
 
@@ -32,7 +32,7 @@ class ReactionSet:
     Check membership
     ================
 
-    To determine if a :class:`.Reaction` is present in the set:
+    To determine if a :class:`.ReactionModel` is present in the set:
 
     ::
 
@@ -68,11 +68,11 @@ class ReactionSet:
 
         if queryset:
             if isinstance(queryset, list):
-                self._queryset = Reaction.objects.filter(pk__in=queryset)
+                self._queryset = ReactionModel.objects.filter(pk__in=queryset)
             else:
                 self._queryset = queryset
         else:
-            self._queryset = Reaction.objects.none()
+            self._queryset = ReactionModel.objects.none()
 
         self._name = name
         if sort:
@@ -99,29 +99,29 @@ class ReactionSet:
         return f'[bold underline]{self}'
 
     def __len__(self) -> int:
-        """Number of member :class:`.Reaction` objects"""
+        """Number of member :class:`.ReactionModel` objects"""
         return self._queryset.count()
 
     def __iter__(self):
-        """Iterate through member :class:`.Reaction` objects"""
+        """Iterate through member :class:`.ReactionModel` objects"""
         return iter(self._queryset)
 
-    def __getitem__(self, key) -> 'Reaction | ReactionSet':
-        """Get member :class:`.Reaction` object by single, slice or list/set/tuple of ID"""
+    def __getitem__(self, key) -> 'ReactionModel | ReactionSet':
+        """Get member :class:`.ReactionModel` object by single, slice or list/set/tuple of ID"""
 
         match key:
             case int():
                 try:
-                    # reaction = Reaction.objects.get(pk=key)
+                    # reaction = ReactionModel.objects.get(pk=key)
                     reaction = self._queryset[key]
-                except Reaction.DoesNotExist as exc:
+                except ReactionModel.DoesNotExist as exc:
                     mrich.error(f'list index out of range: {key=} for {self}')
-                    raise Reaction.DoesNotExist from exc
+                    raise ReactionModel.DoesNotExist from exc
 
                 return reaction
 
             case slice():
-                return ReactionSet(Reaction.objects.filter(pk__in=key))
+                return ReactionSet(ReactionModel.objects.filter(pk__in=key))
 
             case _:
                 mrich.error(
@@ -134,7 +134,7 @@ class ReactionSet:
         """Add a :class:`.ReactionSet` to this one"""
         if other:
             return ReactionSet(
-                Reaction.objects.filter(
+                ReactionModel.objects.filter(
                     Q(pk__in=self._queryset) | Q(pk__in=other.queryset)
                 ),
                 sort=False,
@@ -148,7 +148,7 @@ class ReactionSet:
         match other:
             case ReactionSet():
                 return ReactionSet(
-                    Reaction.objects.filter(
+                    ReactionModel.objects.filter(
                         Q(pk__in=self._queryset) & ~Q(pk__in=other.queryset)
                     ),
                     sort=False,
@@ -156,14 +156,14 @@ class ReactionSet:
 
     ### METHODS
 
-    def add(self, r: Reaction) -> None:
-        """Add a :class:`.Reaction` to this set
+    def add(self, r: ReactionModel) -> None:
+        """Add a :class:`.ReactionModel` to this set
 
-        :param r: :class:`.Reaction` to be added
+        :param r: :class:`.ReactionModel` to be added
 
         """
-        assert isinstance(r, Reaction)
-        self._queryset = Reaction.objects.filter(
+        assert isinstance(r, ReactionModel)
+        self._queryset = ReactionModel.objects.filter(
             pk__in=list(self._queryset.values_list('pk', flat=True)) + [r.pk],
         )
 
@@ -183,7 +183,7 @@ class ReactionSet:
         c = Checkbox(description='Summary', value=False)
         d = Checkbox(description='Draw', value=True)
         e = Checkbox(description='Check chemistry', value=False)
-        f = Checkbox(description='Reactant Quotes', value=False)
+        f = Checkbox(description='ReactantModel Quotes', value=False)
 
         ui1 = GridBox(
             [b, c, d], layout=Layout(grid_template_columns='repeat(5, 100px)')
@@ -247,11 +247,11 @@ class ReactionSet:
 
         :param smiles: Include smiles column (Default value = True)
         :param mols: Include `rdkit.Chem.Mol` column (Default value = True)
-        :param kwargs: keyword arguments are passed on to :meth:`.Reaction.get_dict:
+        :param kwargs: keyword arguments are passed on to :meth:`.ReactionModel.get_dict:
 
         """
 
-        mrich.debug('Using slower Reaction.dict rather than direct SQL query...')
+        mrich.debug('Using slower ReactionModel.dict rather than direct SQL query...')
 
         data = []
         for r in mrich.track(self, prefix='ReactionSet --> DataFrame'):
@@ -263,6 +263,10 @@ class ReactionSet:
         """Return a copy of this set"""
         return ReactionSet(self._queryset.all(), sort=False, name=self.name)
 
+    def reverse(self) -> None:
+        """Reverse the ordering of this set in-place"""
+        self._queryset = self._queryset.reverse()
+
     def get_recipes(
         self, amounts: float | list[float] = 1.0, **kwargs
     ):
@@ -273,7 +277,7 @@ class ReactionSet:
 
         """
         # avoiding circular imports
-        from designdb.recipe import Recipe
+        from designdb.components.recipe import Recipe
 
         return Recipe.from_reactions(reactions=self, amounts=1, **kwargs)
 
@@ -315,7 +319,7 @@ class ReactionSet:
     def products(self) -> CompoundSet:
         """Get all product compounds that can be synthesised with these reactions (no intermediates)"""
 
-        qs = Compound.objects.filter(
+        qs = CompoundModel.objects.filter(
             pk__in=self._queryset.values('product_compound'),
         ).exclude(
             pk__in=self.intermediates.queryset.values('pk'),
@@ -330,9 +334,9 @@ class ReactionSet:
         """Get all intermediate compounds that can be synthesised with these reactions"""
 
         # NB! not 100% sure about this queryset
-        qs = Compound.objects.filter(
+        qs = CompoundModel.objects.filter(
             Q(
-                pk__in=Reactant.objects.values('compound'),
+                pk__in=ReactantModel.objects.values('compound'),
             )
             & Q(pk__in=self._queryset.values('product_compound')),
         )
@@ -346,7 +350,7 @@ class ReactionSet:
     def reactants(self) -> 'CompoundSet':
         """Get all reactant compounds that are used by these reactions"""
 
-        qs = Reactant.objects.filter(
+        qs = ReactantModel.objects.filter(
             reaction__in=self._queryset,
         ).values('compound')
         cset = CompoundSet(qs)

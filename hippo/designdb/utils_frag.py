@@ -23,14 +23,14 @@ GENERATED_TAG_COLS = [
     'Crystalforms short tag',
     'Centroid res',
     'Experiment code',
-    'Pose',
+    'PoseModel',
 ]
 
 
 META_IGNORE_COLS = [
     'Code',
     'Long code',
-    'Compound code',
+    'CompoundModel code',
     'Smiles',
     'Downloaded',
     'Main status',
@@ -97,7 +97,7 @@ class LongcodeRecord:
 def parse_observation_longcode(longcode: str) -> LongcodeRecord:
     """Parse a Fragalysis longcode and try to extract the following information:
 
-    - Target name (target)
+    - TargetModel name (target)
     - Crystal/dataset code (crystal)
     - Chain letter (chain)
     - Residue number (residue_number)

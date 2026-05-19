@@ -211,14 +211,14 @@ def sanitise_mol(m: Chem.rdchem.Mol) -> Chem.rdchem.Mol:
     return MolFromMolBlock(MolToMolBlock(m))
 
 
-def pose_gap(a: 'Pose', b: 'Pose') -> float:
-    """Calculate minimum distance between two :class:`.Pose` objects"""
+def pose_gap(a: 'PoseModel', b: 'PoseModel') -> float:
+    """Calculate minimum distance between two :class:`.PoseModel` objects"""
 
     from molparse.rdkit import mol_to_AtomGroup
     from numpy.linalg import norm
 
     # avoiding circular imports
-    from .models import Pose, ScoreValue
+    from .models import PoseModel, ScoreValueModel
 
 
     min_dist = None
@@ -294,8 +294,8 @@ def make_warn_once_per_key():
 class ScoreSubquery(Subquery):
     def __init__(self, scoring_method):
         # avoiding circular imports
-        from .models import Pose, ScoreValue
-        query = ScoreValue.objects.filter(
+        from .models import PoseModel, ScoreValueModel
+        query = ScoreValueModel.objects.filter(
             pose=OuterRef('pk'),
             compound=OuterRef('compound'),
             scoring_method__method_name=scoring_method,

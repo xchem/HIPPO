@@ -8,7 +8,7 @@ import mrich
 import pandas as pd
 import rdkit
 # from rdkit.Chem import inchi
-from designdb.models import Compound, Pose, PoseTag, Target
+from designdb.models import CompoundModel, PoseModel, PoseTagModel, TargetModel
 from designdb.utils import normalize_string_list
 from designdb.utils_frag import GENERATED_TAG_COLS, META_IGNORE_COLS
 from django.db.models import Q
@@ -37,8 +37,8 @@ class PoseService:
     def create(
         cls,
         *,
-        compound: Compound,
-        target: Target,
+        compound: CompoundModel,
+        target: TargetModel,
         mol: Chem.rdchem.Mol,
         alias: str,
         path: str,
@@ -49,7 +49,7 @@ class PoseService:
     ):
 
         try:
-            pose = Pose.objects.get(
+            pose = PoseModel.objects.get(
                 target=target,
                 compound=compound,
                 pose_alias=alias,
@@ -59,8 +59,8 @@ class PoseService:
             pose.metadata = metadata
             pose.save()
             created = False
-        except Pose.DoesNotExist:
-            pose = Pose(
+        except PoseModel.DoesNotExist:
+            pose = PoseModel(
                 compound=compound,
                 target=target,
                 pose_alias=alias,
@@ -90,9 +90,9 @@ class PoseService:
         path: str,
         reference: int | None = None,
     ):
-        target = Target.objects.get(pk=target_id)
-        compound = Compound.objects.get(pk=compound_id)
-        pose, created = Pose.objects.get_or_create(
+        target = TargetModel.objects.get(pk=target_id)
+        compound = CompoundModel.objects.get(pk=compound_id)
+        pose, created = PoseModel.objects.get_or_create(
             compound=compound,
             target=target,
             pose_path=path,
@@ -102,7 +102,7 @@ class PoseService:
 
     # this is parsing input, maybe in ingestion?
     @staticmethod
-    def get_inspirations(*args, target: Target | None = None):
+    def get_inspirations(*args, target: TargetModel | None = None):
         parsed = []
         for el in args:
             if isinstance(el, str):
@@ -126,7 +126,7 @@ class PoseService:
                 # assume string alias
                 aliases.append(val)
 
-        qs = Pose.objects.filter(
+        qs = PoseModel.objects.filter(
             Q(pk__in=pks) | Q(pose_alias__in=aliases, target=target)
         )
 
@@ -139,13 +139,13 @@ class PoseService:
             # should I check if exist here as well?
         except ValueError:
             try:
-                reference = Pose.objects.get(
+                reference = PoseModel.objects.get(
                     pose_alias=reference,
                     target=target,
                 ).pk
-            except Pose.DoesNotExist as exp:
-                logger.error('Pose %s does not exist', reference)
-                raise Pose.DoesNotExist from exp
+            except PoseModel.DoesNotExist as exp:
+                logger.error('PoseModel %s does not exist', reference)
+                raise PoseModel.DoesNotExist from exp
 
         return reference
 
@@ -170,11 +170,11 @@ class PoseTagService:
     def tags_from_list(tag_list: list[str]):
         assert tag_list is not None, '"None" passed as tag_list'
 
-        PoseTag.objects.bulk_create(
-            [PoseTag(pose_tag_name=k.strip()) for k in tag_list if k.strip()],
+        PoseTagModel.objects.bulk_create(
+            [PoseTagModel(pose_tag_name=k.strip()) for k in tag_list if k.strip()],
             ignore_conflicts=True,
         )
-        tags = PoseTag.objects.filter(pose_tag_name__in=tag_list)
+        tags = PoseTagModel.objects.filter(pose_tag_name__in=tag_list)
         return tags
 
     # might be a good idea to break meta and tags apart
@@ -183,7 +183,7 @@ class PoseTagService:
         *,
         code: str,
         longcode: str,
-    ) -> tuple[list[PoseTag], dict[str, str]]:
+    ) -> tuple[list[PoseTagModel], dict[str, str]]:
         meta_row = self._df[self._df['Code'] == code]
         if not len(meta_row):
             meta_row = self._df[self._df['Long code'] == longcode]

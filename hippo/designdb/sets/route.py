@@ -2,7 +2,7 @@ import json
 
 import mcol
 import mrich
-from designdb.models import Component, Route
+from designdb.models import ComponentModel, RouteModel
 from designdb.sets.compound import CompoundSet
 
 
@@ -26,10 +26,10 @@ class RouteSet:
 
     @classmethod
     def from_ids(cls, ids: list | set, progress: bool = True):
-        """Generate a routeset from a set of :class:`.Route` IDs
+        """Generate a routeset from a set of :class:`.RouteModel` IDs
 
         :param db: database to link
-        :param ids: :class:`.Route` database IDs
+        :param ids: :class:`.RouteModel` database IDs
         :param progress: show progress bar
         """
 
@@ -39,19 +39,19 @@ class RouteSet:
 
         # avoiding circular reference
         # avoiding name conflict
-        from designdb.route import RouteObj
+        from designdb.components.recipe import Route
 
-        routes = [RouteObj.get_route(id=r) for r in ids]
+        routes = [Route.get_route(id=r) for r in ids]
 
         # self = cls.__new__(cls)
         return RouteSet(routes)
 
     @classmethod
     def from_product_ids(cls, ids: list | set, progress: bool = True):
-        """Generate a routeset from a set of product :class:`.Compound` IDs
+        """Generate a routeset from a set of product :class:`.CompoundModel` IDs
 
         :param db: database to link
-        :param ids: :class:`.Compound` database IDs
+        :param ids: :class:`.CompoundModel` database IDs
         """
 
         # str_ids = str(tuple(ids)).replace(',)', ')')
@@ -62,7 +62,7 @@ class RouteSet:
         #     key=f'route_product IN {str_ids}',
         #     multiple=True,
         # )
-        records = Route.objects.filter(
+        records = RouteModel.objects.filter(
             product_compound__pk__in=ids,
         )
 
@@ -88,7 +88,7 @@ class RouteSet:
         new_data = {}
         for d in mrich.track(data['routes'].values(), prefix='Loading Routes...'):
             route_id = d['id']
-            new_data[route_id] = Route.from_json(db=db, path=None, data=d)
+            new_data[route_id] = RouteModel.from_json(db=db, path=None, data=d)
 
         self._data = new_data
         self._cluster_map = None
@@ -100,7 +100,7 @@ class RouteSet:
     ### PROPERTIES
 
     @property
-    def data(self) -> 'dict[int, Route]':
+    def data(self) -> 'dict[int, RouteModel]':
         """Get internal data dictionary"""
         return self._data
 
@@ -116,14 +116,14 @@ class RouteSet:
 
     @property
     def product_ids(self) -> list[int]:
-        """Get the :class:`.Compound` ID's of the products"""
-        return Route.objects.values_list('product_compound__id', flat=True).distinct()
+        """Get the :class:`.CompoundModel` ID's of the products"""
+        return RouteModel.objects.values_list('product_compound__id', flat=True).distinct()
 
     @property
     def reactant_ids(self) -> list[int]:
-        """Get the :class:`.Compound` ID's of the reactants"""
+        """Get the :class:`.CompoundModel` ID's of the reactants"""
 
-        return Component.objects.filter(
+        return ComponentModel.objects.filter(
             route__in=self.ids,
             component_type=2,
         ).values_list('component_ref', flat=True)
@@ -140,19 +140,19 @@ class RouteSet:
 
     @property
     def str_ids(self) -> str:
-        """Return an SQL formatted tuple string of the :class:`.Route` ID's"""
+        """Return an SQL formatted tuple string of the :class:`.RouteModel` ID's"""
         return str(tuple(self.ids)).replace(',)', ')')
 
     @property
     def ids(self) -> list[int]:
-        """Return the :class:`.Route` IDs"""
+        """Return the :class:`.RouteModel` IDs"""
         return self.data.keys()
 
     @property
     def cluster_map(self) -> dict[tuple, set]:
         """Create a dictionary grouping routes by their scaffold/base cluster.
 
-        :returns: A dictionary mapping a tuple of scaffold :class:`.Compound` IDs to a set of :class:`.Route` ID's to their superstructures.
+        :returns: A dictionary mapping a tuple of scaffold :class:`.CompoundModel` IDs to a set of :class:`.RouteModel` ID's to their superstructures.
         """
 
         if self._cluster_map is None:
@@ -265,14 +265,14 @@ class RouteSet:
         route_id, route = self.data.popitem()
         return route_id
 
-    def pop(self) -> 'Route':
+    def pop(self) -> 'RouteModel':
         """Pop the last route from the set and return it's object"""
         route_id, route = self.data.popitem()
         return route
 
     def balanced_pop(
         self, permitted_clusters: set[tuple] | None = None, debug: bool = False
-    ) -> 'Route':
+    ) -> 'RouteModel':
         """Pop a route from this set, while maintaining the balance of scaffold clusters populations"""
 
         if not self._data:
@@ -307,10 +307,10 @@ class RouteSet:
         if self._current_cluster is None:
             self._current_cluster = self._permitted_clusters[0]
 
-        ### pop a Route
+        ### pop a RouteModel
 
         if debug:
-            mrich.debug(f'Would pop Route from {self._current_cluster=}')
+            mrich.debug(f'Would pop RouteModel from {self._current_cluster=}')
 
         cluster = self._current_cluster
 
@@ -337,14 +337,14 @@ class RouteSet:
         if debug:
             mrich.debug('Popped route', route_id)
 
-        # get the Route object
+        # get the RouteModel object
 
         if route_id in self._data:
             route = self._data[route_id]
             del self._data[route_id]
         else:
             # if debug:
-            mrich.debug('Route not present')
+            mrich.debug('RouteModel not present')
             return self.balanced_pop()
 
         ### increment cluster
@@ -407,7 +407,7 @@ class RouteSet:
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return f'{{Route × {len(self)}}}'
+        return f'{{RouteModel × {len(self)}}}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""

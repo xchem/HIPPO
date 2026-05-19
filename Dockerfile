@@ -14,6 +14,8 @@ ARG PYTHON_VERSION=3.12
 
 
 WORKDIR "/home/code/HIPPO"
+# WORKDIR "/home/code/HIPPO/data"
+# WORKDIR "/home/code/HIPPO/hippo"
 
 USER 0
 
@@ -32,12 +34,8 @@ ENV PATH="/home/code/HIPPO/.venv/bin:$PATH"
 ENV PYTHONPATH="/home/code/HIPPO/.venv/lib/python${PYTHON_VERSION}/site-packages:$PYTHONPATH"
 
 
-# copy files from host
-COPY . ./
-
 # patch rich
 RUN python -c "import mrich; mrich.patch_rich_jupyter_margins()"
-
 
 
 # notebooks
@@ -45,8 +43,8 @@ RUN chown ${NB_USER} "/home/code" && sudo apt update && sudo apt install screen 
 
 # force numpy update. since there's now a new venv, make sure conda is
 # used (othewise numpy will be invisible)
-RUN /opt/conda/bin/python -m pip install --upgrade numpy==2.4.4
+RUN uv pip install --upgrade numpy==2.4.4
 USER ${NB_USER}
 
 
-WORKDIR "/home/code/HIPPO"
+# WORKDIR "/home/code/HIPPO"
