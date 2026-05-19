@@ -11,6 +11,7 @@ from django.db import transaction
 
 from .models import CompoundModel, PoseModel, TargetModel
 from .services.ingestion import IngestionBatchResult, IngestionService
+from .sets.compound import CompoundSet
 from .sets.pose import PoseSet
 from .utils import make_warn_once_per_key
 
@@ -78,9 +79,9 @@ class HIPPO:
         return PoseSet(PoseModel.objects.filter(target=self._target))
 
     @property
-    def compounds(self):
-        """Return compound instances for this target"""
-        return CompoundModel.compound_filter.all()
+    def compounds(self) -> CompoundSet:
+        """Return all compounds in the database"""
+        return CompoundSet(CompoundModel.compound_filter.all())
 
     @property
     def num_poses(self) -> int:

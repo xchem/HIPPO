@@ -57,7 +57,10 @@ services:
     env_file:
       - .env
     ports:
-    - "8888:8888"
+      - "8888:8888"
+    volumes:
+      - ./hippo:/home/code/HIPPO/hippo
+      - ./data:/home/code/HIPPO/data
     networks:
       - app_network
     # depends_on:

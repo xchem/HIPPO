@@ -263,6 +263,10 @@ class ReactionSet:
         """Return a copy of this set"""
         return ReactionSet(self._queryset.all(), sort=False, name=self.name)
 
+    def reverse(self) -> None:
+        """Reverse the ordering of this set in-place"""
+        self._queryset = self._queryset.reverse()
+
     def get_recipes(
         self, amounts: float | list[float] = 1.0, **kwargs
     ):

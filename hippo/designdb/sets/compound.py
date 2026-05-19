@@ -21,6 +21,8 @@ from rdkit import Chem
 # from rdkit.Chem import inchi
 from rdkit.Chem import Mol
 
+from ..utils import registration_hash_tautomer_insensitive, superparent
+
 
 class CompoundSet:
     """Object representing a subset of the 'compound' table in the :class:`.Database`.
@@ -333,6 +335,22 @@ class CompoundSet:
         if not ids:
             return None
         return CompoundSet(self.db, ids)
+
+    def get_by_smiles(self, smiles: str) -> CompoundModel:
+        """Get a compound in this set by SMILES, using tautomer-insensitive matching.
+
+        :param smiles: SMILES string to search for
+        :raises ValueError: if SMILES standardisation fails
+        :raises CompoundModel.DoesNotExist: if no match found in this set
+        """
+        mol = Chem.MolFromSmiles(smiles, sanitize=True)
+        try:
+            sp = superparent(mol)
+        except Exception as e:
+            raise ValueError(f"SuperParent failed: {e}") from e
+
+        h = registration_hash_tautomer_insensitive(sp)
+        return self._queryset.get(compound_hash=h)
 
     def get_all_possible_reactants(
         self,
