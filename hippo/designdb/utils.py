@@ -17,8 +17,6 @@ from rdkit.Chem import AddHs, MolFromSmiles, MolToSmiles, RegistrationHash, Remo
 from rdkit.Chem.inchi import MolToInchiKey
 from rdkit.Chem.MolStandardize import rdMolStandardize
 
-from .models import PoseModel
-
 
 def strip_sql(sql) -> str:
     """Reduce unecessary whitespace in SQL"""
@@ -212,7 +210,7 @@ def sanitise_mol(m: Chem.rdchem.Mol) -> Chem.rdchem.Mol:
     return MolFromMolBlock(MolToMolBlock(m))
 
 
-def pose_gap(a: PoseModel, b: PoseModel) -> float:
+def pose_gap(a: 'PoseModel', b: 'PoseModel') -> float:
     """Calculate minimum distance between two :class:`.PoseModel` objects"""
 
     from molparse.rdkit import mol_to_AtomGroup
