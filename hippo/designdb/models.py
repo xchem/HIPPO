@@ -6,7 +6,6 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
-from pandas._libs.hashtable import objects_are_equal
 from rdkit import Chem
 
 from .managers import CompoundManager
@@ -62,7 +61,8 @@ class RDKitMolField(models.TextField):
             return Chem.MolToMolBlock(value)
 
         raise TypeError(
-            f'RDKitMolField only accepts RDKit Mol or MolBlock string, got {type(value)}'
+            'RDKitMolField only accepts RDKit Mol or MolBlock string, '
+            f'got {type(value)}'
         )
 
     def deconstruct(self):
@@ -73,11 +73,11 @@ class RDKitMolField(models.TextField):
 if settings.MANAGE_MODELS:
     # sqlite3, rdkit field types not available
     # shouldn't this be binary as well?
-    from django.db.models import BinaryField as BfpField
+    pass
 
     # from .models import RDKitMolField as MolField
 else:
-    from django_rdkit.models import BfpField, MolField
+    from django_rdkit.models import MolField
 
 
 class BaseModel(models.Model):

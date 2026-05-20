@@ -6,11 +6,13 @@ from designdb.models import InteractionModel
 
 
 class InteractionTable:
-    """Class representing all :class:`.InteractionModel` objects in the 'interaction' table of the :class:`.Database`.
+    """Class representing all :class:`.InteractionModel` objects in the 'interaction'
+    table of the :class:`.Database`.
 
     .. attention::
 
-            :class:`.InteractionTable` objects should not be created directly. Instead use the :meth:`.HIPPO.interactions` property.
+            :class:`.InteractionTable` objects should not be created directly. Instead
+            use the :meth:`.HIPPO.interactions` property.
 
     """
 
@@ -70,11 +72,14 @@ class InteractionTable:
 
 
 class InteractionSet:
-    """Class representing a subset of the :class:`.InteractionModel` objects in the 'interaction' table of the :class:`.Database`.
+    """Class representing a subset of the :class:`.InteractionModel` objects in the
+    'interaction' table of the :class:`.Database`.
 
     .. attention::
 
-            :class:`.InteractionSet` objects should not be created directly. Instead use :meth:`.PoseModel.interactions`, or :meth:`.PoseSet.interactions` methods.
+            :class:`.InteractionSet` objects should not be created directly. Instead
+            use :meth:`.PoseModel.interactions`, or :meth:`.PoseSet.interactions`
+            methods.
 
     """
 
@@ -180,7 +185,8 @@ class InteractionSet:
         :param db: HIPPO :class:`.Database`
         :param residue_number: the residue number
         :param chain: the chain name / letter, defaults to any chain
-        :param target: the protein :class:`.TargetModel` object or ID, defaults to first target in database
+        :param target: the protein :class:`.TargetModel` object or ID, defaults to
+            first target in database
         :returns: a :class:`.InteractionSet` object
         """
 
@@ -261,7 +267,9 @@ class InteractionSet:
 
     @property
     def classic_fingerprint(self) -> dict:
-        """Classic HIPPO fingerprint dictionary, mapping protein :class:`.FeatureModel` ID's to the number of corresponding ligand features (from any :class:`.PoseModel`)"""
+        """Classic HIPPO fingerprint dictionary, mapping protein
+        :class:`.FeatureModel` ID's to the number of corresponding ligand features
+        (from any :class:`.PoseModel`)"""
         return self.get_classic_fingerprint()
 
     @property
@@ -288,7 +296,8 @@ class InteractionSet:
         """Get a list of ``(residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT DISTINCT feature_residue_number, feature_chain_name FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        SELECT DISTINCT feature_residue_number, feature_chain_name
+        FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON feature_id = interaction_feature
         WHERE interaction_id IN {self.str_ids}
@@ -301,7 +310,8 @@ class InteractionSet:
         """Get a list of ``(residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_residue_number, feature_chain_name FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        SELECT DISTINCT interaction_pose, feature_residue_number, feature_chain_name
+        FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON feature_id = interaction_feature
         WHERE interaction_id IN {self.str_ids}
@@ -347,7 +357,9 @@ class InteractionSet:
         """Get a list of ``(residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, interaction_type, feature_residue_number, feature_chain_name FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        SELECT DISTINCT interaction_pose, interaction_type,
+        feature_residue_number, feature_chain_name
+        FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON feature_id = interaction_feature
         WHERE interaction_id IN {self.str_ids}
@@ -371,7 +383,8 @@ class InteractionSet:
         """Get a list of ``(interaction_type, residue_number, chain_name)`` tuples"""
 
         sql = f"""
-        SELECT DISTINCT interaction_type, feature_residue_number, feature_chain_name FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        SELECT DISTINCT interaction_type, feature_residue_number, feature_chain_name
+        FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON feature_id = interaction_feature
         WHERE interaction_id IN {self.str_ids}
@@ -381,11 +394,13 @@ class InteractionSet:
 
     @property
     def num_features(self) -> int:
-        """Count the funmber of protein :class:`.FeatureModel`s with which interactions are formed"""
+        """Count the funmber of protein :class:`.FeatureModel`s with which interactions
+        are formed"""
 
         (count,) = self.db.execute(
             f"""
-        SELECT COUNT(DISTINCT interaction_feature) FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        SELECT COUNT(DISTINCT interaction_feature)
+        FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         WHERE interaction_id IN {self.str_ids}
         """
         ).fetchone()
@@ -394,13 +409,15 @@ class InteractionSet:
 
     @property
     def avg_num_interactions_per_feature(self) -> float:
-        """Average number of interactions formed with each protein :class:`.FeatureModel`"""
+        """Average number of interactions formed with each protein
+        :class:`.FeatureModel`"""
 
         (count,) = self.db.execute(
             f"""
         WITH counts AS
         (
-            SELECT interaction_feature, COUNT(1) AS count FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+            SELECT interaction_feature, COUNT(1) AS count
+            FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
             WHERE interaction_id IN {self.str_ids}
             GROUP BY interaction_feature
         )
@@ -413,11 +430,13 @@ class InteractionSet:
 
     @property
     def per_feature_count_hirsch(self) -> float:
-        """A measure for how evenly protein :class:`.FeatureModel`s are being interacted with"""
+        """A measure for how evenly protein :class:`.FeatureModel`s are being
+        interacted with"""
 
         counts = self.db.execute(
             f"""
-        SELECT interaction_feature, COUNT(1) AS count FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        SELECT interaction_feature, COUNT(1) AS count
+        FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         WHERE interaction_id IN {self.str_ids}
         GROUP BY interaction_feature
         """
@@ -456,11 +475,14 @@ class InteractionSet:
             mrich.var(s, f'{interaction.distance:.1f}', 'Å')
 
     def get_classic_fingerprint(self) -> dict:
-        """Classic HIPPO fingerprint dictionary, mapping protein :class:`.FeatureModel` ID's to the number of corresponding ligand features (from any :class:`.PoseModel`)"""
+        """Classic HIPPO fingerprint dictionary, mapping protein
+        :class:`.FeatureModel` ID's to the number of corresponding ligand features
+        (from any :class:`.PoseModel`)"""
 
         pairs = self.db.execute(
             f"""
-        SELECT interaction_feature, COUNT(1) FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
+        SELECT interaction_feature, COUNT(1)
+        FROM {self.db.SQL_SCHEMA_PREFIX}{self.table}
         WHERE interaction_id IN {self.str_ids}
         GROUP BY interaction_feature
         """

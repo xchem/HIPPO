@@ -15,7 +15,9 @@ class ReactionSet:
 
     .. attention::
 
-            :class:`.ReactionSet` objects should not be created directly. Instead use the :meth:`.HIPPO.reactions` property. See :doc:`getting_started` and :doc:`insert_elaborations`.
+            :class:`.ReactionSet` objects should not be created directly. Instead use
+            the :meth:`.HIPPO.reactions` property. See :doc:`getting_started` and
+            :doc:`insert_elaborations`.
 
     Use as an iterable
     ==================
@@ -107,7 +109,8 @@ class ReactionSet:
         return iter(self._queryset)
 
     def __getitem__(self, key) -> 'ReactionModel | ReactionSet':
-        """Get member :class:`.ReactionModel` object by single, slice or list/set/tuple of ID"""
+        """Get member :class:`.ReactionModel` object by single, slice or
+        list/set/tuple of ID"""
 
         match key:
             case int():
@@ -125,7 +128,8 @@ class ReactionSet:
 
             case _:
                 mrich.error(
-                    f'Unsupported type for ReactionSet.__getitem__(): {key=} {type(key)}'
+                    f'Unsupported type for ReactionSet.__getitem__():'
+                    f' {key=} {type(key)}'
                 )
 
         return None
@@ -247,7 +251,8 @@ class ReactionSet:
 
         :param smiles: Include smiles column (Default value = True)
         :param mols: Include `rdkit.Chem.Mol` column (Default value = True)
-        :param kwargs: keyword arguments are passed on to :meth:`.ReactionModel.get_dict:
+        :param kwargs: keyword arguments are passed on to
+            :meth:`.ReactionModel.get_dict:`
 
         """
 
@@ -267,12 +272,11 @@ class ReactionSet:
         """Reverse the ordering of this set in-place"""
         self._queryset = self._queryset.reverse()
 
-    def get_recipes(
-        self, amounts: float | list[float] = 1.0, **kwargs
-    ):
+    def get_recipes(self, amounts: float | list[float] = 1.0, **kwargs):
         """Get the :class:`.Recipe` object(s) from this set of recipes
 
-        :param amounts: float or list/generator of product amounts in mg, (Default value = 1.0)
+        :param amounts: float or list/generator of product amounts in mg,
+            (Default value = 1.0)
         :param kwargs: keyword arguments are passed on to :meth:`.Recipe.from_reactions:
 
         """
@@ -317,7 +321,8 @@ class ReactionSet:
 
     @property
     def products(self) -> CompoundSet:
-        """Get all product compounds that can be synthesised with these reactions (no intermediates)"""
+        """Get all product compounds that can be synthesised with these reactions
+        (no intermediates)"""
 
         qs = CompoundModel.objects.filter(
             pk__in=self._queryset.values('product_compound'),
@@ -331,7 +336,8 @@ class ReactionSet:
 
     @property
     def intermediates(self) -> CompoundSet:
-        """Get all intermediate compounds that can be synthesised with these reactions"""
+        """Get all intermediate compounds that can be synthesised with these
+        reactions"""
 
         # NB! not 100% sure about this queryset
         qs = CompoundModel.objects.filter(

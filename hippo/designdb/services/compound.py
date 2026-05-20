@@ -4,17 +4,9 @@ import re
 import mrich
 import rdkit
 from designdb.models import CompoundModel, CompoundTagModel
-from designdb.utils import (
-    inchikey_from_smiles,
-    registration_hash_tautomer_insensitive,
-    sanitise_smiles,
-    superparent,
-)
+from designdb.utils import registration_hash_tautomer_insensitive, sanitise_smiles, superparent
 # from mypackage.services.compound import CompoundService
 from rdkit import Chem
-from rdkit.Chem import RegistrationHash
-from rdkit.Chem import inchi as rdkit_inchi
-from rdkit.Chem.MolStandardize import rdMolStandardize
 
 # from rdkit.Chem import inchi
 
@@ -34,10 +26,6 @@ PDBID_PATTERN = re.compile(r'^[A-Za-z0-9]{4}-[a-z].sdf$')
 
 
 logger = logging.getLogger(__name__)
-
-
-
-
 
 
 class CompoundBatchResult:
@@ -62,7 +50,7 @@ class CompoundService:
         try:
             sp = superparent(mol)
         except Exception as e:
-            raise ValueError(f"SuperParent failed: {e}") from e
+            raise ValueError(f'SuperParent failed: {e}') from e
 
         h = registration_hash_tautomer_insensitive(sp)
 
@@ -77,9 +65,7 @@ class CompoundService:
             },
         )
         if not created and logger.level == logging.DEBUG:
-            mrich.warning(
-                f'Skipping compound {h}, duplicate of {compound.pk}'
-            )
+            mrich.warning(f'Skipping compound {h}, duplicate of {compound.pk}')
 
         # there's a following block in the original code
         # I don't understand what it is trying to achieve
@@ -100,7 +86,8 @@ class CompoundService:
 
         #     if not compound:
         #         mrich.error(
-        #             'CompoundModel exists in database but could not be found by inchikey'
+        #             'CompoundModel exists in database but could not be found '
+        #             'by inchikey'
         #         )
         #         mrich.var('smiles', smiles)
         #         mrich.var('inchikey', inchikey)
@@ -138,19 +125,17 @@ class CompoundService:
 
         return result
 
-
     @classmethod
     def get_by_smiles(cls, smiles: str) -> CompoundModel | None:
         mol = Chem.MolFromSmiles(smiles, sanitize=True)
         try:
             sp = superparent(mol)
         except Exception as e:
-            raise ValueError(f"SuperParent failed: {e}") from e
+            raise ValueError(f'SuperParent failed: {e}') from e
 
         h = registration_hash_tautomer_insensitive(sp)
 
         return CompoundModel.objects.get(compound_hash=h)
-
 
 
 class CompoundTagService:
@@ -159,7 +144,11 @@ class CompoundTagService:
         assert tag_list is not None, '"None" passed as tag_list'
 
         CompoundTagModel.objects.bulk_create(
-            [CompoundTagModel(compound_tag_name=k.strip()) for k in tag_list if k.strip()],
+            [
+                CompoundTagModel(compound_tag_name=k.strip())
+                for k in tag_list
+                if k.strip()
+            ],
             ignore_conflicts=True,
         )
         tags = CompoundTagModel.objects.filter(compound_tag_name__in=tag_list)

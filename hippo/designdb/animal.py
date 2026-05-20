@@ -222,23 +222,41 @@ class HIPPO:
 
         :param target: Name of the protein :class:`.TargetModel`
         :param path: Path to the SDF
-        :param reference: Optional single reference :class:`.PoseModel` to use as the protein conformation for all poses, defaults to ``None``
-        :param reference_col: Column that contains reference :class:`.PoseModel` aliases or ID's
-        :param compound_tags: List of string Tags to assign to all created compounds, defaults to ``None``
-        :param pose_tags: List of string Tags to assign to all created poses, defaults to ``None``
-        :param mol_col: Name of the column containing the ``rdkit.ROMol`` ligands, defaults to ``"ROMol"``
-        :param name_col: Name of the column containing the ligand name/alias, defaults to ``"ID"``
-        :param inspirations: Optional single set of inspirations :class:`.PoseSet` object or list of IDs to assign as inspirations to all inserted poses, defaults to ``None``
-        :param inspiration_col: Name of the column containing the list of inspiration :class:`.PoseModel` names or ID's, defaults to ``"ref_mols"``
-        :param inspiration_map: Optional dictionary or callable mapping between inspiration strings found in ``inspiration_col`` and :class:`.PoseModel` ids
-        :param energy_score_col: Name of the column containing the list of energy scores ``"energy_score"``
-        :param distance_score_col: Name of the column containing the list of distance scores, defaults to ``"distance_score"``
-        :param convert_floats: Try to convert all values to ``float``, defaults to ``True``
-        :param skip_equal_dict: Skip rows where ``any(row[key] == value for key, value in skip_equal_dict.items())``, defaults to ``None``
-        :param skip_not_equal_dict: Skip rows where ``any(row[key] != value for key, value in skip_not_equal_dict.items())``, defaults to ``None``
+        :param reference: Optional single reference :class:`.PoseModel` to use as
+            the protein conformation for all poses, defaults to ``None``
+        :param reference_col: Column that contains reference :class:`.PoseModel` aliases
+            or ID's
+        :param compound_tags: List of string Tags to assign to all created compounds,
+            defaults to ``None``
+        :param pose_tags: List of string Tags to assign to all created poses,
+            defaults to ``None``
+        :param mol_col: Name of the column containing the ``rdkit.ROMol`` ligands,
+            defaults to ``"ROMol"``
+        :param name_col: Name of the column containing the ligand name/alias,
+            defaults to ``"ID"``
+        :param inspirations: Optional single set of inspirations :class:`.PoseSet`
+            object or list of IDs to assign as inspirations to all inserted poses,
+            defaults to ``None``
+        :param inspiration_col: Name of the column containing the list of inspiration
+            :class:`.PoseModel` names or ID's, defaults to ``"ref_mols"``
+        :param inspiration_map: Optional dictionary or callable mapping between
+            inspiration strings found in ``inspiration_col`` and :class:`.PoseModel` ids
+        :param energy_score_col: Name of the column containing the list of energy
+            scores ``"energy_score"``
+        :param distance_score_col: Name of the column containing the list of distance
+            scores, defaults to ``"distance_score"``
+        :param convert_floats: Try to convert all values to ``float``,
+            defaults to ``True``
+        :param skip_equal_dict: Skip rows where
+            ``any(row[key] == value for key, value in skip_equal_dict.items())``,
+            defaults to ``None``
+        :param skip_not_equal_dict: Skip rows where
+            ``any(row[key] != value for key, value in skip_not_equal_dict.items())``,
+            defaults to ``None``
 
         All non-name columns are added to the PoseModel metadata.
-        N.B. separate .mol files are not created. The molecule binary will only be stored in the .sqlite file and fake paths are added to the database.
+        N.B. separate .mol files are not created. The molecule binary will only be
+        stored in the .sqlite file and fake paths are added to the database.
         """
         # TODO: original code reads sdf into data frame. I don't see
         # much point for this in this function. get rid of it at some
@@ -362,13 +380,21 @@ class HIPPO:
         :param df_path: Path to the pickled DataFrame
         :param max_energy_score: Filter out poses with `∆∆G` above this value
         :param max_distance_score: Filter out poses with `comRMSD` above this value
-        :param require_intra_geometry_pass: Filter out poses with falsy `intra_geometry_pass` values
-        :param reject_flags: Filter out rows flagged with strings from this list (default = ["one_of_multiple_products", "selectivity_issue_contains_reaction_atoms_of_both_reactants"])
-        :param scaffold_route: Supply a known single-step route to the scaffold product to use if scaffold placements are missing
-        :param scaffold_compound: Supply a :class:`.CompoundModel` for the scaffold product to use if scaffold placements are missing
-        :param dry_run: Don't insert new records into the database (for debugging/testing)
-        :param pose_tags: Add these tags to all inserted poses, defaults to ["syndirella_product", "syndirella_placed"]
-        :param product_tags: Add these tags to all inserted product compounds, defaults to ["syndirella_product"]
+        :param require_intra_geometry_pass: Filter out poses with falsy
+            `intra_geometry_pass` values
+        :param reject_flags: Filter out rows flagged with strings from this list
+            (default = ["one_of_multiple_products",
+            "selectivity_issue_contains_reaction_atoms_of_both_reactants"])
+        :param scaffold_route: Supply a known single-step route to the scaffold product
+            to use if scaffold placements are missing
+        :param scaffold_compound: Supply a :class:`.CompoundModel` for the scaffold
+            product to use if scaffold placements are missing
+        :param dry_run: Don't insert new records into the database
+            (for debugging/testing)
+        :param pose_tags: Add these tags to all inserted poses, defaults to
+            ["syndirella_product", "syndirella_placed"]
+        :param product_tags: Add these tags to all inserted product compounds,
+            defaults to ["syndirella_product"]
         :returns: annotated DataFrame
         """
 

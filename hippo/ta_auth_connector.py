@@ -17,8 +17,8 @@ from urllib.parse import quote
 import requests
 
 # Service location (e.g. "http://auth.ta-authenticator.svc") and request query key
-_TA_AUTH_SERVICE: str = os.environ.get("TA_AUTH_SERVICE", "")
-_TA_AUTH_QUERY_KEY: str = os.environ.get("TA_AUTH_QUERY_KEY", "")
+_TA_AUTH_SERVICE: str = os.environ.get('TA_AUTH_SERVICE', '')
+_TA_AUTH_QUERY_KEY: str = os.environ.get('TA_AUTH_QUERY_KEY', '')
 
 _URL_TIMEOUT: int = 3
 _QUERY_HEADERS: dict[str, str] = {'X-TAAQueryKey': _TA_AUTH_QUERY_KEY}

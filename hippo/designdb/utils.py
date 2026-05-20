@@ -14,9 +14,10 @@ from django.db.models import Aggregate, OuterRef, Subquery
 from molparse.rdkit import mol_from_smiles
 from rdkit import Chem
 from rdkit.Chem import AddHs, MolFromSmiles, MolToSmiles, RegistrationHash, RemoveHs
-from rdkit.Chem import inchi as rdkit_inchi
 from rdkit.Chem.inchi import MolToInchiKey
 from rdkit.Chem.MolStandardize import rdMolStandardize
+
+from .models import PoseModel
 
 
 def strip_sql(sql) -> str:
@@ -211,15 +212,13 @@ def sanitise_mol(m: Chem.rdchem.Mol) -> Chem.rdchem.Mol:
     return MolFromMolBlock(MolToMolBlock(m))
 
 
-def pose_gap(a: 'PoseModel', b: 'PoseModel') -> float:
+def pose_gap(a: PoseModel, b: PoseModel) -> float:
     """Calculate minimum distance between two :class:`.PoseModel` objects"""
 
     from molparse.rdkit import mol_to_AtomGroup
     from numpy.linalg import norm
 
     # avoiding circular imports
-    from .models import PoseModel, ScoreValueModel
-
 
     min_dist = None
 
@@ -294,7 +293,8 @@ def make_warn_once_per_key():
 class ScoreSubquery(Subquery):
     def __init__(self, scoring_method):
         # avoiding circular imports
-        from .models import PoseModel, ScoreValueModel
+        from .models import ScoreValueModel
+
         query = ScoreValueModel.objects.filter(
             pose=OuterRef('pk'),
             compound=OuterRef('compound'),
@@ -355,7 +355,7 @@ def superparent(mol: Chem.Mol) -> Chem.Mol:
 def registration_hash_tautomer_insensitive(mol: Chem.Mol) -> str:
     layers = RegistrationHash.GetMolLayers(
         mol,
-        escape="",
+        escape='',
         enable_tautomer_hash_v2=True,
     )
     return RegistrationHash.GetMolHash(

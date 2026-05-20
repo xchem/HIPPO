@@ -78,7 +78,9 @@ class PoseSet:
 
     .. attention::
 
-            :class:`.PoseSet` objects should not be created directly. Instead use the :meth:`.HIPPO.poses` property. See :doc:`getting_started` and :doc:`insert_elaborations`.
+            :class:`.PoseSet` objects should not be created directly. Instead use the
+            :meth:`.HIPPO.poses` property. See :doc:`getting_started` and
+            :doc:`insert_elaborations`.
 
     Use as an iterable
     ==================
@@ -231,7 +233,9 @@ class PoseSet:
                 )
             case int():
                 return PoseSet(
-                    PoseModel.objects.filter(Q(pk__in=self._queryset) & ~Q(pk=other.pk)),
+                    PoseModel.objects.filter(
+                        Q(pk__in=self._queryset) & ~Q(pk=other.pk)
+                    ),
                     sort=False,
                 )
 
@@ -288,7 +292,9 @@ class PoseSet:
         target: int = None,
         subsite: int = None,
     ) -> 'PoseSet':
-        """Filter poses by a given tag, SubsiteModel ID, or target ID. See :meth:`.PoseSet.get_by_tag`, :meth:`.PoseSet.get_by_target`, amd :meth:`.PoseSet.get_by_subsite`"""
+        """Filter poses by a given tag, SubsiteModel ID, or target ID. See
+        :meth:`.PoseSet.get_by_tag`, :meth:`.PoseSet.get_by_target`, amd
+        :meth:`.PoseSet.get_by_subsite`"""
 
         if tag:
             return self.get_by_tag(tag)
@@ -328,7 +334,8 @@ class PoseSet:
         """Get all child poses with a certain tag
 
         :param tag: tag to filter by
-        :param inverse: return all poses *not* tagged with ``tag`` (Default value = False)
+        :param inverse: return all poses *not* tagged with ``tag``
+            (Default value = False)
 
         """
         self._queryset = self._queryset.annotate(
@@ -347,10 +354,12 @@ class PoseSet:
     def get_by_metadata(
         self, key: str, value: str | None = None, debug: bool = False
     ) -> 'PoseSet':
-        """Get all child poses with by their metadata. If no value is passed, then simply containing the key in the metadata dictionary is sufficient
+        """Get all child poses with by their metadata. If no value is passed, then
+        simply containing the key in the metadata dictionary is sufficient
 
         :param key: metadata key to search for
-        :param value: metadata value, if ``None`` return poses with the metadata key regardless of value (Default value = None)
+        :param value: metadata value, if ``None`` return poses with the metadata key
+            regardless of value (Default value = None)
 
         """
         results = self.db.select_where(
@@ -425,16 +434,21 @@ class PoseSet:
         :param inchikey: include InChIKey column (Default value = True)
         :param alias: include alias column (Default value = True)
         :param name: include name column (Default value = True)
-        :param compound_id: include :class:`.CompoundModel` ID column (Default value = False)
-        :param reference_id: include reference :class:`.PoseModel` ID column (Default value = False)
-        :param target_id: include reference :class:`.TargetModel` ID column (Default value = False)
+        :param compound_id: include :class:`.CompoundModel` ID column
+            (Default value = False)
+        :param reference_id: include reference :class:`.PoseModel` ID column
+            (Default value = False)
+        :param target_id: include reference :class:`.TargetModel` ID column
+            (Default value = False)
         :param path: include path column (Default value = False)
         :param mol: include ``rdkit.Chem.Mol`` in output (Default value = False)
         :param energy_score: include energy_score column (Default value = False)
         :param distance_score: include distance_score column (Default value = False)
-        :param inspiration_score: include inspiration_score column (Default value = False)
+        :param inspiration_score: include inspiration_score column
+            (Default value = False)
         :param metadata: include metadata in output (Default value = False)
-        :param expand_metadata: create separate column for each metadata key (Default value = True)
+        :param expand_metadata: create separate column for each metadata key
+            (Default value = True)
         :param inspiration_ids: include inspiration :class:`.PoseModel` ID column
         :param inspiration_aliases: include inspiration :class:`.PoseModel` alias column
         :param derivative_ids: include derivative :class:`.PoseModel` ID column
@@ -530,7 +544,8 @@ class PoseSet:
                     'subsites__subsite_name',
                     filter=Q(subsites__isnull=False),
                 ),
-                # JsonGroupArray('subsites__subsite_name', filter=Q(subsites__isnull=False),),
+                # JsonGroupArray('subsites__subsite_name',
+                #     filter=Q(subsites__isnull=False),),
             ),
         }
 
@@ -615,7 +630,8 @@ class PoseSet:
         *,
         compound: 'int | CompoundModel | CompoundSet',
     ) -> 'PoseSet | None':
-        """Select a subset of this :class:`.PoseSet` by the associated :class:`.CompoundModel`.
+        """Select a subset of this :class:`.PoseSet` by the associated
+        :class:`.CompoundModel`.
 
         :param compound: :class:`.CompoundModel` object or ID
         :returns: a :class:`.PoseSet` of the selection
@@ -636,7 +652,8 @@ class PoseSet:
         *,
         target: TargetModel,
     ) -> 'PoseSet | None':
-        """Select a subset of this :class:`.PoseSet` by the associated :class:`.TargetModel`.
+        """Select a subset of this :class:`.PoseSet` by the associated
+        :class:`.TargetModel`.
 
         :param id: :class:`.TargetModel` ID
         :returns: a :class:`.PoseSet` of the selection
@@ -651,7 +668,8 @@ class PoseSet:
         *,
         subsite: SubsiteModel,
     ) -> 'PoseSet | None':
-        """Select a subset of this :class:`.PoseSet` by the associated :class:`.SubsiteModel`.
+        """Select a subset of this :class:`.PoseSet` by the associated
+        :class:`.SubsiteModel`.
 
         :param id: :class:`.SubsiteModel` ID
         :returns: a :class:`.PoseSet` of the selection
@@ -695,7 +713,9 @@ class PoseSet:
     #     operator='=',
     #     inverse: bool = False,
     # ):
-    #     """Filter this :class:`.PoseSet` by selecting members where ``function(pose)`` is truthy or pass a key, value, and optional operator to search by database values
+    #     """Filter this :class:`.PoseSet` by selecting members where
+    #     ``function(pose)`` is truthy or pass a key, value, and optional operator
+    #     to search by database values
 
     #     :param function: callable object
     #     :param key: database field for 'pose' table ('pose_' prefix not needed)
@@ -741,7 +761,10 @@ class PoseSet:
         pose_tag.save()
 
         PoseTagJunctionModel.objects.bulk_create(
-            [PoseTagJunctionModel(pose=pose, pose_tag=pose_tag) for pose in self._queryset],
+            [
+                PoseTagJunctionModel(pose=pose, pose_tag=pose_tag)
+                for pose in self._queryset
+            ],
             ignore_conflicts=True,
         )
 
@@ -760,7 +783,8 @@ class PoseSet:
         key,
         value,
     ) -> None:
-        """Append a specific item to list-like values associated with a given key for all member's metadata dictionaries
+        """Append a specific item to list-like values associated with a given key for
+        all member's metadata dictionaries
 
         :param key: the :class:`.Metadata` key to match
         :param value: the value to append to the list
@@ -793,7 +817,9 @@ class PoseSet:
             # I'm still not entirely clear can you really have
             # posesets from different target, if not, and it really
             # seems that not, this should be a single subsite
-            subsite, _ = SubsiteModel.get_or_create(target=pose.target, subsite_name=key)
+            subsite, _ = SubsiteModel.get_or_create(
+                target=pose.target, subsite_name=key
+            )
             subsite_tag = SubsiteTagModel(subsite=subsite, pose=pose)
             subsite_tag.save()
 
@@ -810,7 +836,8 @@ class PoseSet:
 
     #     :param alpha: Tversky alpha parameter
     #     :param beta: Tversky beta parameter
-    #     :param score_type: Score type to add to database, choose from "combo", "shape", "colour"
+    #     :param score_type: Score type to add to database, choose from
+    #         "combo", "shape", "colour"
     #     :returns: Pandas DataFrame with molecules and scores
     #     """
 
@@ -853,7 +880,9 @@ class PoseSet:
 
     #     tuples = df[f'mocassin_{score_type}({alpha},{beta})'].items()
 
-    #     sql = f"""UPDATE {self.db.SQL_SCHEMA_PREFIX}pose SET pose_inspiration_score = {self.db.SQL_STRING_PLACEHOLDER} WHERE pose_id = {self.db.SQL_STRING_PLACEHOLDER}"""
+    #     sql = f"""UPDATE {self.db.SQL_SCHEMA_PREFIX}pose
+    #     SET pose_inspiration_score = {self.db.SQL_STRING_PLACEHOLDER}
+    #     WHERE pose_id = {self.db.SQL_STRING_PLACEHOLDER}"""
 
     #     mrich.debug('Updating pose_inspiration_score values')
     #     self.db.executemany(sql, [(b, a) for a, b in tuples])
@@ -866,7 +895,8 @@ class PoseSet:
     def split_by_reference(self) -> 'dict[int,PoseSet]':
         """Split this :class:`.PoseSet` into subsets grouped by reference ID
 
-        :returns: a dictionary with reference :class:`.PoseModel` IDs as keys and :class:`.PoseSet` subsets as values
+        :returns: a dictionary with reference :class:`.PoseModel` IDs as keys and
+            :class:`.PoseSet` subsets as values
 
         """
         sets = {}
@@ -880,8 +910,10 @@ class PoseSet:
     ) -> 'dict[PoseSet,PoseSet] | PoseSet':
         """Split this :class:`.PoseSet` into subsets grouped by inspirations
 
-        :param single_set: Return a single :class:`.PoseSet` with members sorted by inspirations (Default value = False)
-        :returns: a dictionary with tuples of inspiration :class:`.PoseSet` as keys and :class:`.PoseSet` derivative subsets as values
+        :param single_set: Return a single :class:`.PoseSet` with members sorted by
+            inspirations (Default value = False)
+        :returns: a dictionary with tuples of inspiration :class:`.PoseSet` as keys and
+            :class:`.PoseSet` derivative subsets as values
 
         """
 
@@ -925,7 +957,8 @@ class PoseSet:
         """Write an SDF
 
         :param out_path: filepath of the output
-        :param name_col: pose property to use as the name column, can be ``["name", "alias", "inchikey", "id"]`` (Default value = 'name')
+        :param name_col: pose property to use as the name column, can be
+            ``["name", "alias", "inchikey", "id"]`` (Default value = 'name')
         :param inspiration_ids: include inspiration :class:`.PoseModel` ID column
         :param inspiration_aliases: include inspiration :class:`.PoseModel` alias column
         :param fragalysis_inspirations: create inspirations column "ref_mols"
@@ -1004,16 +1037,23 @@ class PoseSet:
         :param ref_url: reference URL for the method
         :param submitter_name: name of the person submitting the compounds
         :param submitter_email: email of the person submitting the compounds
-        :param submitter_institution: institution name of the person submitting the compounds
+        :param submitter_institution: institution name of the person submitting the
+            compounds
         :param metadata: include metadata in the output? (Default value = True)
         :param skipmetadata: exclude metadata keys from output
-        :param sort_by: if set will sort the SDF by this column/field (Default value = None)
+        :param sort_by: if set will sort the SDF by this column/field
+            (Default value = None)
         :param sort_reverse: reverse the sorting (Default value = False)
-        :param generate_pdbs: generate accompanying protein-ligand complex PDBs (Default value = False)
-        :param ingredients: get procurement and amount information from this :class:`.IngredientSet` (Default value = None)
+        :param generate_pdbs: generate accompanying protein-ligand complex PDBs
+            (Default value = False)
+        :param ingredients: get procurement and amount information from this
+            :class:`.IngredientSet` (Default value = None)
         :param tags: include a column for tags in the output (Default value = True)
-        :param subsites: include a column for subsites in the output (Default value = True)
-        :param extra_cols: extra_cols should be a dictionary with a key for each column name, and list values where the first element is the field description, and all subsequent elements are values for each pose.
+        :param subsites: include a column for subsites in the output
+            (Default value = True)
+        :param extra_cols: extra_cols should be a dictionary with a key for each column
+            name, and list values where the first element is the field description, and
+            all subsequent elements are values for each pose.
 
         """
 
@@ -1192,7 +1232,8 @@ class PoseSet:
 
         #     for i, row in pose_df.iterrows():
 
-        #         compound_id = self.db.get_compound_id(inchikey=row["compound inchikey"])
+        #         compound_id = self.db.get_compound_id(
+        #             inchikey=row["compound inchikey"])
 
         #         ingredient = ingredients(compound_id=compound_id)
 
@@ -1351,7 +1392,8 @@ class PoseSet:
         return pose_df
 
     def to_pymol(self, prefix: str | None = None) -> None:
-        """Group the poses by reference protein and inspirations and output relevant PDBs and SDFs.
+        """Group the poses by reference protein and inspirations and output relevant
+        PDBs and SDFs.
 
         :param prefix: prefix to give all output subdirectories (Default value = None)
 
@@ -1610,7 +1652,9 @@ class PoseSet:
         """Interactive widget to navigate compounds in the table
 
         :param print_name: print the :class:`.PoseModel` name  (Default value = True)
-        :param method: pass the name of a :class:`.PoseModel` method to interactively display. Keyword arguments to interactive() will be passed through (Default value = None)
+        :param method: pass the name of a :class:`.PoseModel` method to interactively
+            display. Keyword arguments to interactive() will be passed through
+            (Default value = None)
         :param function: pass a callable which will be called as `function(pose)`
 
         """
@@ -1769,7 +1813,8 @@ class PoseSet:
     #     """Print a table counting poses by subsite"""
 
     #     sql = f"""
-    #     SELECT subsite_id, subsite_name, COUNT(DISTINCT subsite_tag_pose) FROM {self.db.SQL_SCHEMA_PREFIX}subsite
+    #     SELECT subsite_id, subsite_name, COUNT(DISTINCT subsite_tag_pose)
+    #     FROM {self.db.SQL_SCHEMA_PREFIX}subsite
     #     INNER JOIN {self.db.SQL_SCHEMA_PREFIX}subsite_tag
     #     ON subsite_id = subsite_tag_ref
     #     WHERE subsite_tag_pose IN {self.str_ids}
@@ -1791,7 +1836,8 @@ class PoseSet:
     #     return df
 
     def get_interaction_overlaps(self, return_pairs: bool = False) -> int:
-        """Count the number of member pose pairs which share at least one but not all interactions"""
+        """Count the number of member pose pairs which share at least one but not all
+        interactions"""
 
         records = InteractionModel.objects.filter(
             pose__in=self._queryset,
@@ -1839,7 +1885,8 @@ class PoseSet:
         # get interaction records
 
         sql = f"""
-        SELECT DISTINCT interaction_pose, feature_residue_name, feature_residue_number, interaction_type
+        SELECT DISTINCT interaction_pose, feature_residue_name,
+        feature_residue_number, interaction_type
         FROM {self.db.SQL_SCHEMA_PREFIX}interaction
         INNER JOIN {self.db.SQL_SCHEMA_PREFIX}feature
         ON interaction_feature = feature_id
@@ -2020,13 +2067,15 @@ class PoseSet:
 
     @property
     def references(self) -> 'PoseSet':
-        """Return a :class:`.PoseSet` of the all the distinct references in this :class:`.PoseSet`"""
+        """Return a :class:`.PoseSet` of the all the distinct references in this
+        :class:`.PoseSet`"""
         # TODO: call through proper factory method
         return self.get_by_references(self)
 
     @property
     def reference_ids(self) -> set[int]:
-        """Return a set of :class:`.PoseModel` ID's of the all the distinct references in this :class:`.PoseSet`"""
+        """Return a set of :class:`.PoseModel` ID's of the all the distinct references
+        in this :class:`.PoseSet`"""
         return self.get_by_references(self).values_list('pk', flat=True)
 
     @property
@@ -2101,7 +2150,8 @@ class PoseSet:
 
         # query = 'pose_id, MIN(pose_distance_score)'
         # query = self.db.select_where(
-        #     table='pose', query=query, key=f'pose_id in {self.str_ids}', multiple=False
+        #     table='pose', query=query,
+        #     key=f'pose_id in {self.str_ids}', multiple=False
         # )
         # return query[0]
 
@@ -2137,7 +2187,8 @@ class PoseSet:
 
     @property
     def subsite_balance(self) -> float:
-        """Measure of how evenly subsite counts are distributed across poses in this set"""
+        """Measure of how evenly subsite counts are distributed across poses in this
+        set"""
         # TODO: subsites not implemented yet
         # from numpy import std
 
@@ -2233,8 +2284,12 @@ class PoseSet:
 
         try:
             with transaction.atomic():
-                InspirationModel.objects.filter(original_pose__in=self._queryset).delete()
-                InspirationModel.objects.filter(derivative_pose__in=self._queryset).delete()
+                InspirationModel.objects.filter(
+                    original_pose__in=self._queryset
+                ).delete()
+                InspirationModel.objects.filter(
+                    derivative_pose__in=self._queryset
+                ).delete()
                 SubsiteTagModel.objects.filter(pose__in=self._queryset).delete()
                 InteractionModel.objects.filter(pose__in=self._queryset).delete()
                 self._queryset.delete()

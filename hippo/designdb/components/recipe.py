@@ -13,7 +13,8 @@ from .reaction import DEFAULT_PRODUCT_YIELD, Reaction
 
 
 class Recipe:
-    """A Recipe stores data corresponding to a specific synthetic recipe involving several products, reactants, intermediates, and reactions."""
+    """A Recipe stores data corresponding to a specific synthetic recipe involving
+    several products, reactants, intermediates, and reactions."""
 
     def __init__(
         self,
@@ -82,17 +83,23 @@ class Recipe:
         inner: bool = False,
         get_ingredient_quotes: bool = True,
     ) -> 'Recipe | list[Recipe]':
-        """Create a :class:`.Recipe` from a :class:`.ReactionModel` and its upstream dependencies
+        """Create a :class:`.Recipe` from a :class:`.ReactionModel` and its upstream
+        dependencies
 
         :param reaction: reaction to create recipe from
         :param amount: amount in ``mg`` (Default value = 1)
         :param debug: bool: increase verbosity for debugging (Default value = False)
         :param pick_cheapest: bool: choose the cheapest solution (Default value = True)
-        :param permitted_reactions: once consider reactions in this set (Default value = None)
-        :param quoted_only: bool: only allow reactants with quotes (Default value = False)
-        :param supplier: None | str: optionally restrict quotes to only this supplier (Default value = None)
-        :param unavailable_reaction: define the behaviour for when a reaction has unavailable reactants (Default value = 'error')
-        :param inner: used to indicate that this is a recursive call (Default value = False)
+        :param permitted_reactions: once consider reactions in this set
+            (Default value = None)
+        :param quoted_only: bool: only allow reactants with quotes
+            (Default value = False)
+        :param supplier: None | str: optionally restrict quotes to only this supplier
+            (Default value = None)
+        :param unavailable_reaction: define the behaviour for when a reaction has
+            unavailable reactants (Default value = 'error')
+        :param inner: used to indicate that this is a recursive call
+            (Default value = False)
         :param get_ingredient_quotes: get quotes for ingredients in this recipe
 
         """
@@ -145,13 +152,17 @@ class Recipe:
                 else:
                     return []
 
-        def get_reactant_amount_pairs(reaction_model: ReactionModel) -> list[tuple[int, float]]:
+        def get_reactant_amount_pairs(
+            reaction_model: ReactionModel,
+        ) -> list[tuple[int, float]]:
             """Get pairs of reactant ID and float amounts"""
             if reaction_reactant_cache and reaction_model.id in reaction_reactant_cache:
                 print('reaction_reactant_cache used')
                 return reaction_reactant_cache[reaction_model.id]
             else:
-                pairs = Reaction(reaction_model).get_reactant_amount_pairs(compound_object=False)
+                pairs = Reaction(reaction_model).get_reactant_amount_pairs(
+                    compound_object=False
+                )
                 if reaction_reactant_cache is not None:
                     reaction_reactant_cache[reaction_model.id] = pairs
                 return pairs
@@ -260,15 +271,19 @@ class Recipe:
         debug: bool = False,
         **kwargs,
     ) -> 'Recipe | list[Recipe] | CompoundSet':
-        """Create a :class:`.Recipe` from a :class:`.ReactionSet` and its upstream dependencies
+        """Create a :class:`.Recipe` from a :class:`.ReactionSet` and its upstream
+        dependencies
 
         :param reactions: reactions to create recipe from
         :param amount: amount in ``mg`` (Default value = 1)
         :param debug: bool: increase verbosity for debugging (Default value = False)
         :param pick_cheapest: bool: choose the cheapest solution (Default value = True)
-        :param permitted_reactions: once consider reactions in this set (Default value = None)
-        :param final_products_only: don't get routes to intermediates (Default value = True)
-        :param return_products: return the :class:`.CompoundSet` of products instead (Default value = False)
+        :param permitted_reactions: once consider reactions in this set
+            (Default value = None)
+        :param final_products_only: don't get routes to intermediates
+            (Default value = True)
+        :param return_products: return the :class:`.CompoundSet` of products instead
+            (Default value = False)
 
         """
 
@@ -300,7 +315,8 @@ class Recipe:
             ids = reactions.db.execute(
                 f"""
                 SELECT DISTINCT compound_id FROM {self.db.SQL_SCHEMA_PREFIX}compound
-                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reactant ON compound_id = reactant_compound
+                LEFT JOIN {self.db.SQL_SCHEMA_PREFIX}reactant
+                    ON compound_id = reactant_compound
                 WHERE reactant_compound IS NULL
                 AND compound_id IN {products.str_ids}
             """
@@ -352,18 +368,26 @@ class Recipe:
         """Create recipe(s) to synthesis products in the :class:`.CompoundSet`
 
         :param compounds: set of compounds to find routes for
-        :param solve_combinations: bool: combinatorially combine all individual routes (Default value = True)
-        :param pick_first: return the first solution without comparison (Default value = False)
-        :param warn_multiple_solutions: warn if a compound has multiple routes (Default value = True)
-        :param pick_cheapest_inner_routes: for each compound choose the cheapest route (Default value = False)
+        :param solve_combinations: bool: combinatorially combine all individual routes
+            (Default value = True)
+        :param pick_first: return the first solution without comparison
+            (Default value = False)
+        :param warn_multiple_solutions: warn if a compound has multiple routes
+            (Default value = True)
+        :param pick_cheapest_inner_routes: for each compound choose the cheapest route
+            (Default value = False)
         :param reaction: reaction to create recipe from
         :param amount: amount in ``mg`` (Default value = 1)
         :param debug: bool: increase verbosity for debugging (Default value = False)
         :param pick_cheapest: bool: choose the cheapest solution (Default value = True)
-        :param permitted_reactions: once consider reactions in this set (Default value = None)
-        :param quoted_only: bool: only allow reactants with quotes (Default value = False)
-        :param supplier: None | str: optionally restrict quotes to only this supplier (Default value = None)
-        :param unavailable_reaction: define the behaviour for when a reaction has unavailable reactants (Default value = 'error')
+        :param permitted_reactions: once consider reactions in this set
+            (Default value = None)
+        :param quoted_only: bool: only allow reactants with quotes
+            (Default value = False)
+        :param supplier: None | str: optionally restrict quotes to only this supplier
+            (Default value = None)
+        :param unavailable_reaction: define the behaviour for when a reaction has
+            unavailable reactants (Default value = 'error')
 
         """
 
@@ -378,7 +402,6 @@ class Recipe:
 
         if not hasattr(amount, '__iter__'):
             amount = [amount] * n_comps
-
 
         if use_routes and supplier:
             raise NotImplementedError
@@ -434,7 +457,8 @@ class Recipe:
 
                 if not comp_options:
                     mrich.error(
-                        f'No solutions for compound={comp} ({Compound(comp).reactions.ids=})'
+                        f'No solutions for compound={comp} '
+                        f'({Compound(comp).reactions.ids=})'
                     )
                     continue
 
@@ -530,10 +554,12 @@ class Recipe:
     ) -> 'list[Recipe] | Recipe | CompoundSet':
         """Find the maximal recipe from a given set of reactants
 
-        :param reactants: :class:`.CompoundSet` or :class:`.IngredientSet` for the reactants. Ingredient amounts are ignored
+        :param reactants: :class:`.CompoundSet` or :class:`.IngredientSet` for the
+            reactants. Ingredient amounts are ignored
         :param amount: amount of each product needed (Default value = 1)
         :param debug: increase verbosity (Default value = False)
-        :param return_products: return products instead of recipe (Default value = False)
+        :param return_products: return products instead of recipe
+            (Default value = False)
         :param kwargs: passed to :meth:`.Recipe.from_reactions`
 
         """
@@ -739,7 +765,8 @@ class Recipe:
 
     @property
     def combined_compound_ids(self) -> set[int]:
-        """Combined :class:`.CompoundModel` IDs from :meth:`.Recipe.product_compounds` and :meth:`.Recipe.compounds`"""
+        """Combined :class:`.CompoundModel` IDs from :meth:`.Recipe.product_compounds`
+        and :meth:`.Recipe.compounds`"""
         return set(self.product_compounds.ids) | set(self.compounds.ids)
 
     @property
@@ -1073,9 +1100,10 @@ class Recipe:
                         label=labels,
                         # color = "blue"
                         customdata=customdata,
-                        # customdata = ["Long name A1", "Long name A2", "Long name B1", "Long name B2",
-                        # "Long name C1", "Long name C2"],
-                        # hovertemplate='CompoundModel %{label}<br><br>smiles=%{customdata}<extra></extra>',
+                        # customdata = ["Long name A1", "Long name A2", "Long name B1",
+                        # "Long name B2", "Long name C1", "Long name C2"],
+                        # hovertemplate='CompoundModel %{label}<br><br>'
+                        # 'smiles=%{customdata}<extra></extra>',
                         hovertemplate=hovertemplate,
                     ),
                     link=dict(
@@ -1236,7 +1264,8 @@ class Recipe:
         :param reactant_supplier: include the supplier (Default value = True)
         :param database: include the database (Default value = True)
         :param timestamp: add a timestamp (Default value = True)
-        :param compound_ids_only: ID's only (instead of full :attr:`.IngredientSet.df`) (Default value = False)
+        :param compound_ids_only: ID's only (instead of full :attr:`.IngredientSet.df`)
+            (Default value = False)
         :param products: include products (Default value = True)
         :param serialise_price: serialise :class:`.Price` object (Default value = False)
 
@@ -1346,7 +1375,8 @@ class Recipe:
 
         .. attention::
 
-            This method requires a populated `route` table. For a workaround use :meth:`.CompoundSet.write_CAR_csv` instead
+            This method requires a populated `route` table. For a workaround use
+            :meth:`.CompoundSet.write_CAR_csv` instead
 
         Columns:
 
@@ -1443,7 +1473,8 @@ class Recipe:
         reaction_type_counts: bool = True,
         return_df: bool = False,
     ) -> 'DataFrame | None':
-        """Detailed CSV output including reactant information for purchasing and information on the downstream synthetic use
+        """Detailed CSV output including reactant information for purchasing and
+        information on the downstream synthetic use
 
         ReactantModel
         ========
@@ -1497,20 +1528,26 @@ class Recipe:
 
         sql = f"""
         WITH reactants AS (
-            SELECT component_ref AS reactant_id, component_route AS route_id FROM {self.db.SQL_SCHEMA_PREFIX}component
+            SELECT component_ref AS reactant_id, component_route AS route_id
+            FROM {self.db.SQL_SCHEMA_PREFIX}component
             WHERE component_type = 2
             AND component_ref IN {self.reactants.compounds.str_ids}
         ),
 
         reactions AS (
-            SELECT component_ref AS reaction_id, component_route AS route_id, reaction_type FROM {self.db.SQL_SCHEMA_PREFIX}component
-            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reaction ON component_ref = reaction_id
+            SELECT component_ref AS reaction_id, component_route AS route_id,
+                reaction_type
+            FROM {self.db.SQL_SCHEMA_PREFIX}component
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reaction
+            ON component_ref = reaction_id
             WHERE component_type = 1
             AND component_ref IN {self.reactions.str_ids}
         )
 
-        SELECT reactants.reactant_id, reactions.reaction_id, reactions.reaction_type FROM {self.db.SQL_SCHEMA_PREFIX}reactants
-        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactions ON reactants.route_id = reactions.route_id
+        SELECT reactants.reactant_id, reactions.reaction_id, reactions.reaction_type
+        FROM {self.db.SQL_SCHEMA_PREFIX}reactants
+        INNER JOIN {self.db.SQL_SCHEMA_PREFIX}reactions
+            ON reactants.route_id = reactions.route_id
         """
         reaction_lookup = {}
         for reactant_id, reaction_id, reaction_type in self.db.execute(sql):
@@ -1666,7 +1703,8 @@ class Recipe:
     def write_product_csv(
         self, file: 'str | Path', return_df: bool = False
     ) -> 'pd.DataFrame | None':
-        """Detailed CSV output including product information for selection and synthesis"""
+        """Detailed CSV output including product information for selection and
+        synthesis"""
 
         # from rich import print
         from designdb.sets.pose import PoseSet
@@ -2230,14 +2268,17 @@ class Recipe:
         for intermediate in self.intermediates:
             if intermediate not in reaction_intermediates:
                 mrich.error(
-                    f'Intermediate: {intermediate} is not in self.reactions.intermediates'
+                    f'Intermediate: {intermediate} is not in '
+                    f'self.reactions.intermediates'
                 )
                 return False
 
         # reactants
         for reactant in self.reactants:
             if reactant not in reaction_reactants:
-                mrich.error(f'ReactantModel: {reactant} is not in self.reactions.reactants')
+                mrich.error(
+                    f'ReactantModel: {reactant} is not in self.reactions.reactants'
+                )
                 return False
 
         # all reactions should have enough reactant
@@ -2264,7 +2305,8 @@ class Recipe:
 
                 if reactant_ingredient.amount < required_amount:
                     mrich.error(
-                        f'Not enough of {reactant_ingredient.compound}: {reactant_ingredient.amount} < {required_amount}'
+                        f'Not enough of {reactant_ingredient.compound}: '
+                        f'{reactant_ingredient.amount} < {required_amount}'
                     )
                     return False
 
@@ -2274,7 +2316,8 @@ class Recipe:
         return True
 
     def add_ingredient(self, ingredient: 'Ingredient', amount: float = 1):
-        """Add an :class:`.Ingredient` object for direct purchase (no associated reactions)"""
+        """Add an :class:`.Ingredient` object for direct purchase (no associated
+        reactions)"""
         self.compounds.add(ingredient)
 
     ### DUNDERS
@@ -2300,7 +2343,10 @@ class Recipe:
 
         if self.reactions:
             if self.intermediates:
-                s = f'{self.reactants} --> {self.intermediates} --> {self.products} via {self.reactions}'
+                s = (
+                    f'{self.reactants} --> {self.intermediates} --> '
+                    f'{self.products} via {self.reactions}'
+                )
             else:
                 s = f'{self.reactants} --> {self.products} via {self.reactions}'
 
@@ -2322,7 +2368,10 @@ class Recipe:
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""
-        return f'{mcol.bold}{mcol.underline}{self.__longstr()}{mcol.unbold}{mcol.ununderline}'
+        return (
+            f'{mcol.bold}{mcol.underline}{self.__longstr()}'
+            f'{mcol.unbold}{mcol.ununderline}'
+        )
 
     def __rich__(self) -> str:
         """Rich Formatted string representation"""
@@ -2338,8 +2387,6 @@ class Recipe:
         if hasattr(other, 'compounds'):
             result.compounds += other.compounds
         return result
-
-
 
 
 # name conflict with route model. Trying to get rid of this entirely

@@ -449,7 +449,10 @@ class IngestionService:
         # temp hack: disable a trigger that runs on every score
         # insertion and later enable it
         cursor = connection.cursor()
-        cursor.execute("ALTER TABLE designdb.score_values DISABLE TRIGGER trg_score_values_refresh_pivoted_mv;")
+        cursor.execute(
+            'ALTER TABLE designdb.score_values '
+            'DISABLE TRIGGER trg_score_values_refresh_pivoted_mv;'
+        )
 
         for r in records:
             result.attempts += 1
@@ -526,8 +529,14 @@ class IngestionService:
             scorer.add_scores_from_record(pose=pose, record=r)
 
         # re-enable trigger and populate matview
-        cursor.execute("ALTER TABLE designdb.score_values ENABLE TRIGGER trg_score_values_refresh_pivoted_mv;")
-        cursor.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY designdb.scores_per_pose_pivoted_mv;")
+        cursor.execute(
+            'ALTER TABLE designdb.score_values '
+            'ENABLE TRIGGER trg_score_values_refresh_pivoted_mv;'
+        )
+        cursor.execute(
+            'REFRESH MATERIALIZED VIEW CONCURRENTLY '
+            'designdb.scores_per_pose_pivoted_mv;'
+        )
 
         return result
 
@@ -643,7 +652,9 @@ class IngestionService:
                     mrich.warning('Skipping unsupported chemistry:', reaction_type)
                     continue
                 # except Exception:
-                #     mrich.error('Uncaught error with row', i, 'route', j, 'reaction', k)
+                #     mrich.error(
+                #         'Uncaught error with row', i, 'route', j, 'reaction', k
+                #     )
                 #     continue
 
                 products.add(Ingredient.from_compound(product, amount=1))
@@ -976,7 +987,9 @@ class IngestionService:
                 # comp service?
                 for superstructure_id in superstructure_ids:
                     base = CompoundModel.objects.get(pk=scaffold_id)
-                    superstructure = CompoundModel.objects.get(pk=int(superstructure_id))
+                    superstructure = CompoundModel.objects.get(
+                        pk=int(superstructure_id)
+                    )
                     ScaffoldModel.objects.get_or_create(
                         base_compound=base,
                         superstructure_compound=superstructure,

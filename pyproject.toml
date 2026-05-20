@@ -95,6 +95,7 @@ exclude = [
   "tests",
   "migrations",
   "hippo",
+  "hippo_legacy",
 ]
 force-exclude = true
 
@@ -118,16 +119,13 @@ exclude = [
     "migrations",
     "tests",
     "hippo",
+    "hippo_legacy",
 ]
 
 [tool.isort]
 profile = "hug"
 src_paths = ["src", "tests"]
 
-# [tool.hatch.build]
-# include = [
-#     "hippo/*.py",
-# ]
 
 [tool.uv.sources]
 django-rdkit = { git = "https://github.com/rdkit/django-rdkit" }

@@ -117,7 +117,9 @@ class RouteSet:
     @property
     def product_ids(self) -> list[int]:
         """Get the :class:`.CompoundModel` ID's of the products"""
-        return RouteModel.objects.values_list('product_compound__id', flat=True).distinct()
+        return RouteModel.objects.values_list(
+            'product_compound__id', flat=True
+        ).distinct()
 
     @property
     def reactant_ids(self) -> list[int]:
@@ -152,7 +154,8 @@ class RouteSet:
     def cluster_map(self) -> dict[tuple, set]:
         """Create a dictionary grouping routes by their scaffold/base cluster.
 
-        :returns: A dictionary mapping a tuple of scaffold :class:`.CompoundModel` IDs to a set of :class:`.RouteModel` ID's to their superstructures.
+        :returns: A dictionary mapping a tuple of scaffold :class:`.CompoundModel` IDs
+            to a set of :class:`.RouteModel` ID's to their superstructures.
         """
 
         if self._cluster_map is None:
@@ -240,7 +243,8 @@ class RouteSet:
                     WHEN count_valid IS NULL THEN 1
                 END)
             AS [count_unavailable] FROM {self.db.SQL_SCHEMA_PREFIX}route
-            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component ON component_route = route_id
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}component
+            ON component_route = route_id
             LEFT JOIN possible_reactants ON quote_compound = component_ref
             WHERE component_type = 2
             GROUP BY route_id
@@ -273,7 +277,8 @@ class RouteSet:
     def balanced_pop(
         self, permitted_clusters: set[tuple] | None = None, debug: bool = False
     ) -> 'RouteModel':
-        """Pop a route from this set, while maintaining the balance of scaffold clusters populations"""
+        """Pop a route from this set, while maintaining the balance of scaffold
+        clusters populations"""
 
         if not self._data:
             mrich.print('RouteSet depleted')

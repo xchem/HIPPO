@@ -2,12 +2,7 @@
 
 import mcol
 import mrich
-from designdb.models import (
-    CataloguePriceCompoundJunctionModel,
-    CompoundModel,
-    ReactantModel,
-    ReactionModel,
-)
+from designdb.models import CataloguePriceCompoundJunctionModel, CompoundModel, ReactionModel
 
 from .compound import Compound
 
@@ -52,9 +47,7 @@ class Reaction:
     @property
     def reactant_ids(self) -> list[int]:
         """Returns the reactant :class:`.CompoundModel` PKs"""
-        return list(
-            self._instance.reactants.values_list('compound_id', flat=True)
-        )
+        return list(self._instance.reactants.values_list('compound_id', flat=True))
 
     @property
     def product_smiles(self) -> str:
@@ -74,9 +67,7 @@ class Reaction:
 
     ### METHODS
 
-    def get_reactant_amount_pairs(
-        self, compound_object: bool = True
-    ) -> list[tuple]:
+    def get_reactant_amount_pairs(self, compound_object: bool = True) -> list[tuple]:
         """Returns pairs of (compound, amount) for each reactant.
 
         :param compound_object: return :class:`.Compound` objects instead of IDs
@@ -149,6 +140,7 @@ class Reaction:
         :param amount: amount in mg
         """
         from .recipe import Recipe  # local to break circular import
+
         return Recipe.from_reaction(
             self._instance,
             amount=amount,
@@ -164,7 +156,10 @@ class Reaction:
         return f'R{self.id}'
 
     def __repr__(self) -> str:
-        return f'{mcol.bold}{mcol.underline}{self.plain_repr}{mcol.unbold}{mcol.ununderline}'
+        return (
+            f'{mcol.bold}{mcol.underline}{self.plain_repr}'
+            f'{mcol.unbold}{mcol.ununderline}'
+        )
 
     def __rich__(self) -> str:
         return f'[bold underline]{self.plain_repr}'

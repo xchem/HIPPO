@@ -29,7 +29,9 @@ class CompoundSet:
 
     .. attention::
 
-            :class:`.CompoundSet` objects should not be created directly. Instead use the :meth:`.HIPPO.compounds` property. See :doc:`getting_started` and :doc:`insert_elaborations`.
+            :class:`.CompoundSet` objects should not be created directly. Instead use
+            the :meth:`.HIPPO.compounds` property. See :doc:`getting_started` and
+            :doc:`insert_elaborations`.
 
     Use as an iterable
     ==================
@@ -137,7 +139,9 @@ class CompoundSet:
         self,
         other: 'CompoundModel | CompoundSet | IngredientSet',
     ) -> 'CompoundSet':
-        """Subtract a :class:`.CompoundModel` object or ID from this set, or subtract multiple at once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
+        """Subtract a :class:`.CompoundModel` object or ID from this set, or subtract
+        multiple at once when ``other`` is a :class:`.CompoundSet` or
+        :class:`.IngredientSet`"""
 
         match other:
             case CompoundSet():
@@ -149,7 +153,9 @@ class CompoundSet:
                 )
             case int():
                 return CompoundSet(
-                    CompoundModel.objects.filter(Q(pk__in=self._queryset) & ~Q(pk=other.pk)),
+                    CompoundModel.objects.filter(
+                        Q(pk__in=self._queryset) & ~Q(pk=other.pk)
+                    ),
                     sort=False,
                 )
 
@@ -157,7 +163,8 @@ class CompoundSet:
         self,
         other: 'CompoundModel | CompoundSet | IngredientSet | int',
     ) -> 'CompoundSet':
-        """Add a :class:`.CompoundModel` object or ID to this set, or add multiple at once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
+        """Add a :class:`.CompoundModel` object or ID to this set, or add multiple at
+        once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
 
         match other:
             case CompoundModel():
@@ -226,7 +233,8 @@ class CompoundSet:
                 raise NotImplementedError
 
     def __xor__(self, other: 'CompoundSet'):
-        """Exclusive OR set operation, returns all compounds in either set but not both"""
+        """Exclusive OR set operation, returns all compounds in either set but
+        not both"""
 
         match other:
             case CompoundSet():
@@ -294,7 +302,8 @@ class CompoundSet:
             return CompoundSet(self._queryset.filter(has_tag=True))
 
     def get_by_metadata(self, key: str, value: str | None = None) -> 'CompoundSet':
-        """Get all child compounds with by their metadata. If no value is passed, then simply containing the key in the metadata dictionary is sufficient
+        """Get all child compounds with by their metadata. If no value is passed, then
+        simply containing the key in the metadata dictionary is sufficient
 
         :param key: metadata key
         :param value: metadata value (Default value = None)
@@ -326,7 +335,10 @@ class CompoundSet:
         values = self.db.select_where(
             query='scaffold_superstructure',
             table='scaffold',
-            key=f'scaffold_base = {scaffold} AND scaffold_superstructure IN {self.str_ids}',
+            key=(
+                f'scaffold_base = {scaffold}'
+                f' AND scaffold_superstructure IN {self.str_ids}'
+            ),
             multiple=True,
             none=none,
         )
@@ -347,7 +359,7 @@ class CompoundSet:
         try:
             sp = superparent(mol)
         except Exception as e:
-            raise ValueError(f"SuperParent failed: {e}") from e
+            raise ValueError(f'SuperParent failed: {e}') from e
 
         h = registration_hash_tautomer_insensitive(sp)
         return self._queryset.get(compound_hash=h)
@@ -356,7 +368,8 @@ class CompoundSet:
         self,
         debug: bool = False,
     ) -> 'CompoundSet':
-        """Recursively searches for all the reactants that could possible be needed to synthesise these compounds.
+        """Recursively searches for all the reactants that could possible be needed to
+        synthesise these compounds.
 
         :param debug: Increased verbosity for debugging (Default value = False)
 
@@ -392,7 +405,8 @@ class CompoundSet:
         self,
         debug: bool = False,
     ) -> 'ReactionSet':
-        """Recursively searches for all the reactants that could possible be needed to synthesise these compounds.
+        """Recursively searches for all the reactants that could possible be needed to
+        synthesise these compounds.
 
         :param debug: Increased verbosity for debugging (Default value = False)
 
@@ -424,9 +438,11 @@ class CompoundSet:
         return ReactionModel.objects.filter(product__compound__in=seen)
 
     def get_risk_diversity(self, debug: bool = False) -> float:
-        """Calculate the average spread of risk (#atoms added) for each scaffold in this set
+        """Calculate the average spread of risk (#atoms added) for each scaffold in
+        this set
 
-        :returns: average of the standard deviations of number of atoms added for each scaffold
+        :returns: average of the standard deviations of number of atoms added for each
+            scaffold
 
         """
 
@@ -434,10 +450,14 @@ class CompoundSet:
             f"""
         WITH nums AS (
             SELECT scaffold_base AS base, scaffold_superstructure AS elab,
-            {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(c2.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(c1.compound_mol) AS diff
+            {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(c2.compound_mol)
+            - {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(c1.compound_mol)
+            AS diff
             FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
-            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound AS c1 ON scaffold_base = c1.compound_id
-            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound AS c2 ON scaffold_superstructure = c2.compound_id
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound AS c1
+            ON scaffold_base = c1.compound_id
+            INNER JOIN {self.db.SQL_SCHEMA_PREFIX}compound AS c2
+            ON scaffold_superstructure = c2.compound_id
             WHERE scaffold_superstructure IN {self.str_ids}
         ),
 
@@ -556,7 +576,8 @@ class CompoundSet:
         # compounds with poses
 
         sql = f"""
-        SELECT tag_name, COUNT(DISTINCT pose_compound) FROM {self.db.SQL_SCHEMA_PREFIX}tag
+        SELECT tag_name, COUNT(DISTINCT pose_compound)
+        FROM {self.db.SQL_SCHEMA_PREFIX}tag
         INNER JOIN {self.db.SQL_SCHEMA_PREFIX}pose
         ON tag_pose = pose_id
         WHERE pose_compound IN {self.str_ids}
@@ -794,7 +815,8 @@ class CompoundSet:
     ) -> 'RouteSet':
         """Get a RoutSet to products in this set.
 
-        :param permitted_reactions: optionally restrict reactions to those in this :class:`.ReactionSet`
+        :param permitted_reactions: optionally restrict reactions to those in this
+            :class:`.ReactionSet`
 
         """
 
@@ -920,11 +942,14 @@ class CompoundSet:
         :param alias: include alias column (Default value = True)
         :param mol: include ``rdkit.Chem.Mol`` in output (Default value = False)
         :param metadata: include metadata in output (Default value = False)
-        :param expand_metadata: create separate column for each metadata key (Default value = True)
+        :param expand_metadata: create separate column for each metadata key
+            (Default value = True)
         :param poses: include poses in output (Default value = False)
         :param num_reactant: include num_poses column
-        :param num_reactant: include num_reactant column (number of reactions where compound is a reactant)
-        :param num_reactions: include num_reactions column (number of reactions where compound is a product)
+        :param num_reactant: include num_reactant column (number of reactions where
+            compound is a reactant)
+        :param num_reactions: include num_reactions column (number of reactions where
+            compound is a product)
         :param tags: include tags column
         :param scaffolds: include scaffolds column
         :param elabs: include elabs column
@@ -1103,7 +1128,8 @@ class CompoundSet:
         return self - quoted
 
     def get_dict(self) -> dict:
-        """Get a dictionary object with all serialisable data needed to reconstruct this set"""
+        """Get a dictionary object with all serialisable data needed to reconstruct
+        this set"""
         return dict(db=str(self.db.path.resolve()), indices=self.indices)
 
     def write_smiles_csv(
@@ -1333,7 +1359,8 @@ class CompoundSet:
                             row[f'reactant-2-{i}'] = reaction.reactants[1].smiles
                         case _:
                             raise NotImplementedError(
-                                f'Unsupported number of reactants for {reaction=}: {len(reaction.reactants)}'
+                                f'Unsupported number of reactants for'
+                                f' {reaction=}: {len(reaction.reactants)}'
                             )
 
                     row[f'reaction-product-smiles-{i}'] = reaction.product.smiles
@@ -1655,7 +1682,8 @@ class CompoundSet:
 
     @property
     def atomtype_dict(self) -> dict[str, int]:
-        """Get a dictionary with atomtypes as keys and corresponding quantities/counts as values"""
+        """Get a dictionary with atomtypes as keys and corresponding
+        quantities/counts as values"""
         from molparse.atomtypes import combine_atomtype_dicts
 
         atomtype_dicts = [c.atomtype_dict for c in self]
@@ -1669,12 +1697,16 @@ class CompoundSet:
 
         """
 
+        nha = self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']
         sql = f"""
         WITH nums AS (
             SELECT
                 A.compound_id AS comp_id,
-                {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(A.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(B.compound_mol) AS diff
-            FROM {self.db.SQL_SCHEMA_PREFIX}compound A, {self.db.SQL_SCHEMA_PREFIX}compound B
+                {nha}(A.compound_mol)
+                - {nha}(B.compound_mol)
+                AS diff
+            FROM {self.db.SQL_SCHEMA_PREFIX}compound A,
+            {self.db.SQL_SCHEMA_PREFIX}compound B
             WHERE A.compound_base = B.compound_id
             AND A.compound_id IN {self.str_ids}
         )
@@ -1695,15 +1727,20 @@ class CompoundSet:
     def avg_num_atoms_added(self) -> float:
         """Calculate the average number of atoms added w.r.t the scaffold
 
-        :returns: average number of atoms added values for compounds which have a scaffold
+        :returns: average number of atoms added values for compounds which have a
+            scaffold
 
         """
+        nha = self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']
         sql = f"""
         WITH nums AS (
             SELECT
                 A.compound_id AS comp_id,
-                {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(A.compound_mol) - {self.db.COMPOUND_PROPERTY_FUNCTIONS['num_heavy_atoms']}(B.compound_mol) AS diff
-            FROM {self.db.SQL_SCHEMA_PREFIX}compound A, {self.db.SQL_SCHEMA_PREFIX}compound B
+                {nha}(A.compound_mol)
+                - {nha}(B.compound_mol)
+                AS diff
+            FROM {self.db.SQL_SCHEMA_PREFIX}compound A,
+            {self.db.SQL_SCHEMA_PREFIX}compound B
             WHERE A.compound_base = B.compound_id
             AND A.compound_id IN {self.str_ids}
         )
@@ -1720,9 +1757,11 @@ class CompoundSet:
 
     @property
     def risk_diversity(self) -> float:
-        """Calculate the average spread of risk (#atoms added) for each scaffold in this set
+        """Calculate the average spread of risk (#atoms added) for each scaffold in
+        this set
 
-        :returns: average of the standard deviations of number of atoms added for each scaffold
+        :returns: average of the standard deviations of number of atoms added for each
+            scaffold
 
         """
 
@@ -1730,7 +1769,8 @@ class CompoundSet:
 
     @property
     def elaboration_balance(self) -> float:
-        """Measure of how evenly elaborations are distributed across scaffolds in this set"""
+        """Measure of how evenly elaborations are distributed across scaffolds in
+        this set"""
 
         sql = f"""
         SELECT COUNT(1) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
@@ -1750,7 +1790,8 @@ class CompoundSet:
 
     @property
     def num_scaffolds_elaborated(self) -> int:
-        """Count the number of scaffold compounds that have at least one elaboration in this set
+        """Count the number of scaffold compounds that have at least one elaboration in
+        this set
 
         :returns: number of scaffold compounds
 
@@ -1758,7 +1799,8 @@ class CompoundSet:
 
         (count,) = self.db.execute(
             f"""
-                SELECT COUNT(DISTINCT scaffold_base) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
+                SELECT COUNT(DISTINCT scaffold_base)
+                FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
                 WHERE scaffold_superstructure IN {self.str_ids}
             """
         ).fetchone()
@@ -1790,7 +1832,8 @@ class CompoundSet:
         """Return a count of scaffolds of this set"""
         (count,) = self.db.execute(
             f"""
-                SELECT COUNT(DISTINCT scaffold_base) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
+                SELECT COUNT(DISTINCT scaffold_base)
+                FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
                 WHERE scaffold_superstructure IN {self.str_ids}
             """
         ).fetchone()
@@ -1798,12 +1841,16 @@ class CompoundSet:
 
     @property
     def elabs(self) -> 'CompoundSet':
-        """Returns a :class:`.CompoundSet` of all compounds that are a an elaboration of an existing scaffold"""
+        """Returns a :class:`.CompoundSet` of all compounds that are a an elaboration
+        of an existing scaffold"""
 
         ids = self.db.select_where(
             query='scaffold_superstructure',
             table='scaffold',
-            key=f'scaffold_superstructure IS NOT NULL and scaffold_base IN {self.str_ids}',
+            key=(
+                f'scaffold_superstructure IS NOT NULL'
+                f' and scaffold_base IN {self.str_ids}'
+            ),
             multiple=True,
             none='quiet',
         )
@@ -1819,7 +1866,8 @@ class CompoundSet:
         """Return a count of elaborations of this set"""
         (count,) = self.db.execute(
             f"""
-                SELECT COUNT(DISTINCT scaffold_superstructure) FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
+                SELECT COUNT(DISTINCT scaffold_superstructure)
+                FROM {self.db.SQL_SCHEMA_PREFIX}scaffold
                 WHERE scaffold_base IN {self.str_ids}
             """
         ).fetchone()
@@ -1879,7 +1927,8 @@ class CompoundSet:
 
     @property
     def reaction_ids(self) -> list[int]:
-        """Returns a list of :class:`.ReactionModel` IDs that result in members of this set"""
+        """Returns a list of :class:`.ReactionModel` IDs that result in members of
+        this set"""
         records = self.db.select_where(
             table='reaction',
             query='reaction_id',
@@ -1892,11 +1941,15 @@ class CompoundSet:
 
 
 class IngredientSet:
-    """An :class:`.Ingredient` is a :class:`.CompoundModel` with a fixed quanitity and an attached quote, the :class:`.IngredientSet` is a object representing multiple ingredients.
+    """An :class:`.Ingredient` is a :class:`.CompoundModel` with a fixed quanitity and
+    an attached quote, the :class:`.IngredientSet` is a object representing multiple
+    ingredients.
 
     .. attention::
 
-            :class:`.IngredientSet` objects should not be created directly. Instead they are returned by several methods when working with :doc:`quoting` and :doc:`rgen`.
+            :class:`.IngredientSet` objects should not be created directly. Instead they
+            are returned by several methods when working with :doc:`quoting` and
+            :doc:`rgen`.
 
     Selecting ingredients in the set
     ================================
@@ -2124,7 +2177,8 @@ class IngredientSet:
     ) -> 'IngredientSet':
         """Create an :class:`.IngredientSet` from a :class:`.CompoundSet` or IDs
 
-        :param compounds: :class:`.CompoundSet` to use, if ``None`` must provide ``ids`` and ``db`` (Default value = None)
+        :param compounds: :class:`.CompoundSet` to use, if ``None`` must provide
+            ``ids`` and ``db`` (Default value = None)
         :param ids: CompoundModel IDs (Default value = None)
         :param db: HIPPO Database (Default value = None)
         :param amount: Amount(s) in ``mg`` (Default value = 1)
@@ -2247,13 +2301,16 @@ class IngredientSet:
     ) -> None:
         """Add an :class:`.Ingredient` to this set
 
-        :param ingredient: :class:`.Ingredient` to be added, if ``None`` must specify other parameters, (Default value = None)
+        :param ingredient: :class:`.Ingredient` to be added, if ``None`` must specify
+            other parameters, (Default value = None)
         :param compound_id: :class:`.CompoundModel` ID (Default value = None)
         :param amount: amount in ``mg`` (Default value = None)
         :param quote_id: :class:`.Quote` ID (Default value = None)
         :param supplier: supplier name string or list (Default value = None)
-        :param max_lead_time: maximum lead-time for quoting (in days) (Default value = None)
-        :param quoted_amount: amount of associated :class:`.Quote` (Default value = None)
+        :param max_lead_time: maximum lead-time for quoting (in days)
+            (Default value = None)
+        :param quoted_amount: amount of associated :class:`.Quote`
+            (Default value = None)
         :param debug: increase verbosity for debugging (Default value = False)
 
         """
@@ -2395,7 +2452,8 @@ class IngredientSet:
         # pairs = self.db.execute(
         #     f"""
         #     WITH matching_quotes AS (
-        #         SELECT quote_id, quote_compound, MIN(quote_price) FROM {self.db.SQL_SCHEMA_PREFIX}quote
+        #         SELECT quote_id, quote_compound, MIN(quote_price)
+        #         FROM {self.db.SQL_SCHEMA_PREFIX}quote
         #         WHERE quote_compound IN {self.str_compound_ids}
         #         AND quote_amount >= {amount}
         #         GROUP BY quote_compound
@@ -2418,7 +2476,8 @@ class IngredientSet:
     def get_dict(self, data_orient: str = 'list') -> dict:
         """Get serialisable dictionary
 
-        :param data_orient: passed to ``pandas.DataFrame.to_dict`` (Default value = 'list')
+        :param data_orient: passed to ``pandas.DataFrame.to_dict``
+            (Default value = 'list')
 
         """
         return dict(

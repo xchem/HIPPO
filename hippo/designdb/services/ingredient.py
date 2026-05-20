@@ -5,7 +5,6 @@ from django.db.models import Exists, OuterRef, Q
 
 
 class IngredientService:
-
     @staticmethod
     def get_quotes(
         compound: CompoundModel,
@@ -44,7 +43,8 @@ class IngredientService:
 
             if not qs.exists():
                 mrich.debug(
-                    f'No quote available for C{compound.pk} with amount >= {min_amount} mg. Estimating price...'
+                    f'No quote available for C{compound.pk} with amount >= '
+                    f'{min_amount} mg. Estimating price...'
                 )
 
         if pick_cheapest:

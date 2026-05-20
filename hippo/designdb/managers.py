@@ -1,15 +1,5 @@
 from django.apps import apps
-from django.db.models import (
-    BooleanField,
-    Case,
-    F,
-    Func,
-    Manager,
-    OuterRef,
-    QuerySet,
-    Subquery,
-    When,
-)
+from django.db.models import Manager, QuerySet
 from rdkit import Chem
 
 from .utils import registration_hash_tautomer_insensitive, superparent
@@ -17,22 +7,20 @@ from .utils import registration_hash_tautomer_insensitive, superparent
 
 class CompoundQueryset(QuerySet):
     def filter_qs(self):
-        CompoundModel = apps.get_model("designdb", "CompoundModel")
+        CompoundModel = apps.get_model('designdb', 'CompoundModel')
         qs = CompoundModel.objects.all()
         return qs
-
 
     def get_by_smiles(self, smiles):
         mol = Chem.MolFromSmiles(smiles, sanitize=True)
         try:
             sp = superparent(mol)
         except Exception as e:
-            raise ValueError(f"SuperParent failed: {e}") from e
+            raise ValueError(f'SuperParent failed: {e}') from e
 
         h = registration_hash_tautomer_insensitive(sp)
 
         return self.filter_qs().get(compound_hash=h)
-
 
 
 class CompoundManager(Manager):
@@ -45,7 +33,7 @@ class CompoundManager(Manager):
         try:
             sp = superparent(mol)
         except Exception as e:
-            raise ValueError(f"SuperParent failed: {e}") from e
+            raise ValueError(f'SuperParent failed: {e}') from e
 
         h = registration_hash_tautomer_insensitive(sp)
 

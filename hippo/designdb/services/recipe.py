@@ -1,11 +1,11 @@
 import mrich
+from designdb.components.recipe import Recipe
 from designdb.models import CompoundModel, ReactionModel
 from designdb.sets.compound import IngredientSet
 from designdb.sets.reaction import ReactionSet
 
 
 class RecipeService:
-
     @staticmethod
     def from_reaction(
         reaction,
@@ -30,7 +30,8 @@ class RecipeService:
 
         if debug:
             mrich.debug(
-                f'RecipeService.from_reaction(R{reaction.id}, {amount=}, {pick_cheapest=})'
+                f'RecipeService.from_reaction(R{reaction.id}, '
+                f'{amount=}, {pick_cheapest=})'
             )
             mrich.debug(f'{reaction.product.id=}')
             mrich.debug(f'{reaction.reactants.ids=}')
@@ -72,7 +73,9 @@ class RecipeService:
                 else:
                     return []
 
-        def get_reactant_amount_pairs(reaction: 'ReactionModel') -> list[tuple[int, float]]:
+        def get_reactant_amount_pairs(
+            reaction: 'ReactionModel',
+        ) -> list[tuple[int, float]]:
             """Get pairs of reactant ID and float amounts"""
             if reaction_reactant_cache and reaction.id in reaction_reactant_cache:
                 print('reaction_reactant_cache used')
@@ -187,7 +190,6 @@ class RecipeService:
         """Create a Recipe from a ReactionSet and its upstream dependencies."""
 
         from designdb.components.recipe import Recipe
-        from designdb.sets.compound import CompoundSet
 
         assert isinstance(reactions, ReactionSet)
 
