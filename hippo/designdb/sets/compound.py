@@ -20,7 +20,8 @@ from designdb.models import (
     RouteModel,
     ScaffoldModel,
 )
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q, QuerySet
+from django.db.models.query import ModelIterable
 from pandas import DataFrame
 from rdkit import Chem
 
@@ -47,7 +48,7 @@ class CompoundSet:
     Use as an iterable
     ==================
 
-    Iterate through :class:`.CompoundModel` objects in the set:
+    Iterate through :class:`.Compound` component objects in the set:
 
     ::
 
@@ -100,13 +101,21 @@ class CompoundSet:
     ) -> None:
         """CompoundSet initialisation"""
 
-        if queryset:
-            if isinstance(queryset, list):
-                self._queryset = CompoundModel.objects.filter(pk__in=queryset)
-            else:
-                self._queryset = queryset
-        else:
+        # Normalise any input to a CompoundModel instance queryset (stored
+        # internally); indexing/iteration wrap these as Compound components.
+        if queryset is None:
             self._queryset = CompoundModel.objects.none()
+        elif isinstance(queryset, QuerySet) and queryset._iterable_class is (
+            ModelIterable
+        ):
+            # already a model-instance queryset -- keep it (stays lazy)
+            self._queryset = queryset
+        else:
+            # any other iterable of ids or instances (list, set, tuple,
+            # values_list queryset, ...) -> resolve to pks and filter
+            self._queryset = CompoundModel.objects.filter(
+                pk__in=[getattr(x, 'pk', x) for x in queryset]
+            )
 
         if sort:
             self._queryset = self._queryset.order_by('pk')
@@ -120,13 +129,13 @@ class CompoundSet:
         return self._queryset.count()
 
     def __iter__(self):
-        """Iterate through compounds in this set"""
-        return iter(self._queryset)
+        """Iterate through compounds in this set as :class:`.Compound` components"""
+        return (Compound(c) for c in self._queryset)
 
     def __getitem__(
         self,
         key: int | slice,
-    ) -> 'CompoundModel | CompoundSet':
+    ) -> 'Compound | CompoundSet':
         """Get compounds or subsets thereof from this set
 
         :param key: integer index or slice of indices
@@ -140,7 +149,7 @@ class CompoundSet:
                 idx = key + n if key < 0 else key
                 if not 0 <= idx < n:
                     raise IndexError(f'CompoundSet index out of range: {key}')
-                return self._queryset[idx]
+                return Compound(self._queryset[idx])
 
             case slice():
                 # positional slice of the ordered members. Slice `.all()` (a
@@ -155,11 +164,11 @@ class CompoundSet:
 
     def __sub__(
         self,
-        other: 'CompoundModel | CompoundSet | IngredientSet',
+        other: 'Compound | CompoundModel | CompoundSet | IngredientSet | int',
     ) -> 'CompoundSet':
-        """Subtract a :class:`.CompoundModel` object or ID from this set, or subtract
-        multiple at once when ``other`` is a :class:`.CompoundSet` or
-        :class:`.IngredientSet`"""
+        """Subtract a :class:`.Compound`/:class:`.CompoundModel` object or ID from
+        this set, or subtract multiple at once when ``other`` is a
+        :class:`.CompoundSet` or :class:`.IngredientSet`"""
 
         # local import to avoid the IngredientSet <-> CompoundSet cycle
         from designdb.sets.ingredient import IngredientSet
@@ -170,6 +179,8 @@ class CompoundSet:
         match other:
             case CompoundSet() | IngredientSet():
                 ids -= set(other.ids)
+            case Compound() | CompoundModel():
+                ids.discard(other.pk)
             case int():
                 ids.discard(other)
             case _:
@@ -178,10 +189,11 @@ class CompoundSet:
 
     def __add__(
         self,
-        other: 'CompoundModel | CompoundSet | IngredientSet | int',
+        other: 'Compound | CompoundModel | CompoundSet | IngredientSet | int',
     ) -> 'CompoundSet':
-        """Add a :class:`.CompoundModel` object or ID to this set, or add multiple at
-        once when ``other`` is a :class:`.CompoundSet` or :class:`.IngredientSet`"""
+        """Add a :class:`.Compound`/:class:`.CompoundModel` object or ID to this set,
+        or add multiple at once when ``other`` is a :class:`.CompoundSet` or
+        :class:`.IngredientSet`"""
 
         # local import to avoid the IngredientSet <-> CompoundSet cycle
         from designdb.sets.ingredient import IngredientSet
@@ -190,7 +202,7 @@ class CompoundSet:
         # subqueries that recurse when accumulated (e.g. combining many recipes)
         ids = set(self._queryset.values_list('pk', flat=True))
         match other:
-            case CompoundModel():
+            case Compound() | CompoundModel():
                 ids.add(other.pk)
             case int():
                 ids.add(other)
@@ -333,12 +345,13 @@ class CompoundSet:
         )
         return CompoundSet(ids)
 
-    def get_by_smiles(self, smiles: str) -> CompoundModel:
+    def get_by_smiles(self, smiles: str) -> 'Compound':
         """Get a compound in this set by SMILES, using tautomer-insensitive matching.
 
         :param smiles: SMILES string to search for
         :raises ValueError: if SMILES standardisation fails
         :raises CompoundModel.DoesNotExist: if no match found in this set
+        :returns: the matching :class:`.Compound` component
         """
         mol = Chem.MolFromSmiles(smiles, sanitize=True)
         try:
@@ -347,7 +360,7 @@ class CompoundSet:
             raise ValueError(f'SuperParent failed: {e}') from e
 
         h = registration_hash_tautomer_insensitive(sp)
-        return self._queryset.get(compound_hash=h)
+        return Compound(self._queryset.get(compound_hash=h))
 
     def get_all_possible_reactants(
         self,

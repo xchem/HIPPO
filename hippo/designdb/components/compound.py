@@ -34,6 +34,7 @@ from .quote import Quote
 
 if TYPE_CHECKING:
     from designdb.animal import HIPPO
+    from designdb.components.pose import Pose
     from designdb.sets.compound import CompoundSet
     from designdb.sets.pose import PoseSet
     from designdb.sets.reaction import ReactionSet
@@ -84,6 +85,11 @@ class Compound:
     @property
     def id(self) -> int:
         """Returns the compound's database ID"""
+        return self._instance.pk
+
+    @property
+    def pk(self) -> int:
+        """Alias for :attr:`.id` (the compound's database primary key)"""
         return self._instance.pk
 
     @property
@@ -192,8 +198,9 @@ class Compound:
         return self.get_poses()
 
     @property
-    def best_placed_pose(self) -> 'PoseModel':
-        """Returns the compound's pose with the lowest distance score"""
+    def best_placed_pose(self) -> 'Pose':
+        """Returns the compound's pose with the lowest distance score, as a
+        :class:`.Pose` component"""
         return self.poses.best_placed_pose
 
     @property
@@ -633,7 +640,7 @@ class Compound:
         if scaffolds and (scaffolds := self.scaffolds):
             data = {}
             for scaffold in scaffolds:
-                data[scaffold.compound_smiles] = f'C{scaffold.pk} (scaffold)'
+                data[scaffold.smiles] = f'C{scaffold.id} (scaffold)'
             data[self.smiles] = str(self)
 
             if len(data) > 1:

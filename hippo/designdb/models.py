@@ -126,6 +126,7 @@ class TargetModel(BaseModel):
             models.UniqueConstraint(
                 fields=[
                     'target_name',
+                    'project',
                 ],
                 name='uc_target',
             ),

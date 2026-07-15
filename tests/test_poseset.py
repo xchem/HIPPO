@@ -78,3 +78,10 @@ def test_poseset_int_indexing_is_positional(poseset):
 def test_poseset_int_index_out_of_range_raises(poseset):
     with pytest.raises(IndexError):
         poseset[len(poseset)]
+
+
+def test_poseset_best_placed_pose_returns_pose(poseset):
+    """best_placed_pose yields a Pose component (like iteration/indexing)."""
+    from designdb.components.pose import Pose
+
+    assert isinstance(poseset.best_placed_pose, Pose)
