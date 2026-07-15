@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS designdb.targets (
     project_id BIGINT NOT NULL REFERENCES designdb.projects (id) ON DELETE RESTRICT,
     created_on TIMESTAMPTZ DEFAULT now(),
     updated_on TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT uc_target UNIQUE (target_name)
+    CONSTRAINT uc_target UNIQUE (target_name, project_id)
 );
 
 CREATE TABLE IF NOT EXISTS designdb.compounds (

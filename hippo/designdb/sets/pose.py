@@ -2193,9 +2193,12 @@ class PoseSet:
         return self.targets.values_list('id', flat=True)
 
     @property
-    def best_placed_pose(self) -> PoseModel:
-        """Returns the pose with the best distance_score in this subset"""
-        return self._queryset.get(pk=self.best_placed_pose_id)
+    def best_placed_pose(self) -> 'Pose':
+        """Returns the pose with the best distance_score in this subset, as a
+        :class:`.Pose` component"""
+        from designdb.components.pose import Pose
+
+        return Pose(self._queryset.get(pk=self.best_placed_pose_id))
 
     @property
     def best_placed_pose_id(self) -> int:

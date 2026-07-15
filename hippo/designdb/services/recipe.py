@@ -731,7 +731,7 @@ class RecipeService:
             inspirations = inspiration_map.get(prod.compound_id, None)
 
             if not inspirations and not is_scaffold:
-                scaffold = Compound(comp.scaffolds[0])
+                scaffold = comp.scaffolds[0]  # CompoundSet yields Compound
                 inspirations = inspiration_map.get(scaffold.id, None)
 
                 scaffold_meta = scaffold.metadata or {}
