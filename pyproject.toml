@@ -1,6 +1,7 @@
-# [build-system]
-# requires = ["hatchling"]
-# build-backend = "hatchling.build"
+[build-system]
+requires = ["uv_build>=0.10.6,<0.11.0"]
+build-backend = "uv_build"
+
 [project]
 name = "xchem-hippo"
 version = "1.0.0"
@@ -139,3 +140,7 @@ required-environments = [
     "sys_platform == 'linux' and platform_machine == 'aarch64'",
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
+
+[tool.uv.build-backend]
+module-name = "hippo"
+module-root = ""
