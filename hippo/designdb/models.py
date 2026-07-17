@@ -641,11 +641,16 @@ class CompoundTagModel(BaseModel):
 
 
 class CompoundTagJunctionModel(BaseModel):
-    pk = models.CompositePrimaryKey('compound_id', 'compound_tag_id')
+    pk = models.CompositePrimaryKey('compound_id', 'compound_tag_id', 'target_id')
     compound = models.ForeignKey(
         CompoundModel,
         on_delete=models.CASCADE,
         db_column='compound_id',
+    )
+    target = models.ForeignKey(
+        TargetModel,
+        on_delete=models.CASCADE,
+        db_column='target_id',
     )
     compound_tag = models.ForeignKey(
         CompoundTagModel,
@@ -691,11 +696,16 @@ class EnumerationMethodModel(BaseModel):
 
 
 class CompoundEnumerationMethodJunctionModel(BaseModel):
-    pk = models.CompositePrimaryKey('compound_id', 'enumeration_method_id')
+    pk = models.CompositePrimaryKey('compound_id', 'enumeration_method_id', 'target_id')
     compound = models.ForeignKey(
         CompoundModel,
         on_delete=models.CASCADE,
         db_column='compound_id',
+    )
+    target = models.ForeignKey(
+        TargetModel,
+        on_delete=models.CASCADE,
+        db_column='target_id',
     )
     enumeration_method = models.ForeignKey(
         EnumerationMethodModel,

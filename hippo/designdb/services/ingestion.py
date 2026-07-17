@@ -10,7 +10,9 @@ import mrich
 import pandas as pd
 from designdb.components.compound import Ingredient
 from designdb.models import (
+    CompoundEnumerationMethodJunctionModel,
     CompoundModel,
+    CompoundTagJunctionModel,
     EnumerationMethodModel,
     PoseMethodModel,
     PoseModel,
@@ -371,7 +373,12 @@ class IngestionService:
                 smiles=smiles,
                 # inchikey=sane_inchikey,
             )
-            compound.tags.add(*compound_tags)
+            for compound_tag in compound_tags:
+                CompoundTagJunctionModel.objects.get_or_create(
+                    compound=compound,
+                    compound_tag=compound_tag,
+                    target=target,
+                )
             if compound_created:
                 result.compounds_created += 1
 
@@ -514,9 +521,18 @@ class IngestionService:
                 # smiles=sane_smiles,
                 # inchikey=sane_inchikey,
             )
-            compound.tags.add(*compound_tags)
+            for compound_tag in compound_tags:
+                CompoundTagJunctionModel.objects.get_or_create(
+                    compound=compound,
+                    compound_tag=compound_tag,
+                    target=target,
+                )
             if enumeration_method_obj is not None:
-                compound.enumeration_methods.add(enumeration_method_obj)
+                CompoundEnumerationMethodJunctionModel.objects.get_or_create(
+                    compound=compound,
+                    enumeration_method=enumeration_method_obj,
+                    target=target,
+                )
             if compound_created:
                 result.compounds_created += 1
 
@@ -1080,7 +1096,12 @@ class IngestionService:
         products = CompoundModel.objects.filter(pk__in=product_ids)
         product_tags = CompoundTagService.tags_from_list(product_tag_list)
         for compound in products:
-            compound.tags.add(*product_tags)
+            for compound_tag in product_tags:
+                CompoundTagJunctionModel.objects.get_or_create(
+                    compound=compound,
+                    compound_tag=compound_tag,
+                    target=target,
+                )
 
         # bulk register scaffold relationships
 

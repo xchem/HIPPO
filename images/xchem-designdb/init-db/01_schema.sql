@@ -206,10 +206,11 @@ CREATE TABLE IF NOT EXISTS designdb.compound_tags (
 -- New table
 CREATE TABLE IF NOT EXISTS designdb.has_compound_tags (
     compound_id BIGINT NOT NULL REFERENCES designdb.compounds (id) ON DELETE CASCADE,
+    target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE CASCADE,
     compound_tag_id BIGINT NOT NULL REFERENCES designdb.compound_tags (id) ON DELETE CASCADE,
     created_on TIMESTAMPTZ DEFAULT now(),
     updated_on TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY (compound_id, compound_tag_id)
+    PRIMARY KEY (compound_id, compound_tag_id, target_id)
 );
 
 -- New table
@@ -229,10 +230,11 @@ CREATE TABLE IF NOT EXISTS designdb.enumeration_methods (
 -- New table
 CREATE TABLE IF NOT EXISTS designdb.has_enumeration_methods (
     compound_id BIGINT NOT NULL REFERENCES designdb.compounds (id) ON DELETE CASCADE,
+    target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE CASCADE,
     enumeration_method_id BIGINT NOT NULL REFERENCES designdb.enumeration_methods (id) ON DELETE CASCADE,
     created_on TIMESTAMPTZ DEFAULT now(),
     updated_on TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY (compound_id, enumeration_method_id)
+    PRIMARY KEY (compound_id, enumeration_method_id, target_id)
 );
 
 -- New table

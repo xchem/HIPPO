@@ -19,6 +19,7 @@ from designdb.models import (
     ReactionModel,
     RouteModel,
     ScaffoldModel,
+    TargetModel,
 )
 from django.db.models import Count, Exists, OuterRef, Q, QuerySet
 from django.db.models.query import ModelIterable
@@ -1287,6 +1288,8 @@ class CompoundSet:
     def add_tag(
         self,
         tag: str,
+        *,
+        target: TargetModel,
     ) -> None:
         """Add this tag to every member of the set"""
 
@@ -1296,7 +1299,9 @@ class CompoundSet:
 
         CompoundTagJunctionModel.objects.bulk_create(
             [
-                CompoundTagJunctionModel(compound=compound, compound_tag=compound_tag)
+                CompoundTagJunctionModel(
+                    compound=compound, compound_tag=compound_tag, target=target
+                )
                 for compound in self._queryset
             ],
             ignore_conflicts=True,
@@ -1503,14 +1508,25 @@ class CompoundSet:
         """Returns the inchikeys of compounds in this set"""
         return list(self._queryset.values_list('compound_inchikey', flat=True))
 
+    def get_tags(self, target: TargetModel | None = None) -> set[str]:
+        """Returns the set of unique tags present in this compound set
+
+        :param target: Optionally restrict to tags assigned under this
+            :class:`.TargetModel`, defaults to ``None`` (tags across all targets)
+        """
+        junctions = CompoundTagJunctionModel.objects.filter(compound_id__in=self.ids)
+        if target is not None:
+            junctions = junctions.filter(target=target)
+        return set(
+            junctions.values_list(
+                'compound_tag__compound_tag_name', flat=True
+            ).distinct()
+        )
+
     @property
     def tags(self) -> set[str]:
         """Returns the set of unique tags present in this compound set"""
-        return set(
-            CompoundTagJunctionModel.objects.filter(compound_id__in=self.ids)
-            .values_list('compound_tag__compound_tag_name', flat=True)
-            .distinct()
-        )
+        return self.get_tags()
 
     @property
     def num_poses(self) -> int:
