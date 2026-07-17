@@ -4279,7 +4279,7 @@ wheels = [
 [[package]]
 name = "xchem-hippo"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "apsw" },
     { name = "chardet" },

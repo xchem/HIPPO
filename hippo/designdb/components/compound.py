@@ -18,6 +18,7 @@ from designdb.models import (
     ReactantModel,
     ReactionModel,
     ScaffoldModel,
+    TargetModel,
 )
 from django.db.models import Exists, OuterRef
 from IPython.display import display
@@ -376,17 +377,24 @@ class Compound:
             return quote
         return quote.pk
 
-    def get_tags(self) -> list[str]:
-        """Get the tags assigned to this compound"""
-        return list(self._instance.tags.values_list('compound_tag_name', flat=True))
+    def get_tags(self, target: TargetModel | None = None) -> list[str]:
+        """Get the tags assigned to this compound
 
-    def add_tag(self, tag: str) -> None:
+        :param target: Optionally restrict to tags assigned under this
+            :class:`.TargetModel`, defaults to ``None`` (tags across all targets)
+        """
+        junctions = CompoundTagJunctionModel.objects.filter(compound=self._instance)
+        if target is not None:
+            junctions = junctions.filter(target=target)
+        return list(junctions.values_list('compound_tag__compound_tag_name', flat=True))
+
+    def add_tag(self, tag: str, *, target: TargetModel) -> None:
         """Add a tag to this compound"""
 
         assert isinstance(tag, str)
         tag_obj, _ = CompoundTagModel.objects.get_or_create(compound_tag_name=tag)
         CompoundTagJunctionModel.objects.get_or_create(
-            compound=self._instance, compound_tag=tag_obj
+            compound=self._instance, compound_tag=tag_obj, target=target
         )
         self._tags = None  # invalidate cache
 
