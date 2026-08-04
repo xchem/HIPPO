@@ -12,7 +12,7 @@ Not strictly necessary but it's convenient to have database connection parameter
 ```
 DB_NAME=designdb
 DB_USER=postgres
-DB_PASSWORD=s_URzt7CWfWZ.AXD7RcF
+DB_PASSWORD=<choose a password>
 DB_HOST=database
 
 TA_AUTH_SERVICE=https://ta-authenticator.xchem.diamond.ac.uk/
