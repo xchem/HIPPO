@@ -17,13 +17,49 @@ Please see the [documentation](https://hippo-docs.winokan.com) to get started
 
 ## Installation
 
-HIPPO is pip-installable, to install it, simply run
+HIPPO requires **python 3.13**. Install it with an explicit version:
 
 ```bash
-pip install xchem-hippo
+pip install xchem-hippo==2.0.3
 ```
 
+**Pin the version.** A bare `pip install xchem-hippo` is not safe here. If the
+requested version cannot be installed — most often because the interpreter is
+not 3.13 — pip does not report that. It quietly works backwards through older
+releases until it finds one that fits, and lands on **1.0.5**, the last release
+predating the 2.x rewrite. The install succeeds and nothing warns you, but the
+package installed is a different codebase.
+
+The 1.0.x releases cannot be yanked, as existing work depends on them, so this
+fallback path stays open. Pinning closes it: with `==` there is only one
+candidate, so pip has nothing to fall back to and reports the real error
+instead.
+
 To run the full suite of tests see README-dev.md.
+
+### Syndirella
+
+HIPPO reads and writes [Syndirella](https://github.com/xchem/syndirella)'s file
+formats. `xchem-syndirella` is a normal dependency and is installed for you.
+
+It was previously excluded, because the older `syndirella` distribution required
+python `<3.11` and `numpy<2` and so could not be depended on at all.
+`xchem-syndirella` 1.0.6 lifted both caps. It does still pin `numpy<=2.4`, which
+is what holds numpy below the latest release in this project.
+
+Note that `import syndirella` also requires **PyRosetta**, which is not
+installed automatically: it is a large out-of-band download with its own licence
+terms. Without it, `xchem-fragmenstein` substitutes a mock object for
+`pyrosetta` that cannot satisfy submodule imports, and importing syndirella
+fails with `'AttributeFilledMock' object is not iterable`. To install it:
+
+```bash
+python -c "import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()"
+```
+
+This does not affect HIPPO itself, which does not yet import syndirella — the code
+that did (`Pose.posebusters()`) has not been ported yet.
+
 
 ## More Information
 

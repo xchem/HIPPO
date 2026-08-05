@@ -1,5 +1,5 @@
 # Postgres + RDKit cartridge (designdb). Config via .env.
-# Rebuild with: docker compose build --pull  to refresh base image and reduce CVEs.
+# Rebuild with: docker compose build --pull --no-cache  to refresh base image and CVE fixes.
 
 services:
   database:
@@ -10,8 +10,13 @@ services:
         RDKIT_VERSION: ${RDKIT_VERSION:-Release_2025_09_5}
         BOOST_VERSION: ${BOOST_VERSION:-1.90.0}
         BOOST_VER_US: ${BOOST_VER_US:-1_90_0}
+        DEBIAN_SUITE: ${DEBIAN_SUITE:-trixie}
         PG_MAJOR: ${PG_MAJOR:-18}
-        PG_BASE: ${PG_BASE:-postgres:18.3-bookworm}
+        PG_BASE: ${PG_BASE:-postgres:18.4-trixie}
+        # Gosu CVE fix: rebuild gosu with patched Go stdlib (remove when postgres image fixes upstream)
+        GOLANG_VERSION: ${GOLANG_VERSION:-1.26.5-alpine}
+        GOSU_VERSION: ${GOSU_VERSION:-1.19}
+        GOLANG_X_SYS_VERSION: ${GOLANG_X_SYS_VERSION:-0.44.0}
     image: xchem_designdb:latest
     container_name: xchem_designdb
     restart: unless-stopped

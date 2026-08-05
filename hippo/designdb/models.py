@@ -76,7 +76,7 @@ if settings.MANAGE_MODELS:
     # plain-text RDKitMolField shim defined above.
     MolField = RDKitMolField
 else:
-    from django_rdkit.models import MolField
+    from .rdkit_fields import MolField
 
 
 class BaseModel(models.Model):

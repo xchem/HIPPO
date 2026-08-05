@@ -41,16 +41,26 @@ def animal(tmp_path_factory):
     Session-scoped (Django is configured once per process). Downloads are off:
     ``DOWNLOAD_APO_DESOLV_ON_INIT`` defaults to False, so init does no network.
     """
+    from unittest.mock import patch
+
     import hippo
 
     db_path = tmp_path_factory.mktemp("hippo_db") / "test.sqlite"
 
-    return hippo.HIPPO(
-        target_name="test",
-        target_access_string="test-proposal",
-        username="test-user",
-        db=str(db_path),
-    )
+    # load_hippo() checks the target access string against the TA authenticator
+    # service. There is no service (and no TA_AUTH_QUERY_KEY) in the test
+    # environment, and an unset key yields an empty access set, which would make
+    # load_hippo() return None. Stub the lookup rather than relaxing the check.
+    with patch(
+        "hippo.bootstrap.get_auth_target_access",
+        return_value={"test-proposal"},
+    ):
+        return hippo.HIPPO(
+            target_name="test",
+            target_access_string="test-proposal",
+            username="test-user",
+            db=str(db_path),
+        )
 
 
 @pytest.fixture
