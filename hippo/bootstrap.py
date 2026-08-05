@@ -5,6 +5,7 @@ from pathlib import Path
 import django
 import mrich
 from django.conf import settings
+from ta_auth_connector import get_auth_target_access
 
 # fix path
 ROOT = Path(__file__).resolve().parent
@@ -78,12 +79,11 @@ def load_hippo(
     mrich.bold('Creating HIPPO animal')
     mrich.var('target_name', target_name, color='arg')
 
-    # TODO: disabled because of STFC downtime on 03-07-2026. re-enable when done
-    # tas_list = get_auth_target_access(username)
+    tas_list = get_auth_target_access(username)
 
-    # if target_access_string not in tas_list:
-    #     mrich.error(f'User {username} does not have access to {target_access_string}')
-    #     return
+    if target_access_string not in tas_list:
+        mrich.error(f'User {username} does not have access to {target_access_string}')
+        return
 
     if db is None:
         # populate from env

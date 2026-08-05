@@ -4,15 +4,26 @@ build-backend = "uv_build"
 
 [project]
 name = "xchem-hippo"
-version = "1.0.0"
+version = "2.0.3"
 authors = [
     { name = "Max Winokan", email = "max@winokan.com" },
     { name = "Kalev Takkis", email = "ktakkis@informaticsmatters.com" },
 ]
 description = "Hit Interaction Profiling and Procurement Optimisation"
 readme = "README.md"
-# python version limit dictated by pandas
-requires-python = ">=3.10,<3.14"
+# Lower bound: xchem-ta-auth-client declares requires-python >=3.13.
+#
+# Deliberately NO upper bound, even though xchem-syndirella currently declares
+# <3.14. Adding one would achieve nothing and cost something:
+#   - it changes no outcome. On 3.14 pip lands on the ancient 1.0.5 either way
+#     -- with a cap because 2.x is filtered out, without one because pip
+#     backtracks past the unsatisfiable xchem-syndirella. Measured, not assumed.
+#   - published metadata is immutable, so a cap here would block 3.14 forever,
+#     including after syndirella gains 3.14 support. Without one, released
+#     versions start working on 3.14 by themselves once that happens.
+# This is exactly the trap syndirella's own stale <3.11 cap set for this project
+# -- don't repeat it. Cap only when a version is genuinely known to be broken.
+requires-python = ">=3.13"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -37,22 +48,21 @@ dependencies = [
     "python-louvain>=0.16",
     "psycopg[binary]>=3.3",
     "django>=5.2.12",
-    "syndirella>=5.0.7a0",
     "typer>=0.24.1",      # used?
     "neo4j>=6.1.0",
     "gemmi>=0.7.5",
     "mrich>=1.0",
     "requests>=2.32",
     "pdbfixer>=1.12.0",
-    # Max's hippo depends on this. cannot install with uv, comes from conda
+    "xchem-ta-auth-client>=1.0.0",
+    "numpy>=2",
+    "xchem-syndirella>=1.0.6",
+    # original HIPPO depends on this. cannot install with uv, comes from conda
     # "chemicalite==2024.5.1",
     # options:
     # - this is probably present in diamond environments,
     # - can use conda install in container
     # - but.. probs don't even need it, it's only used for expressions and I got that covered
-    "django-rdkit",
-    "numpy>=1.26.4",
-    # "numpy>=2", # need it but not working
 ]
 
 [dependency-groups]
@@ -131,9 +141,6 @@ pythonpath = ["."]
 markers = [
     "sqlite: container-free tests that run in SQLite mode (no Postgres/Fragalysis). Run with `pytest -m sqlite`.",
 ]
-
-[tool.uv.sources]
-django-rdkit = { git = "https://github.com/rdkit/django-rdkit" }
 
 [tool.uv]
 required-environments = [
