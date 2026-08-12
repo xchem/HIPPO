@@ -3364,7 +3364,7 @@ dev = [
 requires-dist = [
     { name = "apsw", specifier = ">=3.51" },
     { name = "chardet", specifier = ">=7" },
-    { name = "django", specifier = ">=5.2.12" },
+    { name = "django", specifier = ">=5.2.12,<6" },
     { name = "gemmi", specifier = ">=0.7.5" },
     { name = "hippo-plot", specifier = ">=0.0.1" },
     { name = "hirsch", specifier = ">=0.1" },
