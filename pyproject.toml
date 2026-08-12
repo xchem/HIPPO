@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "xchem-hippo"
-version = "2.0.4"
+version = "2.0.5"
 authors = [
     { name = "Max Winokan", email = "max@winokan.com" },
     { name = "Kalev Takkis", email = "ktakkis@informaticsmatters.com" },
