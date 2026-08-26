@@ -1,8 +1,12 @@
 """Generic tools for use in the HIPPO package"""
 
 import ast
+import cProfile
+import functools
 import json
+import os
 import re
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from string import ascii_uppercase
 from typing import TYPE_CHECKING
@@ -364,3 +368,298 @@ def registration_hash_tautomer_insensitive(mol: Chem.Mol) -> str:
         layers,
         RegistrationHash.HashScheme.TAUTOMER_INSENSITIVE_LAYERS,
     )
+
+
+# Bound on the SMILES -> hash memo. A single load of <=100k molecules never fills
+# it; past that we stop inserting rather than evicting, keeping the entries from
+# earliest in the run (which is where repeats cluster).
+_HASH_CACHE_MAX = 100_000
+_HASH_CACHE: dict[str, str] = {}
+
+# Below this many uncached molecules, process-pool startup costs more than the
+# parallelism saves, so hashing runs serially.
+PARALLEL_HASH_MIN_MOLECULES = 100
+
+
+# PostgreSQL's wire protocol encodes the bind-parameter count as int16, capping a
+# single statement at 65535 parameters. Django only chunks bulk_create for SQLite
+# (BaseDatabaseOperations.bulk_batch_size returns len(objs)), so on PostgreSQL an
+# unbounded bulk_create of N rows sends N x fields parameters in one statement and
+# fails once that exceeds the cap -- around 4,400 rows for PoseModel.
+PG_MAX_BIND_PARAMS = 65535
+
+# Independently of the protocol cap, keep single statements to a sane size: pose
+# rows carry mol blobs, and a multi-megabyte INSERT is bad for memory and for lock
+# duration even when it is legal.
+MAX_ROWS_PER_STATEMENT = 5000
+
+
+# Target wire size for one bulk statement. Both psycopg (building the parameter
+# array) and PostgreSQL (parsing the multi-VALUES statement) hold the whole thing
+# in memory, so this bounds peak RAM on both ends and keeps lock duration and
+# retry cost sane. The latency-vs-size curve is flat across a wide middle range,
+# so the exact value matters far less than avoiding the extremes.
+TARGET_STATEMENT_BYTES = 4_000_000
+
+# How many rows to sample when estimating row width. Cheap, and spread across the
+# batch rather than taken from the front, since SDFs are often size-ordered.
+ROW_SIZE_SAMPLE = 64
+
+
+def _value_bytes(value) -> int:
+    """Approximate wire size of a single bound parameter."""
+    if value is None:
+        return 1
+    if isinstance(value, memoryview | bytes | bytearray):
+        return len(value)
+    if isinstance(value, str):
+        return len(value.encode('utf-8', 'ignore'))
+    # numbers, booleans, dates: bound as fixed-width values
+    return 8
+
+
+def estimate_row_bytes(model, objs, *, fields: list[str] | None = None) -> float:
+    """Estimate the average wire size of one row of ``objs``.
+
+    Values are measured through each field's ``get_prep_value``, so this reflects
+    what is actually bound -- notably ``MolField``, which sends
+    ``mol.ToBinary()`` rather than the molblock text.
+
+    :param model: the Django model being written
+    :param objs: the objects about to be written
+    :param fields: field names to measure, or ``None`` for every concrete field.
+        Pass the subset for ``bulk_update``, which only binds the updated columns.
+    :returns: mean bytes per row, or ``0.0`` if it cannot be estimated
+    """
+    if not objs:
+        return 0.0
+
+    if fields is None:
+        model_fields = list(model._meta.concrete_fields)
+    else:
+        model_fields = [model._meta.get_field(name) for name in fields]
+
+    stride = max(1, len(objs) // ROW_SIZE_SAMPLE)
+    sample = objs[::stride][:ROW_SIZE_SAMPLE]
+    if not sample:
+        return 0.0
+
+    total = 0
+    for obj in sample:
+        for field in model_fields:
+            try:
+                value = field.get_prep_value(getattr(obj, field.attname, None))
+            except Exception:
+                # a field whose prep raises on an unsaved object: fall back to the
+                # raw attribute rather than failing the size estimate
+                value = getattr(obj, field.attname, None)
+            total += _value_bytes(value)
+
+    return total / len(sample)
+
+
+def safe_batch_size(
+    model,
+    *,
+    objs=None,
+    fields: list[str] | None = None,
+    requested: int | None = None,
+    target_bytes: int = TARGET_STATEMENT_BYTES,
+    extra_params: int = 0,
+) -> int:
+    """Rows to send per ``bulk_create``/``bulk_update`` statement for ``model``.
+
+    Two independent limits apply, and the smaller wins:
+
+    1. **Bind parameters** -- PostgreSQL encodes the parameter count as int16, so
+       ``rows x fields`` must stay under 65535. This is a correctness ceiling, not
+       a tuning knob.
+    2. **Statement bytes** -- estimated from ``objs`` and held near
+       ``target_bytes``. This is what actually differs between models: a pose row
+       carries a serialised molecule while a junction row is a few integers, so
+       equal row counts produce statements orders of magnitude apart.
+
+    Sampling ``objs`` rather than assuming a fixed row width means unusually large
+    ligands automatically produce smaller batches instead of oversized statements.
+
+    Without ``objs`` only the parameter ceiling applies (bounded by
+    :data:`MAX_ROWS_PER_STATEMENT`), which is safe but ignores row width.
+
+    :param model: the Django model being written
+    :param objs: the objects about to be written, sampled to estimate row width
+    :param fields: field subset being written, for ``bulk_update``
+    :param requested: caller's explicit preference; honoured up to the parameter
+        ceiling and clamped above it
+    :param target_bytes: desired wire size per statement
+    :param extra_params: additional per-statement parameters to leave room for
+    :returns: rows per statement, at least 1
+    """
+    n_fields = max(1, len(fields or model._meta.concrete_fields))
+    # 5% headroom: the field count is an estimate of what Django actually binds,
+    # and landing exactly on the cap leaves no room for a conflict clause or an
+    # extra expression to tip it over.
+    budget = int((PG_MAX_BIND_PARAMS - extra_params) * 0.95)
+    param_ceiling = max(1, budget // n_fields)
+
+    if requested is not None:
+        if requested > param_ceiling:
+            mrich.warning(
+                f'batch_size={requested} exceeds the safe maximum for '
+                f'{model.__name__} ({param_ceiling} rows x {n_fields} fields vs '
+                f'the {PG_MAX_BIND_PARAMS}-parameter cap); using {param_ceiling}'
+            )
+            return param_ceiling
+        return max(1, requested)
+
+    ceiling = min(param_ceiling, MAX_ROWS_PER_STATEMENT)
+
+    row_bytes = estimate_row_bytes(model, objs, fields=fields) if objs else 0.0
+    if row_bytes <= 0:
+        return ceiling
+
+    return max(1, min(int(target_bytes / row_bytes), ceiling))
+
+
+def default_hash_workers() -> int:
+    """Default worker count for parallel registration hashing."""
+    return min(8, os.cpu_count() or 1)
+
+
+def _hash_worker(smiles: str) -> tuple[str, str | None]:
+    """Compute one registration hash. Runs in a *separate process*.
+
+    .. warning::
+       Must stay pure RDKit. This is forked from a parent that may hold an open
+       database connection inside a transaction; forking is safe only as long as
+       the child never touches that socket. Do not import or call anything
+       Django/ORM here.
+
+    :param smiles: SMILES to hash
+    :returns: ``(smiles, hash)``, or ``(smiles, None)`` if it could not be hashed
+    """
+    try:
+        return smiles, _compute_compound_hash(smiles)
+    except ValueError:
+        return smiles, None
+
+
+def _compute_compound_hash(smiles: str) -> str:
+    """Uncached, unparallelised registration hash for a SMILES.
+
+    :param smiles: SMILES to hash
+    :returns: tautomer-insensitive registration hash
+    :raises ValueError: if the SMILES cannot be parsed or SuperParent fails
+    """
+    mol = Chem.MolFromSmiles(smiles, sanitize=True)
+    if mol is None:
+        raise ValueError(f'Could not parse SMILES: {smiles!r}')
+    try:
+        sp = rdMolStandardize.SuperParent(mol)
+    except Exception as e:
+        raise ValueError(f'SuperParent failed: {e}') from e
+    return registration_hash_tautomer_insensitive(sp)
+
+
+def compound_hash_from_smiles(smiles: str) -> str:
+    """Registration hash for a SMILES, via its SuperParent.
+
+    ``rdMolStandardize.SuperParent`` is the dominant pure-CPU cost of SDF
+    ingestion (~6 ms/mol), so results are memoised on the SMILES string. The memo
+    only helps when a SMILES repeats; for a batch of mostly-distinct molecules use
+    :func:`compound_hashes_from_smiles`, which parallelises instead.
+
+    :param smiles: SMILES to hash
+    :returns: tautomer-insensitive registration hash
+    :raises ValueError: if the SMILES cannot be parsed or SuperParent fails
+    """
+    cached = _HASH_CACHE.get(smiles)
+    if cached is not None:
+        return cached
+    result = _compute_compound_hash(smiles)
+    if len(_HASH_CACHE) < _HASH_CACHE_MAX:
+        _HASH_CACHE[smiles] = result
+    return result
+
+
+def compound_hashes_from_smiles(
+    smiles_list: list[str],
+    *,
+    max_workers: int | None = None,
+) -> dict[str, str]:
+    """Registration hashes for many SMILES, in parallel.
+
+    SuperParent is CPU-bound C++ that does not release the GIL, so threads cannot
+    help; separate processes scale close to linearly (~6x on 8 workers for a
+    1000-molecule SDF). Only cache misses are dispatched, and only SMILES strings
+    cross the process boundary -- never RDKit molecules or ORM objects.
+
+    Falls back to serial hashing when there is little to do or when a pool cannot
+    be started, so this is always safe to call.
+
+    :param smiles_list: SMILES to hash; duplicates are collapsed
+    :param max_workers: worker processes, defaulting to
+        :func:`default_hash_workers` (``min(8, cpu_count())``). ``1`` forces serial.
+    :returns: mapping of SMILES to hash. SMILES that could not be hashed are
+        absent, matching :func:`compound_hash_from_smiles` raising for them.
+    """
+    result: dict[str, str] = {}
+    todo: list[str] = []
+
+    for smiles in dict.fromkeys(smiles_list):
+        cached = _HASH_CACHE.get(smiles)
+        if cached is not None:
+            result[smiles] = cached
+        else:
+            todo.append(smiles)
+
+    if not todo:
+        return result
+
+    workers = default_hash_workers() if max_workers is None else max_workers
+
+    if workers > 1 and len(todo) >= PARALLEL_HASH_MIN_MOLECULES:
+        # ~4 chunks per worker: enough to even out molecules of differing cost
+        # without paying per-task IPC on every molecule
+        chunksize = max(1, len(todo) // (workers * 4))
+        try:
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                pairs = list(pool.map(_hash_worker, todo, chunksize=chunksize))
+        except Exception as e:
+            # restricted//sandboxed environments may refuse to fork
+            mrich.warning(f'Parallel hashing unavailable ({e}); falling back')
+            pairs = [_hash_worker(smiles) for smiles in todo]
+    else:
+        pairs = [_hash_worker(smiles) for smiles in todo]
+
+    for smiles, value in pairs:
+        if value is None:
+            continue
+        result[smiles] = value
+        if len(_HASH_CACHE) < _HASH_CACHE_MAX:
+            _HASH_CACHE[smiles] = value
+
+    return result
+
+
+def profile(output_file='profile.prof'):
+    """Function profiler decorator.
+
+    Usage: just add the decorator
+    @profile(<filename>)
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+
+            profiler = cProfile.Profile()
+            profiler.enable()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                profiler.disable()
+                profiler.dump_stats(output_file)
+
+        return wrapper
+
+    return decorator
