@@ -648,6 +648,8 @@ class IngestionService:
         batch_size: int | None = None,
         chunk_size: int | None = None,
         single_transaction: bool = False,
+        check_rmsd: bool = False,
+        rmsd_threshold: float = 1.0,
     ) -> IngestionBatchResult:
         """Ingest an SDF into the database, set-based.
 
@@ -664,10 +666,6 @@ class IngestionService:
         objects and are resolved here via :class:`MethodService` /
         :meth:`ScoreService.resolve_score_method_map`, keeping model instances out
         of the client-facing signature for the eventual client/backend split.
-
-        .. note::
-           ``check_rmsd`` is not supported -- the RMSD duplicate check is inherently
-           per-pose; see :meth:`PoseService.create_batch`.
 
         .. note::
            ``trg_score_values_refresh_pivoted_mv`` is deliberately left alone. It is
@@ -689,6 +687,10 @@ class IngestionService:
         :param single_transaction: wrap the whole file in one transaction instead
             of committing per chunk. All-or-nothing, at the cost of a transaction
             that lives for the entire load.
+        :param check_rmsd: skip poses whose RMSD to an existing pose of the same
+            compound is below ``rmsd_threshold``; see
+            :meth:`PoseService.create_batch`
+        :param rmsd_threshold: RMSD below which two poses are the same, in Angstrom
         :returns: counts of attempted records and created compounds/poses
         :raises ValueError: if a named method is not registered
         """
@@ -745,6 +747,8 @@ class IngestionService:
                 field_warning=field_warning,
                 max_workers=max_workers,
                 batch_size=batch_size,
+                check_rmsd=check_rmsd,
+                rmsd_threshold=rmsd_threshold,
             )
 
         validated = False
@@ -813,6 +817,8 @@ class IngestionService:
         field_warning,
         max_workers,
         batch_size,
+        check_rmsd,
+        rmsd_threshold,
     ) -> None:
         """Run the five ingestion phases over one chunk of records.
 
@@ -930,6 +936,8 @@ class IngestionService:
             specs=specs,
             pose_method=pose_method_obj,
             batch_size=batch_size,
+            check_rmsd=check_rmsd,
+            rmsd_threshold=rmsd_threshold,
         )
         result.poses_created += poses_created
 

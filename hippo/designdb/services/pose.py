@@ -297,6 +297,8 @@ class PoseService:
         specs: list[dict],
         pose_method: PoseMethodModel | None = None,
         batch_size: int | None = None,
+        check_rmsd: bool = False,
+        rmsd_threshold: float = 1.0,
     ) -> tuple[list[PoseModel | None], int]:
         """Bulk counterpart of :meth:`create`.
 
@@ -315,17 +317,23 @@ class PoseService:
         the last record's metadata winning -- the same end state the sequential
         version reaches.
 
-        .. note::
-           ``check_rmsd`` is deliberately unsupported here. The RMSD duplicate check
-           needs each candidate pose's ``pose_mol`` deserialised and compared one at
-           a time, which cannot be expressed as a bulk query; callers wanting it
-           should use the per-record :meth:`create`.
+        ``check_rmsd`` is supported. The pairwise RMSD comparison is unavoidably
+        per-pose CPU work, but the *candidate lookup* batches like everything else:
+        one query fetches every existing pose for the batch's compounds, and each
+        spec is then compared against its own compound's candidates in memory.
+        Sequential semantics are preserved -- :meth:`create` saves each pose before
+        testing the next, so a pose can match one created earlier in the same file;
+        specs accepted earlier in this batch are therefore included as candidates
+        for later ones.
 
         :param target: target the poses belong to
         :param specs: per-pose field dicts, in record order
         :param pose_method: optional method to associate with every created pose
         :param batch_size: rows per INSERT/UPDATE statement; ``None`` picks the safe
             per-model maximum. See :func:`safe_batch_size`.
+        :param check_rmsd: skip a pose whose RMSD to an existing pose of the same
+            compound is below ``rmsd_threshold``
+        :param rmsd_threshold: RMSD below which two poses are the same, in Angstrom
         :returns: ``(poses, created_count)`` where ``poses`` is aligned with
             ``specs`` and holds ``None`` for any entry that could not be created
         """
@@ -378,6 +386,56 @@ class PoseService:
 
         # 3. insert the ones that do not
         new_keys = [k for k in spec_for_key if k not in existing]
+
+        # RMSD dedup, for specs that did not match on (compound, alias). One query
+        # for all candidates, then per-spec comparison. `rmsd_match` maps a skipped
+        # key either to an existing pose or to another key in this batch whose pose
+        # is created below.
+        rmsd_match: dict[tuple[int, str], PoseModel] = {}
+        rmsd_alias: dict[tuple[int, str], tuple[int, str]] = {}
+        if check_rmsd and new_keys:
+            cand_qs = PoseModel.objects.filter(
+                target=target, compound_id__in={k[0] for k in new_keys}
+            )
+            if pose_method is not None:
+                cand_qs = cand_qs.filter(methods=pose_method)
+
+            candidates: dict[int, list] = {}
+            for pose in cand_qs:
+                candidates.setdefault(pose.compound_id, []).append(
+                    (pose, pose.pose_mol)
+                )
+
+            remaining = []
+            for key in new_keys:
+                spec = spec_for_key[key]
+                mol = spec['mol']
+                hit = None
+                for pose, other in candidates.get(key[0], []):
+                    try:
+                        if get_rmsd(mol, other) < rmsd_threshold:
+                            hit = pose
+                            break
+                    except Exception:
+                        logger.warning('RMSD calculation failed against pose %s', pose)
+                if hit is not None:
+                    if isinstance(hit, PoseModel):
+                        logger.warning(
+                            'Pose RMSD below threshold %.3f A, skipping duplicate '
+                            '(alias=%s)',
+                            rmsd_threshold,
+                            spec['alias'],
+                        )
+                        rmsd_match[key] = hit
+                    else:
+                        rmsd_alias[key] = hit
+                    continue
+                # accepted: becomes a candidate for later specs, mirroring the
+                # sequential path where each pose is saved before the next is tested
+                candidates.setdefault(key[0], []).append((key, mol))
+                remaining.append(key)
+            new_keys = remaining
+
         created_poses: dict[tuple[int, str], PoseModel] = {}
         if new_keys:
             new_objects = []
@@ -423,7 +481,11 @@ class PoseService:
                     ),
                 )
 
-        resolved = {**existing, **created_poses}
+        resolved = {**existing, **created_poses, **rmsd_match}
+        # keys that matched a pose created within this same batch
+        for key, other_key in rmsd_alias.items():
+            if other_key in resolved:
+                resolved[key] = resolved[other_key]
         poses = [resolved.get(key) for key in key_for_idx]
         return poses, len(created_poses)
 

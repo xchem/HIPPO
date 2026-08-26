@@ -555,6 +555,8 @@ class HIPPO:
         batch_size: int | None = None,
         chunk_size: int | None = None,
         single_transaction: bool = False,
+        check_rmsd: bool = False,
+        rmsd_threshold: float = 1.0,
     ) -> None:
         """Add posed virtual hits from an SDF into the database.
 
@@ -608,6 +610,10 @@ class HIPPO:
             :data:`DEFAULT_CHUNK_SIZE`. This is what bounds *memory*.
         :param single_transaction: Wrap the whole file in one transaction rather
             than committing each chunk as it completes
+        :param check_rmsd: Skip a pose whose RMSD to an existing pose of the same
+            compound is below ``rmsd_threshold``
+        :param rmsd_threshold: RMSD below which two poses are the same, in
+            Angstrom, defaults to ``1.0``
 
         .. note::
            Registration hashing dominates CPU cost. Compounds already registered
@@ -715,6 +721,8 @@ class HIPPO:
                 batch_size=batch_size,
                 chunk_size=chunk_size,
                 single_transaction=single_transaction,
+                check_rmsd=check_rmsd,
+                rmsd_threshold=rmsd_threshold,
             )
         except Exception:
             # re-raise the original rather than `raise Exception from exc`: a bare
