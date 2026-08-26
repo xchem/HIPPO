@@ -19,12 +19,10 @@ from .client import (
 )
 from .models import (
     CompoundModel,
-    EnumerationMethodModel,
     PoseMethodModel,
     PoseModel,
     Project,
     RouteModel,
-    ScoringMethodModel,
     TargetModel,
 )
 from .services.download import DownloadService
@@ -553,53 +551,105 @@ class HIPPO:
         convert_floats: bool = True,
         skip_equal_dict: dict | None = None,
         skip_not_equal_dict: dict | None = None,
+        max_workers: int | None = None,
+        batch_size: int | None = None,
+        chunk_size: int | None = None,
+        single_transaction: bool = False,
         check_rmsd: bool = False,
         rmsd_threshold: float = 1.0,
     ) -> None:
         """Add posed virtual hits from an SDF into the database.
 
-        :param target: Name of the protein :class:`.TargetModel`
+        Ingestion is set-based: the SDF is resolved to compounds, poses,
+        inspirations, tags and scores in a fixed number of statements rather than a
+        few dozen per record.
+
+        All non-name columns are added to the pose metadata. N.B. separate .mol
+        files are not created -- the molecule binary is stored in the database and
+        fake paths are recorded.
+
         :param path: Path to the SDF
-        :param reference: Optional single reference :class:`.PoseModel` to use as
-            the protein conformation for all poses, defaults to ``None``
-        :param reference_col: Column that contains reference :class:`.PoseModel` aliases
-            or ID's
-        :param compound_tags: List of string Tags to assign to all created compounds,
+        :param reference: Optional single reference :class:`.PoseModel` used as the
+            protein conformation for all poses, defaults to ``None``
+        :param reference_col: Column containing reference :class:`.PoseModel`
+            aliases or IDs, resolved per record
+        :param inspirations: Optional :class:`.PoseSet` or list of IDs assigned as
+            inspirations to every inserted pose, defaults to ``None``
+        :param inspiration_col: Column containing per-record inspiration
+            :class:`.PoseModel` names or IDs, defaults to ``"ref_mols"``
+        :param inspiration_map: Optional mapping between inspiration strings found
+            in ``inspiration_col`` and :class:`.PoseModel` ids
+        :param compound_tags: String tags to assign to all created compounds,
             defaults to ``None``
-        :param pose_tags: List of string Tags to assign to all created poses,
-            defaults to ``None``
-        :param mol_col: Name of the column containing the ``rdkit.ROMol`` ligands,
-            defaults to ``"ROMol"``
-        :param name_col: Name of the column containing the ligand name/alias,
-            defaults to ``"ID"``
-        :param inspirations: Optional single set of inspirations :class:`.PoseSet`
-            object or list of IDs to assign as inspirations to all inserted poses,
-            defaults to ``None``
-        :param inspiration_col: Name of the column containing the list of inspiration
-            :class:`.PoseModel` names or ID's, defaults to ``"ref_mols"``
-        :param inspiration_map: Optional dictionary or callable mapping between
-            inspiration strings found in ``inspiration_col`` and :class:`.PoseModel` ids
-        :param energy_score_col: Name of the column containing the list of energy
-            scores ``"energy_score"``
-        :param distance_score_col: Name of the column containing the list of distance
-            scores, defaults to ``"distance_score"``
-        :param convert_floats: Try to convert all values to ``float``,
-            defaults to ``True``
+        :param pose_tags: String tags to assign to all created poses, defaults to
+            ``None``
+        :param enumeration_method: ``(name, version)`` of a registered enumeration
+            method to associate with every compound
+        :param pose_method: ``(name, version)`` of a registered pose method to
+            associate with every pose
+        :param score_cols: Columns holding score values
+        :param scoring_methods: ``(name, version)`` pairs positionally aligned with
+            ``score_cols``
+        :param mol_col: Column containing the ``rdkit.ROMol`` ligands, defaults to
+            ``"ROMol"``
+        :param name_col: Column containing the ligand name/alias, defaults to
+            ``"ID"``
+        :param convert_floats: Try to convert all values to ``float``, defaults to
+            ``True``
         :param skip_equal_dict: Skip rows where
             ``any(row[key] == value for key, value in skip_equal_dict.items())``,
             defaults to ``None``
         :param skip_not_equal_dict: Skip rows where
             ``any(row[key] != value for key, value in skip_not_equal_dict.items())``,
             defaults to ``None``
+        :param max_workers: Worker processes for registration hashing, defaulting to
+            ``min(8, cpu_count())``. Pass ``1`` to force serial hashing.
+        :param batch_size: Rows per INSERT/UPDATE statement, or ``None`` for the
+            automatic per-model maximum. Bounds *statement* size, not memory.
+        :param chunk_size: SDF records read and processed per pass, defaulting to
+            :data:`DEFAULT_CHUNK_SIZE`. This is what bounds *memory*.
+        :param single_transaction: Wrap the whole file in one transaction rather
+            than committing each chunk as it completes
+        :param check_rmsd: Skip a pose whose RMSD to an existing pose of the same
+            compound is below ``rmsd_threshold``
+        :param rmsd_threshold: RMSD below which two poses are the same, in
+            Angstrom, defaults to ``1.0``
 
-        All non-name columns are added to the PoseModel metadata.
-        N.B. separate .mol files are not created. The molecule binary will only be
-        stored in the .sqlite file and fake paths are added to the database.
+        .. note::
+           Registration hashing dominates CPU cost. Compounds already registered
+           under the same SMILES are resolved by an indexed lookup and never
+           hashed; the rest are hashed across ``max_workers`` processes.
+
+        .. note::
+           ``chunk_size`` and ``batch_size`` control different things and are not
+           interchangeable:
+
+           * ``chunk_size`` is how many SDF records are held in memory at once. The
+             file is streamed, so peak memory is roughly ``chunk_size`` x 100 KB
+             regardless of file size -- a 300,000-record SDF loads in the same
+             footprint as a 5,000-record one.
+           * ``batch_size`` is how many rows go into a single INSERT. It exists
+             because PostgreSQL caps a statement at 65535 bind parameters, which an
+             unchunked ``bulk_create`` would breach at around 4,400 poses. It
+             defaults to the largest safe value per model and is clamped down if an
+             explicit value would breach the cap.
+
+           They interact only in that a chunk cannot produce more rows than it
+           holds: with ``chunk_size`` below ``batch_size``, each chunk is a single
+           statement anyway.
+
+        .. note::
+           Re-ingesting a scored SDF updates existing scores rather than failing on
+           the ``pk_score_values`` primary key.
+
+        .. note::
+           By default each chunk is committed as it completes, so a failure part way
+           through leaves earlier chunks in the database. Ingestion is re-runnable --
+           existing compounds and poses are found rather than duplicated -- so the
+           fix is to run the same file again. Pass ``single_transaction=True`` for
+           all-or-nothing semantics, at the cost of a transaction (and its locks and
+           WAL) living for the entire load.
         """
-        # TODO: original code reads sdf into data frame. I don't see
-        # much point for this in this function. get rid of it at some
-        # point
-
         if not isinstance(path, Path):
             path = Path(path)
 
@@ -620,7 +670,6 @@ class HIPPO:
         if isinstance(inspirations, PoseSet):
             inspiration_list = list(inspirations.ids)
         elif isinstance(inspirations, list):
-            # TODO: potentially check types
             inspiration_list = inspirations
         else:
             inspiration_list = []
@@ -633,88 +682,54 @@ class HIPPO:
         if inspiration_map is None:
             inspiration_map = {}
 
-        enumeration_method_obj = None
-        if enumeration_method is not None:
-            name, version = enumeration_method
-            try:
-                enumeration_method_obj = EnumerationMethodModel.objects.get(
-                    enum_name=name, enum_version=version
-                )
-            except EnumerationMethodModel.DoesNotExist:
-                raise ValueError(
-                    f"Enumeration method '{name}' v{version} not found. "
-                    'Call register_enumeration_method() first.'
-                ) from None
-
-        pose_method_obj = None
-        if pose_method is not None:
-            name, version = pose_method
-            try:
-                pose_method_obj = PoseMethodModel.objects.get(
-                    pose_method_name=name, pose_method_version=version
-                )
-            except PoseMethodModel.DoesNotExist:
-                raise ValueError(
-                    f"Pose method '{name}' v{version} not found. "
-                    'Call register_pose_method() first.'
-                ) from None
-
-        score_method_map = {}
-        if score_cols and scoring_methods:
-            if len(score_cols) != len(scoring_methods):
-                raise ValueError(
-                    'score_cols and scoring_methods must be the same length'
-                )
-            for col, (method_name, method_version) in zip(
-                score_cols, scoring_methods, strict=False
-            ):
-                try:
-                    obj = ScoringMethodModel.objects.get(
-                        method_name=method_name, method_version=method_version
-                    )
-                except ScoringMethodModel.DoesNotExist:
-                    raise ValueError(
-                        f"Scoring method '{method_name}' v{method_version} not found. "
-                        'Call register_scoring_method() first.'
-                    ) from None
-                score_method_map[col] = obj
+        # Method names are resolved to rows by the service layer (MethodService /
+        # ScoreService), not here: that is DB traversal, and keeping ORM objects out
+        # of the client-facing call is what the eventual client/backend split needs.
 
         warn = make_warn_once_per_key()
 
+        # NB: deliberately does *not* disable trg_score_values_refresh_pivoted_mv.
+        # That trigger is FOR EACH STATEMENT and scores are written one statement
+        # per chunk, so disabling it would buy little while requiring schema helpers
+        # that are not present on every deployment and risking leaving it off.
+        #
+        # Transaction scope lives in the service: the file is streamed in chunks and
+        # each is committed as it completes (or all of them together, under
+        # single_transaction), so there is no outer atomic() here.
         try:
-            with transaction.atomic():
-                result: IngestionBatchResult = IngestionService.ingest_sdf(
-                    file_path=path,
-                    target=self.target,
-                    compound_tag_list=compound_tags,
-                    pose_tag_list=pose_tags,
-                    enumeration_method_obj=enumeration_method_obj,
-                    pose_method_obj=pose_method_obj,
-                    score_method_map=score_method_map,
-                    mol_col=mol_col,
-                    name_col=name_col,
-                    inspiration_col=inspiration_col,
-                    inspirations=inspiration_list,
-                    reference_col=reference_col,
-                    reference=reference_id,
-                    skip_equal=skip_equal_dict,
-                    skip_not_equal=skip_not_equal_dict,
-                    convert_floats=convert_floats,
-                    field_warning=warn,
-                    inspiration_map=inspiration_map,
-                    check_rmsd=check_rmsd,
-                    rmsd_threshold=rmsd_threshold,
-                )
-        except Exception as exc:
-            logger.error(exc, exc_info=True)
-            # TODO: handle gracefully
-            raise Exception from exc
+            result: IngestionBatchResult = IngestionService.ingest_sdf(
+                file_path=path,
+                target=self.target,
+                compound_tag_list=compound_tags,
+                pose_tag_list=pose_tags,
+                enumeration_method=enumeration_method,
+                pose_method=pose_method,
+                score_cols=score_cols,
+                scoring_methods=scoring_methods,
+                mol_col=mol_col,
+                name_col=name_col,
+                inspiration_col=inspiration_col,
+                inspirations=inspiration_list,
+                reference_col=reference_col,
+                reference=reference_id,
+                skip_equal=skip_equal_dict,
+                skip_not_equal=skip_not_equal_dict,
+                convert_floats=convert_floats,
+                field_warning=warn,
+                inspiration_map=inspiration_map,
+                max_workers=max_workers,
+                batch_size=batch_size,
+                chunk_size=chunk_size,
+                single_transaction=single_transaction,
+                check_rmsd=check_rmsd,
+                rmsd_threshold=rmsd_threshold,
+            )
+        except Exception:
+            # re-raise the original rather than `raise Exception from exc`: a bare
+            # Exception discards the type and traceback of the real failure
+            logger.exception('load_sdf failed for %s', path)
+            raise
 
-        # It's not clear what the original code was trying to do. I'm
-        # going to issue warning when number of compounds and poses
-        # was less than the number of compounds in sdf (not all were
-        # successfully parsed) but that may not have been the original
-        # intention
         if result.attempts == result.compounds_created:
             f = mrich.success
         else:

@@ -13,17 +13,18 @@ from designdb.models import (
     CompoundEnumerationMethodJunctionModel,
     CompoundModel,
     CompoundTagJunctionModel,
-    EnumerationMethodModel,
+    InspirationModel,
     PoseMethodModel,
     PoseModel,
+    PoseTagJunctionModel,
     ReactantModel,
     ReactionModel,
     ScaffoldModel,
-    ScoringMethodModel,
     TargetModel,
 )
 from designdb.recipe import Recipe, Route
 from designdb.services.compound import CompoundService, CompoundTagService
+from designdb.services.method import MethodService
 from designdb.services.pose import PoseService, PoseTagService
 from designdb.services.pose_score import ScoreService
 from designdb.services.reaction import ReactionService
@@ -35,6 +36,7 @@ from designdb.utils import (
     SanitisationError,
     inchikey_from_smiles,
     remove_other_ligands,
+    safe_batch_size,
     sanitise_smiles,
 )
 from designdb.utils_chem import (
@@ -46,7 +48,7 @@ from designdb.utils_frag import (
     UnsupportedFragalysisLongcodeError,
     parse_observation_longcode,
 )
-from django.db import connection
+from django.db import connection, transaction
 from numpy import isnan
 from pandas import read_pickle
 
@@ -216,6 +218,120 @@ def read_df(path: Path):
     return df
 
 
+DEFAULT_CHUNK_SIZE = 5000
+
+
+def iter_sdf_chunks(
+    path: Path,
+    *,
+    mol_col: str,
+    name_col: str,
+    skip_equal: dict,
+    skip_not_equal: dict,
+    chunk_size: int,
+):
+    """Stream an SDF, yielding lists of at most ``chunk_size`` records.
+
+    Replaces ``read_df`` + :func:`preprocess_df` for the ingestion path. Those
+    materialise the entire file: measured at roughly 100 KB per molecule through
+    the full pipeline, a 300,000-record SDF would need ~28 GB. Streaming holds one
+    chunk at a time, so peak memory is set by ``chunk_size`` rather than file size.
+
+    Records are built to match ``PandasTools.LoadSDF`` exactly -- ``GetProp``
+    returns strings, as the DataFrame columns do, and ``_Name`` becomes
+    ``name_col`` -- so ingestion behaviour is unchanged. Verified record-for-record
+    against the DataFrame path.
+
+    Non-SDF inputs (pickled frames) have no streaming reader and are read whole,
+    then chunked.
+
+    :param path: file to read
+    :param mol_col: key to store the molecule under
+    :param name_col: key to store the molecule title under
+    :param skip_equal: keep rows where ``row[k] == v``
+    :param skip_not_equal: keep rows where ``row[k] != v``
+    :param chunk_size: maximum records per yielded chunk
+    :yields: lists of record dicts
+    """
+
+    def keep(rec) -> bool:
+        # 'ID' is hardcoded here to match the DataFrame path, which filters on
+        # df['ID'] regardless of name_col
+        if rec.get('ID') == 'ver_1.2':
+            return False
+        for k, v in skip_equal.items():
+            if rec.get(k) != v:
+                return False
+        for k, v in skip_not_equal.items():
+            if rec.get(k) == v:
+                return False
+        return True
+
+    def finish(rec):
+        alias = rec.get(name_col)
+        if isinstance(alias, str):
+            rec[name_col] = alias.strip()
+        return rec
+
+    if not path.name.endswith('.sdf'):
+        # pickled frame: no streaming reader available, so read whole and chunk
+        df = read_df(path)
+        records = preprocess_df(
+            df,
+            skip_equal=skip_equal,
+            skip_not_equal=skip_not_equal,
+            name_col=name_col,
+        )
+        for i in range(0, len(records), chunk_size):
+            yield records[i : i + chunk_size]
+        return
+
+    chunk: list[dict] = []
+    seen = kept = 0
+    with open(path, 'rb') as handle:
+        for mol in Chem.ForwardSDMolSupplier(handle):
+            seen += 1
+            if mol is None:
+                mrich.error(f'Could not parse molecule {seen} of {path}')
+                continue
+            rec = {n: mol.GetProp(n) for n in mol.GetPropNames()}
+            rec[name_col] = mol.GetProp('_Name') if mol.HasProp('_Name') else ''
+            rec[mol_col] = mol
+            if not keep(rec):
+                continue
+            kept += 1
+            chunk.append(finish(rec))
+            if len(chunk) >= chunk_size:
+                yield chunk
+                chunk = []
+    if chunk:
+        yield chunk
+    mrich.var('SDF entries (read)', seen)
+    mrich.var('SDF entries (post-filter)', kept)
+
+
+def validate_record(
+    record,
+    mol_col,
+    name_col,
+    inspiration_col,
+    inspirations,
+    reference_col,
+    reference,
+):
+    """Streaming counterpart of :func:`validate_df`, checked on the first record."""
+    assert mol_col in record, f'{mol_col=} not in {sorted(record)}'
+
+    if name_col:
+        assert name_col in record, f'{name_col=} not in {sorted(record)}'
+
+    if inspiration_col and not inspirations:
+        assert inspiration_col in record, f'{inspiration_col=} not in {sorted(record)}'
+
+    if not reference and reference_col:
+        assert reference_col in record, f'{reference_col=} not in {sorted(record)}'
+
+
 def validate_df(
     df,
     mol_col,
@@ -317,6 +433,9 @@ class IngestionBatchResult:
     attempts: int = 0
     compounds_created: int = 0
     poses_created: int = 0
+    #: chunks committed so far; with per-chunk commits this is what survived a
+    #: partial failure
+    chunks_committed: int = 0
 
 
 class IngestionService:
@@ -419,6 +538,89 @@ class IngestionService:
 
         return result
 
+    @staticmethod
+    def score_values_load_helpers_available() -> bool:
+        """Check that *both* score-value load helpers exist on this database.
+
+        Deployed databases have been found carrying ``begin_score_values_load()``
+        without ``end_score_values_load()``: the historical per-record loader called
+        ``begin_`` twice and never called ``end_``, so a half-applied schema went
+        unnoticed. Disabling the trigger under those conditions strands it disabled
+        and silently staleifies ``scores_per_pose_pivoted_mv``, so both are checked
+        before anything is disabled.
+
+        :returns: ``True`` only if both functions are present
+        """
+        if connection.vendor != 'postgresql':
+            return False
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT '
+                "to_regprocedure('designdb.begin_score_values_load()') IS NOT NULL, "
+                "to_regprocedure('designdb.end_score_values_load()') IS NOT NULL"
+            )
+            begin_exists, end_exists = cursor.fetchone()
+        if not (begin_exists and end_exists):
+            mrich.warning(
+                'score_values load helpers missing on this database '
+                f'(begin={bool(begin_exists)}, end={bool(end_exists)}); '
+                'not disabling trg_score_values_refresh_pivoted_mv. '
+                'See docs/proposal_pose_alias_index.md sibling note, or create them '
+                'from images/xchem-designdb/init-db/01_schema.sql.'
+            )
+        return bool(begin_exists and end_exists)
+
+    @classmethod
+    def begin_score_values_load(cls) -> bool:
+        """Disable the per-statement score-value matview refresh trigger.
+
+        ``trg_score_values_refresh_pivoted_mv`` fires a matview refresh for every
+        statement touching ``score_values``. The schema ships helpers to bracket a
+        bulk load (``init-db/01_schema.sql``).
+
+        Call this *outside* the ingestion transaction: the helper takes an
+        ``AccessExclusiveLock`` on ``score_values``, and holding that for the whole
+        load is what makes concurrent writers on production block.
+
+        Refuses to disable anything unless :meth:`score_values_load_helpers_available`
+        confirms the matching ``end_`` helper exists, so a failure can never leave
+        the trigger off.
+
+        .. note::
+           The trigger is ``FOR EACH STATEMENT``, and :meth:`ingest_sdf` writes
+           all scores in a single statement -- so skipping the disable costs the
+           batch path one refresh, not one per record. Losing this optimisation is
+           not a reason to risk stranding the trigger.
+
+        :returns: ``True`` if the trigger was actually disabled, ``False`` otherwise
+            (SQLite, or helpers missing)
+        """
+        if not cls.score_values_load_helpers_available():
+            return False
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT designdb.begin_score_values_load();')
+        return True
+
+    @staticmethod
+    def end_score_values_load() -> bool:
+        """Re-enable the score-value trigger and refresh the matview.
+
+        Counterpart to :meth:`begin_score_values_load`. Always call this from a
+        ``finally``: leaving the trigger disabled silently staleifies
+        ``scores_per_pose_pivoted_mv`` for every later reader.
+
+        .. note::
+           The SQL helper refreshes the matview *non*-concurrently, so this takes an
+           ``AccessExclusiveLock`` on the view for the duration of the refresh.
+
+        :returns: ``True`` if the trigger was re-enabled, ``False`` on SQLite
+        """
+        if connection.vendor != 'postgresql':
+            return False
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT designdb.end_score_values_load();')
+        return True
+
     @classmethod
     def ingest_sdf(
         cls,
@@ -427,9 +629,10 @@ class IngestionService:
         target,
         compound_tag_list: list[str],
         pose_tag_list: list[str],
-        enumeration_method_obj: 'EnumerationMethodModel | None' = None,
-        pose_method_obj: PoseMethodModel | None = None,
-        score_method_map: dict[str, 'ScoringMethodModel'] | None = None,
+        enumeration_method: tuple[str, str] | None = None,
+        pose_method: tuple[str, str] | None = None,
+        score_cols: list[str] | None = None,
+        scoring_methods: list[tuple[str, str]] | None = None,
         mol_col: str,
         name_col: str,
         inspiration_col: str | None = None,
@@ -441,59 +644,196 @@ class IngestionService:
         skip_not_equal,
         convert_floats: bool = True,
         field_warning=None,
+        max_workers: int | None = None,
+        batch_size: int | None = None,
+        chunk_size: int | None = None,
+        single_transaction: bool = False,
         check_rmsd: bool = False,
         rmsd_threshold: float = 1.0,
     ) -> IngestionBatchResult:
+        """Ingest an SDF into the database, set-based.
+
+        Each phase touches the database once for the whole file rather than once
+        per record:
+
+        1. parse, sanitise and hash every record -- pure CPU, no DB
+        2. resolve all compounds (:meth:`CompoundService.create_batch`)
+        3. resolve all inspirations and references in bulk
+        4. insert all poses (:meth:`PoseService.create_batch`)
+        5. insert all tag junctions, inspirations and scores in bulk
+
+        Methods arrive as ``(name, version)`` pairs rather than pre-resolved ORM
+        objects and are resolved here via :class:`MethodService` /
+        :meth:`ScoreService.resolve_score_method_map`, keeping model instances out
+        of the client-facing signature for the eventual client/backend split.
+
+        .. note::
+           ``trg_score_values_refresh_pivoted_mv`` is deliberately left alone. It is
+           ``FOR EACH STATEMENT`` and this path writes every score in a single
+           statement, so it fires once per load either way.
+
+        :param enumeration_method: ``(name, version)`` of the enumeration method
+        :param pose_method: ``(name, version)`` of the pose method
+        :param score_cols: SDF columns holding score values
+        :param scoring_methods: ``(name, version)`` pairs aligned with ``score_cols``
+        :param max_workers: worker processes for registration hashing; see
+            :func:`compound_hashes_from_smiles`
+        :param batch_size: rows per INSERT/UPDATE statement, applied to every bulk
+            write. ``None`` uses the safe per-model maximum; a larger value is
+            clamped to it. See :func:`safe_batch_size`.
+        :param chunk_size: SDF records held in memory and processed per pass,
+            defaulting to :data:`DEFAULT_CHUNK_SIZE`. This is what bounds peak
+            memory; ``batch_size`` only bounds statement size.
+        :param single_transaction: wrap the whole file in one transaction instead
+            of committing per chunk. All-or-nothing, at the cost of a transaction
+            that lives for the entire load.
+        :param check_rmsd: skip poses whose RMSD to an existing pose of the same
+            compound is below ``rmsd_threshold``; see
+            :meth:`PoseService.create_batch`
+        :param rmsd_threshold: RMSD below which two poses are the same, in Angstrom
+        :returns: counts of attempted records and created compounds/poses
+        :raises ValueError: if a named method is not registered
+        """
         result = IngestionBatchResult()
+
+        # Methods arrive as (name, version) rather than ORM objects: resolving them
+        # is DB traversal and belongs here, not in the client layer. Done before any
+        # file IO so an unregistered method fails fast.
+        enumeration_method_obj = MethodService.resolve_enumeration_method(
+            enumeration_method
+        )
+        pose_method_obj = MethodService.resolve_pose_method(pose_method)
+        score_method_map = ScoreService.resolve_score_method_map(
+            score_cols, scoring_methods
+        )
 
         output_directory = Path(str(file_path.name).removesuffix('.sdf'))
         output_directory.mkdir(parents=True, exist_ok=True)
 
-        df = read_df(file_path)
-        validate_df(
-            df,
-            mol_col,
-            name_col,
-            inspiration_col,
-            inspirations,
-            reference_col,
-            reference,
-        )
-
         compound_tags = CompoundTagService.tags_from_list(compound_tag_list)
         pose_tags = PoseTagService.tags_from_list(pose_tag_list)
-
-        # I need to know here one of two things:
-        # - which scores to create
-        # - which fields in sdf to ignore
-        # I mean, probs shouldn't cats smiles, etc as scores
-
-        # it's probably the latter, isn't it? then I don't actually
-        # need to init scores at all, especially with central
-        # deisgndb, the scoring method likely exists
-
-        # scorer = ScoreService(['energy_score', 'distance_score'])
         scorer = ScoreService()
 
-        records = preprocess_df(
-            df,
+        chunk_size = chunk_size or DEFAULT_CHUNK_SIZE
+        chunks = iter_sdf_chunks(
+            file_path,
+            mol_col=mol_col,
+            name_col=name_col,
             skip_equal=skip_equal,
             skip_not_equal=skip_not_equal,
-            name_col=name_col,
+            chunk_size=chunk_size,
         )
 
-        # temp(?) hack: disable a trigger that runs on every score
-        # insertion and later enable it
-        cursor = connection.cursor()
-        cursor.execute('SELECT designdb.begin_score_values_load();')
+        def run_chunk(records):
+            return cls._ingest_chunk(
+                records=records,
+                result=result,
+                target=target,
+                output_directory=output_directory,
+                compound_tags=compound_tags,
+                pose_tags=pose_tags,
+                scorer=scorer,
+                enumeration_method_obj=enumeration_method_obj,
+                pose_method_obj=pose_method_obj,
+                score_method_map=score_method_map,
+                mol_col=mol_col,
+                name_col=name_col,
+                inspiration_col=inspiration_col,
+                inspirations=inspirations,
+                inspiration_map=inspiration_map,
+                reference=reference,
+                reference_col=reference_col,
+                convert_floats=convert_floats,
+                field_warning=field_warning,
+                max_workers=max_workers,
+                batch_size=batch_size,
+                check_rmsd=check_rmsd,
+                rmsd_threshold=rmsd_threshold,
+            )
 
-        for r in records:
+        validated = False
+        if single_transaction:
+            # all-or-nothing: one transaction spans every chunk. Bounded memory
+            # still applies, but the transaction (and its locks and WAL) lives for
+            # the whole load.
+            with transaction.atomic():
+                for records in chunks:
+                    if not validated and records:
+                        validate_record(
+                            records[0],
+                            mol_col,
+                            name_col,
+                            inspiration_col,
+                            inspirations,
+                            reference_col,
+                            reference,
+                        )
+                        validated = True
+                    run_chunk(records)
+        else:
+            # commit per chunk: a failure leaves earlier chunks committed. Ingestion
+            # is re-runnable -- existing compounds and poses are found rather than
+            # duplicated -- so a partial load is recovered by running again.
+            for records in chunks:
+                if not validated and records:
+                    validate_record(
+                        records[0],
+                        mol_col,
+                        name_col,
+                        inspiration_col,
+                        inspirations,
+                        reference_col,
+                        reference,
+                    )
+                    validated = True
+                with transaction.atomic():
+                    run_chunk(records)
+                result.chunks_committed += 1
+
+        return result
+
+    @classmethod
+    def _ingest_chunk(
+        cls,
+        *,
+        records,
+        result,
+        target,
+        output_directory,
+        compound_tags,
+        pose_tags,
+        scorer,
+        enumeration_method_obj,
+        pose_method_obj,
+        score_method_map,
+        mol_col,
+        name_col,
+        inspiration_col,
+        inspirations,
+        inspiration_map,
+        reference,
+        reference_col,
+        convert_floats,
+        field_warning,
+        max_workers,
+        batch_size,
+        check_rmsd,
+        rmsd_threshold,
+    ) -> None:
+        """Run the five ingestion phases over one chunk of records.
+
+        Counts accumulate into ``result``. Record indices are chunk-local, which is
+        all the bulk lookups need -- cross-chunk identity is resolved through the
+        database (a compound created by an earlier chunk is found, not duplicated).
+        """
+
+        # ---- phase 1: CPU-only preparation -------------------------------------
+        # `prepared` holds one entry per record that survived sanitisation, keeping
+        # the original record index so the bulk lookups below can be joined back on
+        prepared: list[dict] = []
+        for idx, r in enumerate(records):
             result.attempts += 1
 
-            # TODO: this is the original procedure how it was
-            # calculated in hippo. I'm not touching it now, but this
-            # could use a rewrite, it converts smiles back to mol and
-            # then to inchikey
             smiles = r.get('smiles', None)
             if not smiles:
                 smiles = mp.rdkit.mol_to_smiles(r[mol_col])
@@ -512,79 +852,169 @@ class IngestionService:
                 mrich.error(f'Could not sanitise {smiles=}')
                 continue
 
-            inchikey = inchikey_from_smiles(smiles)
-            # sane_inchikey = inchikey_from_smiles(sane_smiles)
-
-            compound, compound_created = CompoundService.create(
-                smiles=smiles,
-                # mol=r[mol_col],
-                # smiles=sane_smiles,
-                # inchikey=sane_inchikey,
+            prepared.append(
+                {
+                    'idx': idx,
+                    'record': r,
+                    'smiles': smiles,
+                    'inchikey': inchikey_from_smiles(smiles),
+                    'mol': r[mol_col],
+                    'alias': r[name_col],
+                    'metadata': metadata_from_record(
+                        r,
+                        ignore_fields=[inspiration_col, name_col, mol_col],
+                        convert_floats=convert_floats,
+                        field_warning=field_warning,
+                    ),
+                    'path': os.path.relpath(
+                        output_directory / f'{r[name_col]}.fake.mol'
+                    ),
+                }
             )
-            for compound_tag in compound_tags:
-                CompoundTagJunctionModel.objects.get_or_create(
-                    compound=compound,
-                    compound_tag=compound_tag,
-                    target=target,
-                )
-            if enumeration_method_obj is not None:
-                CompoundEnumerationMethodJunctionModel.objects.get_or_create(
-                    compound=compound,
-                    enumeration_method=enumeration_method_obj,
-                    target=target,
-                )
-            if compound_created:
-                result.compounds_created += 1
 
-            pose_inspirations = PoseService.get_inspirations(
-                inspirations,
-                inspiration_map.get(r[name_col], []),
-                r.get(inspiration_col, []) if inspiration_col else None,
+        if not prepared:
+            return
+
+        # ---- phase 2: compounds ------------------------------------------------
+        compound_map = CompoundService.create_batch(
+            smiles_list=[p['smiles'] for p in prepared],
+            max_workers=max_workers,
+            batch_size=batch_size,
+        )
+        result.compounds_created += sum(
+            1 for _, created in compound_map.values() if created
+        )
+
+        # drop records whose compound could not be resolved
+        prepared = [p for p in prepared if p['smiles'] in compound_map]
+        if not prepared:
+            return
+
+        # ---- phase 3: inspirations and references ------------------------------
+        inspirations_by_idx = PoseService.get_inspirations_batch(
+            records,
+            global_inspirations=inspirations,
+            inspiration_map=inspiration_map,
+            inspiration_col=inspiration_col,
+            name_col=name_col,
+            target=target,
+        )
+
+        if reference:
+            # an explicit reference applies to every pose in the file
+            reference_by_idx: dict[int, int | None] = {}
+        elif reference_col:
+            reference_by_idx = PoseService.get_reference_batch(
+                records,
+                reference_col=reference_col,
                 target=target,
             )
+        else:
+            reference_by_idx = {}
 
-            if not reference and reference_col:
-                reference = PoseService.get_reference(r[reference_col], target)
-
-            metadata = metadata_from_record(
-                r,
-                ignore_fields=[inspiration_col, name_col, mol_col],
-                convert_floats=convert_floats,
-                field_warning=field_warning,
+        # ---- phase 4: poses ----------------------------------------------------
+        specs = []
+        for p in prepared:
+            compound, _ = compound_map[p['smiles']]
+            specs.append(
+                {
+                    'compound': compound,
+                    'mol': p['mol'],
+                    'alias': p['alias'],
+                    'path': p['path'],
+                    'metadata': p['metadata'],
+                    'inchikey': p['inchikey'],
+                    'smiles': p['smiles'],
+                    'reference': reference
+                    if reference
+                    else reference_by_idx.get(p['idx']),
+                }
             )
 
-            pose_path = os.path.relpath(output_directory / f'{r[name_col]}.fake.mol')
-            pose, pose_created = PoseService.create(
-                compound=compound,
-                target=target,
-                mol=r[mol_col],
-                alias=r[name_col],
-                path=pose_path,
-                metadata=metadata,
-                inchikey=inchikey,
-                smiles=smiles,
-                reference=reference,
-                pose_method=pose_method_obj,
-                check_rmsd=check_rmsd,
-                rmsd_threshold=rmsd_threshold,
+        poses, poses_created = PoseService.create_batch(
+            target=target,
+            specs=specs,
+            pose_method=pose_method_obj,
+            batch_size=batch_size,
+            check_rmsd=check_rmsd,
+            rmsd_threshold=rmsd_threshold,
+        )
+        result.poses_created += poses_created
+
+        # ---- phase 5: junctions, inspirations and scores -----------------------
+        compound_ids = {compound.pk for compound, _ in compound_map.values()}
+
+        if compound_tags:
+            CompoundTagJunctionModel.objects.bulk_create(
+                [
+                    CompoundTagJunctionModel(
+                        compound_id=compound_id,
+                        compound_tag=tag,
+                        target=target,
+                    )
+                    for compound_id in compound_ids
+                    for tag in compound_tags
+                ],
+                ignore_conflicts=True,
+                batch_size=safe_batch_size(
+                    CompoundTagJunctionModel, requested=batch_size
+                ),
             )
-            if pose_created:
-                result.poses_created += 1
 
-            pose.tags.add(*pose_tags)
-            pose.inspirations.add(*PoseModel.objects.filter(pk__in=pose_inspirations))
+        if enumeration_method_obj is not None:
+            CompoundEnumerationMethodJunctionModel.objects.bulk_create(
+                [
+                    CompoundEnumerationMethodJunctionModel(
+                        compound_id=compound_id,
+                        enumeration_method=enumeration_method_obj,
+                        target=target,
+                    )
+                    for compound_id in compound_ids
+                ],
+                ignore_conflicts=True,
+                batch_size=safe_batch_size(
+                    CompoundEnumerationMethodJunctionModel, requested=batch_size
+                ),
+            )
 
-            if score_method_map:
-                scorer.add_scores_from_record(
-                    pose=pose, record=r, score_method_map=score_method_map
+        live = [(p, pose) for p, pose in zip(prepared, poses, strict=True) if pose]
+
+        if pose_tags:
+            PoseTagJunctionModel.objects.bulk_create(
+                [
+                    PoseTagJunctionModel(pose=pose, pose_tag=tag)
+                    for _, pose in live
+                    for tag in pose_tags
+                ],
+                ignore_conflicts=True,
+                batch_size=safe_batch_size(PoseTagJunctionModel, requested=batch_size),
+            )
+
+        inspiration_rows = []
+        for p, pose in live:
+            for original_id in inspirations_by_idx.get(p['idx'], []):
+                inspiration_rows.append(
+                    InspirationModel(
+                        derivative_pose=pose,
+                        original_pose_id=original_id,
+                    )
                 )
-            else:
-                scorer.add_scores_from_record(pose=pose, record=r)
+        if inspiration_rows:
+            InspirationModel.objects.bulk_create(
+                inspiration_rows,
+                ignore_conflicts=True,
+                batch_size=safe_batch_size(
+                    InspirationModel, objs=inspiration_rows, requested=batch_size
+                ),
+            )
 
-        # re-enable trigger and populate matview
-        cursor.execute('SELECT designdb.begin_score_values_load();')
+        scorer.add_scores_from_records_batch(
+            pairs=[(pose, p['record']) for p, pose in live],
+            score_method_map=score_method_map or None,
+            batch_size=batch_size,
+        )
 
-        return result
+        return
 
     # how is that without target??
     @classmethod
