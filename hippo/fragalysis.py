@@ -61,12 +61,12 @@ def parse_observation_longcode(longcode: str) -> dict[str]:
     import re
 
     match = re.search(
-        r"(.*)_([A-z]_[0-9]*_[A-Z0-9]_[0-9])_(.*)\+([A-z]\+[0-9]*\+[0-9]\+[0-9])_.LIG",
+        r"(.*)_([A-z]_[0-9]*_[A-Z0-9]_[0-9])_(.*)\+([A-z]\+[0-9]*\+[A-z0-9]\+[0-9])_.LIG",
         longcode,
     )
     if not match:
         match = re.search(
-            r"(.*)_([A-z]_[0-9]*_[0-9])_(.*)\+([A-z]\+[0-9]*\+[0-9])_.LIG", longcode
+            r"(.*)_([A-z]_[0-9]*_[0-9])_(.*)\+([A-z]\+[A-z0-9]*\+[0-9])_.LIG", longcode
         )
 
         if not match:
