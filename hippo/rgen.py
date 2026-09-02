@@ -831,19 +831,20 @@ class RandomSelectionGenerator(RRGMixin):
         """Unformatted string representation"""
         return f"RandomSelectionGenerator(recipe_dir={self.recipe_dir})"
 
+
 class RandomRecipeSelectionGenerator(RRGMixin):
 
     def __init__(
-            self,
-            db,
-            *,
-            max_lead_time=None,
-            suppliers: list | None = None,
-            start_with: Recipe | None = None,
-            route_pool: "RouteSet | None" = None,
-            compounds: CompoundSet | None = None,
-            amount: float = 1.0,  # in mg
-            out_key: str | None = None,
+        self,
+        db,
+        *,
+        max_lead_time=None,
+        suppliers: list | None = None,
+        start_with: Recipe | None = None,
+        route_pool: "RouteSet | None" = None,
+        compounds: CompoundSet | None = None,
+        amount: float = 1.0,  # in mg
+        out_key: str | None = None,
     ):
 
         mrich.debug("RandomRecipeSelectionGenerator.__init__()")
@@ -898,7 +899,9 @@ class RandomRecipeSelectionGenerator(RRGMixin):
             out_key=out_key,
         )
 
-        self._compound_and_route_pool = [ingredient for ingredient in self._sgen.compound_pool]
+        self._compound_and_route_pool = [
+            ingredient for ingredient in self._sgen.compound_pool
+        ]
         self._compound_and_route_pool.extend([route for route in self._rgen.route_pool])
 
         self.dump_data()
@@ -906,11 +909,13 @@ class RandomRecipeSelectionGenerator(RRGMixin):
     ### FACTORIES
 
     @classmethod
-    def from_json(cls,
-                  db: "Database",
-                  path: "Path | str",
-                  rgen_path: "Path | str",
-                  sgen_path: "Path | str"):
+    def from_json(
+        cls,
+        db: "Database",
+        path: "Path | str",
+        rgen_path: "Path | str",
+        sgen_path: "Path | str",
+    ):
         """Construct the RandomRecipeSelectionGenerator from a JSON file"""
 
         data = json.load(open(path, "rt"))
@@ -946,7 +951,9 @@ class RandomRecipeSelectionGenerator(RRGMixin):
         self._rgen = RandomRecipeGenerator.from_json(db, rgen_path)
         self._sgen = RandomSelectionGenerator.from_json(db, sgen_path)
 
-        self._compound_and_route_pool = [ingredient for ingredient in self.sgen.compound_pool]
+        self._compound_and_route_pool = [
+            ingredient for ingredient in self.sgen.compound_pool
+        ]
         self._compound_and_route_pool.extend([route for route in self.rgen.route_pool])
 
         return self
@@ -984,14 +991,14 @@ class RandomRecipeSelectionGenerator(RRGMixin):
         json.dump(data, open(self.data_path, "wt"), indent=4)
 
     def generate(
-            self,
-            budget: float = 10000,
-            currency: str = "EUR",
-            max_products: int = 1000,
-            max_reactions: int = 1000,
-            debug: bool = False,
-            max_iter: int | None = None,
-            shuffle: bool = True,
+        self,
+        budget: float = 10000,
+        currency: str = "EUR",
+        max_products: int = 1000,
+        max_reactions: int = 1000,
+        debug: bool = False,
+        max_iter: int | None = None,
+        shuffle: bool = True,
     ):
         """Generate random recipe containing a combination of routes and compound selections
 
@@ -1060,7 +1067,10 @@ class RandomRecipeSelectionGenerator(RRGMixin):
             else:
                 candidate_compound = candidate
 
-            if candidate_compound in recipe.products or candidate_compound in recipe.compounds:
+            if (
+                candidate_compound in recipe.products
+                or candidate_compound in recipe.compounds
+            ):
                 continue
 
             # add the route or compound to the recipe
