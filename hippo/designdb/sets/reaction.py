@@ -282,7 +282,7 @@ class ReactionSet:
 
         """
 
-        mrich.debug('Using slower ReactionModel.dict rather than direct SQL query...')
+        mrich.debug('Using slower Reaction.dict rather than direct SQL query...')
 
         data = []
         for r in mrich.track(self, prefix='ReactionSet --> DataFrame'):

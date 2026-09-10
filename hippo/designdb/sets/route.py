@@ -285,7 +285,7 @@ class RouteSet:
         ### pop a RouteModel
 
         if debug:
-            mrich.debug(f'Would pop RouteModel from {self._current_cluster=}')
+            mrich.debug(f'Would pop Route from {self._current_cluster=}')
 
         cluster = self._current_cluster
 
@@ -319,7 +319,7 @@ class RouteSet:
             del self._data[route_id]
         else:
             # if debug:
-            mrich.debug('RouteModel not present')
+            mrich.debug('Route not present')
             return self.balanced_pop()
 
         ### increment cluster
@@ -382,7 +382,7 @@ class RouteSet:
 
     def __str__(self) -> str:
         """Unformatted string representation"""
-        return f'{{RouteModel × {len(self)}}}'
+        return f'{{Route × {len(self)}}}'
 
     def __repr__(self) -> str:
         """ANSI Formatted string representation"""

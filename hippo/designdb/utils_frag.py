@@ -25,14 +25,14 @@ GENERATED_TAG_COLS = [
     'Crystalforms short tag',
     'Centroid res',
     'Experiment code',
-    'PoseModel',
+    'Pose',
 ]
 
 
 META_IGNORE_COLS = [
     'Code',
     'Long code',
-    'CompoundModel code',
+    'Compound code',
     'Smiles',
     'Downloaded',
     'Main status',

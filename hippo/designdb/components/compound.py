@@ -20,6 +20,7 @@ from designdb.models import (
     ScaffoldModel,
     TargetModel,
 )
+from designdb.utils import guard_tag_creation
 from django.db.models import Exists, OuterRef
 from IPython.display import display
 from molparse.atomtypes import formula_to_atomtype_dict
@@ -389,10 +390,21 @@ class Compound:
         return list(junctions.values_list('compound_tag__compound_tag_name', flat=True))
 
     def add_tag(self, tag: str, *, target: TargetModel) -> None:
-        """Add a tag to this compound"""
+        """Add a tag to this compound
+
+        The tag vocabulary is maintained outside HIPPO. An unknown tag is created
+        here for the benefit of test instances, with a warning; see
+        :func:`.guard_tag_creation`.
+
+        :raises MissingTagError: if the tag is unknown and tag creation is
+            disabled
+        """
 
         assert isinstance(tag, str)
-        tag_obj, _ = CompoundTagModel.objects.get_or_create(compound_tag_name=tag)
+        tag_obj = CompoundTagModel.objects.filter(compound_tag_name=tag).first()
+        if tag_obj is None:
+            guard_tag_creation(tag)
+            tag_obj = CompoundTagModel.objects.create(compound_tag_name=tag)
         CompoundTagJunctionModel.objects.get_or_create(
             compound=self._instance, compound_tag=tag_obj, target=target
         )

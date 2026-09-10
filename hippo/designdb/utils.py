@@ -15,6 +15,7 @@ import mcol
 import molparse as mp
 import mrich
 import numpy as np
+from designdb import settings as designdb_settings
 from django.db.models import Aggregate, OuterRef, Subquery
 from molparse.rdkit import mol_from_smiles
 from rdkit import Chem
@@ -273,6 +274,42 @@ class SanitisationError(Exception):
     """Something went wrong in Molecule/SMILES sanitisation"""
 
     ...
+
+
+class MissingTagError(ValueError):
+    """A referenced tag is not in the tag vocabulary.
+
+    Subclasses :class:`ValueError` to match the ``MethodService`` convention for
+    "referenced thing is not registered".
+    """
+
+    ...
+
+
+def guard_tag_creation(name: str) -> None:
+    """Guard the debugging-only tag-creation paths.
+
+    The tag vocabulary is maintained outside HIPPO. Ingestion never creates tags;
+    the ``add_tag`` helpers still may, so that test instances can be set up
+    without the external pathway, but every creation is announced and can be
+    switched off wholesale via
+    :data:`~designdb.settings.ALLOW_TAG_CREATION`.
+
+    Call this *before* writing the row, so disabling creation actually prevents
+    it.
+
+    :param name: the tag name about to be created
+    :raises MissingTagError: if tag creation is disabled
+    """
+    if not designdb_settings.ALLOW_TAG_CREATION:
+        raise MissingTagError(
+            f'Unknown tag {name!r} and tag creation is disabled. '
+            'Add it to the tag vocabulary first.'
+        )
+    mrich.warning(
+        f'Creating tag {name!r}. Tag creation is for test instances only and '
+        'will be disabled in production.'
+    )
 
 
 def make_warn_once_per_key():
