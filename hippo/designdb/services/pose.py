@@ -17,7 +17,7 @@ from designdb.models import (
     PoseTagModel,
     TargetModel,
 )
-from designdb.utils import normalize_string_list, safe_batch_size
+from designdb.utils import MissingTagError, normalize_string_list, safe_batch_size
 from designdb.utils_chem import get_rmsd
 from designdb.utils_frag import GENERATED_TAG_COLS, META_IGNORE_COLS
 from django.db.models import Q
@@ -603,15 +603,55 @@ class PoseTagService:
 
         mrich.var('curated_tag_cols', self._curated_tag_cols)
 
-    @staticmethod
-    def tags_from_list(tag_list: list[str]):
-        assert tag_list is not None, '"None" passed as tag_list'
+        # Resolve the whole vocabulary once, up front: an unregistered tag fails
+        # before any record is written rather than part-way through the load, and
+        # tags_and_meta stops issuing a query per record. Only columns that are
+        # truthy somewhere are resolved -- an all-false column never produced a
+        # tag, so requiring it to exist would be stricter than the old behaviour.
+        # NB the truthiness test must match the one tags_and_meta applies per
+        # record below -- pandas' Series.any() skips NaN, but bool(nan) is True,
+        # so an all-NaN column would be left out of the map and then asked for.
+        used_tag_cols = [
+            c
+            for c in self._curated_tag_cols
+            if any(bool(v) for v in self._df[c].values)
+        ]
+        self._tag_map = {
+            tag.pose_tag_name: tag
+            for tag in PoseTagService.resolve_tags(used_tag_cols + self._other_tags)
+        }
 
-        PoseTagModel.objects.bulk_create(
-            [PoseTagModel(pose_tag_name=k.strip()) for k in tag_list if k.strip()],
-            ignore_conflicts=True,
-        )
-        tags = PoseTagModel.objects.filter(pose_tag_name__in=tag_list)
+    @staticmethod
+    def resolve_tags(tag_list: list[str]) -> list[PoseTagModel]:
+        """Resolve tag names to existing rows in the tag vocabulary.
+
+        Lookup-only: the vocabulary is maintained outside HIPPO, so an unknown
+        name is an error rather than a new row. Lookup counterpart of the
+        external registration pathway, in the same spirit as
+        :meth:`.MethodService.resolve_pose_method`.
+
+        :param tag_list: tag names; surrounding whitespace, blanks and duplicates
+            are ignored
+        :returns: the matching tags, evaluated (not a lazy queryset -- callers
+            iterate them once per chunk)
+        :raises MissingTagError: if any name is not in the vocabulary
+        """
+        if tag_list is None:
+            raise ValueError('"None" passed as tag_list')
+
+        names = {k.strip() for k in tag_list if k and k.strip()}
+        if not names:
+            return []
+
+        tags = list(PoseTagModel.objects.filter(pose_tag_name__in=names))
+
+        missing = names - {t.pose_tag_name for t in tags}
+        if missing:
+            raise MissingTagError(
+                f'Unknown pose tag(s): {sorted(missing)}. Tags must exist before '
+                'ingestion -- add them to the tag vocabulary first, then re-run.'
+            )
+
         return tags
 
     # might be a good idea to break meta and tags apart
@@ -640,6 +680,7 @@ class PoseTagService:
             if meta_row[tag].values[0]:
                 pose_tag_set.add(tag)
 
-        tags = PoseTagService.tags_from_list(pose_tag_set)
+        # keys come from resolve_tags, which strips; column names may not be
+        tags = [self._tag_map[tag.strip()] for tag in pose_tag_set]
 
         return tags, metadata

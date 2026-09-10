@@ -21,6 +21,7 @@ from designdb.models import (
     ScaffoldModel,
     TargetModel,
 )
+from designdb.utils import guard_tag_creation
 from django.db.models import Count, Exists, OuterRef, Q, QuerySet
 from django.db.models.query import ModelIterable
 from pandas import DataFrame
@@ -1291,11 +1292,22 @@ class CompoundSet:
         *,
         target: TargetModel,
     ) -> None:
-        """Add this tag to every member of the set"""
+        """Add this tag to every member of the set
+
+        The tag vocabulary is maintained outside HIPPO. An unknown tag is created
+        here for the benefit of test instances, with a warning; see
+        :func:`.guard_tag_creation`.
+
+        :raises MissingTagError: if the tag is unknown and tag creation is
+            disabled
+        """
 
         assert isinstance(tag, str)
 
-        compound_tag, _ = CompoundTagModel.objects.get_or_create(compound_tag_name=tag)
+        compound_tag = CompoundTagModel.objects.filter(compound_tag_name=tag).first()
+        if compound_tag is None:
+            guard_tag_creation(tag)
+            compound_tag = CompoundTagModel.objects.create(compound_tag_name=tag)
 
         CompoundTagJunctionModel.objects.bulk_create(
             [

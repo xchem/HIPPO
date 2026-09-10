@@ -30,7 +30,7 @@ from designdb.models import (
 )
 from designdb.sets.interaction import InteractionSet
 from designdb.settings import DEFAULT_POSE_METHODS
-from designdb.utils import ScoreSubquery, normalize_string_list
+from designdb.utils import ScoreSubquery, guard_tag_creation, normalize_string_list
 from designdb.utils_frag import generate_header
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -844,12 +844,22 @@ class PoseSet:
         self,
         tag: str,
     ) -> None:
-        """Add this tag to every member of the set"""
+        """Add this tag to every member of the set
+
+        The tag vocabulary is maintained outside HIPPO. An unknown tag is created
+        here for the benefit of test instances, with a warning; see
+        :func:`.guard_tag_creation`.
+
+        :raises MissingTagError: if the tag is unknown and tag creation is
+            disabled
+        """
 
         assert isinstance(tag, str)
 
-        pose_tag = PoseTagModel(pose_tag_name=tag)
-        pose_tag.save()
+        pose_tag = PoseTagModel.objects.filter(pose_tag_name=tag).first()
+        if pose_tag is None:
+            guard_tag_creation(tag)
+            pose_tag = PoseTagModel.objects.create(pose_tag_name=tag)
 
         PoseTagJunctionModel.objects.bulk_create(
             [
@@ -1253,8 +1263,8 @@ class PoseSet:
         pose_df.rename(
             inplace=True,
             columns={
-                'id': 'HIPPO PoseModel ID',
-                'compound_id': 'HIPPO CompoundModel ID',
+                'id': 'HIPPO Pose ID',
+                'compound_id': 'HIPPO Compound ID',
                 'mol': mol_col,
                 # "smiles": "original SMILES",
                 # "compound_id": "compound inchikey",
@@ -1262,8 +1272,8 @@ class PoseSet:
         )
 
         extras = {
-            'HIPPO PoseModel ID': 'HIPPO PoseModel ID',
-            'HIPPO CompoundModel ID': 'HIPPO CompoundModel ID',
+            'HIPPO Pose ID': 'HIPPO Pose ID',
+            'HIPPO Compound ID': 'HIPPO Compound ID',
             'smiles': 'smiles',
             'ref_pdb': 'protein reference',
             'ref_mols': 'fragment inspirations',
@@ -1754,7 +1764,7 @@ class PoseSet:
                     min=0,
                     max=len(self) - 1,
                     step=1,
-                    description='PoseModel:',
+                    description='Pose:',
                     disabled=False,
                 ),
             )
@@ -1775,7 +1785,7 @@ class PoseSet:
                     min=0,
                     max=len(self) - 1,
                     step=1,
-                    description='PoseModel:',
+                    description='Pose:',
                     disabled=False,
                 ),
             )
@@ -1786,7 +1796,7 @@ class PoseSet:
                 min=0,
                 max=len(self) - 1,
                 step=1,
-                description=f'PoseModel (/{len(self)}):',
+                description=f'Pose (/{len(self)}):',
                 disabled=False,
             )
 
@@ -1795,7 +1805,7 @@ class PoseSet:
             h = Checkbox(description='Tags', value=False)
             i = Checkbox(description='Subsites', value=False)
             d = Checkbox(description='2D (Comp.)', value=False)
-            e = Checkbox(description='2D (PoseModel)', value=False)
+            e = Checkbox(description='2D (Pose)', value=False)
             f = Checkbox(description='3D', value=True)
             g = Checkbox(description='Metadata', value=False)
 

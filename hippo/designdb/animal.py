@@ -386,7 +386,12 @@ class HIPPO:
             (otherwise ``FRAGALYSIS_AUTH_TOKEN`` is used)
         :param stack: Fragalysis stack to download from (default ``'production'``)
         :param skip: optional list of observation names to skip
+        :param tags: compound tags to assign to every loaded hit
         :returns: a DataFrame of metadata
+        :raises MissingTagError: if any tag is not in the tag vocabulary. The tag
+            vocabulary is maintained outside HIPPO and ingestion never creates
+            tags, so this covers ``tags`` *and* every curated ``metadata.csv``
+            column that is used as a pose tag
 
         """
 
@@ -580,9 +585,10 @@ class HIPPO:
         :param inspiration_map: Optional mapping between inspiration strings found
             in ``inspiration_col`` and :class:`.PoseModel` ids
         :param compound_tags: String tags to assign to all created compounds,
-            defaults to ``None``
+            defaults to ``None``. Tags must already exist -- the tag vocabulary is
+            maintained outside HIPPO and ingestion never creates tags
         :param pose_tags: String tags to assign to all created poses, defaults to
-            ``None``
+            ``None``. Must already exist, as for ``compound_tags``
         :param enumeration_method: ``(name, version)`` of a registered enumeration
             method to associate with every compound
         :param pose_method: ``(name, version)`` of a registered pose method to
@@ -614,6 +620,7 @@ class HIPPO:
             compound is below ``rmsd_threshold``
         :param rmsd_threshold: RMSD below which two poses are the same, in
             Angstrom, defaults to ``1.0``
+        :raises MissingTagError: if any tag is not in the tag vocabulary
 
         .. note::
            Registration hashing dominates CPU cost. Compounds already registered
@@ -829,10 +836,14 @@ class HIPPO:
         :param dry_run: Don't insert new records into the database
             (for debugging/testing)
         :param pose_tags: Add these tags to all inserted poses, defaults to
-            ["syndirella_product", "syndirella_placed"]
+            ["syndirella_product", "syndirella_placed"]. Tags must already exist --
+            the tag vocabulary is maintained outside HIPPO and ingestion never
+            creates tags, so these defaults must be present in the database
         :param product_tags: Add these tags to all inserted product compounds,
-            defaults to ["syndirella_product"]
+            defaults to ["syndirella_product"]. Must already exist, as for
+            ``pose_tags``
         :returns: annotated DataFrame
+        :raises MissingTagError: if any tag is not in the tag vocabulary
         """
 
         reject_flags = reject_flags or [
@@ -859,7 +870,7 @@ class HIPPO:
                     target=self.target,
                     reject_flags=reject_flags,
                     pose_tag_list=pose_tags,
-                    product_tag_list=pose_tags,
+                    product_tag_list=product_tags,
                     max_energy_score=max_energy_score,
                     max_distance_score=max_distance_score,
                     require_intra_geometry_pass=require_intra_geometry_pass,

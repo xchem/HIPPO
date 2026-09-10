@@ -5,6 +5,7 @@ import mrich
 import rdkit
 from designdb.models import CompoundModel, CompoundTagModel
 from designdb.utils import (
+    MissingTagError,
     compound_hashes_from_smiles,
     registration_hash_tautomer_insensitive,
     safe_batch_size,
@@ -287,16 +288,35 @@ class CompoundService:
 
 class CompoundTagService:
     @staticmethod
-    def tags_from_list(tag_list: list[str]):
-        assert tag_list is not None, '"None" passed as tag_list'
+    def resolve_tags(tag_list: list[str]) -> list[CompoundTagModel]:
+        """Resolve tag names to existing rows in the tag vocabulary.
 
-        CompoundTagModel.objects.bulk_create(
-            [
-                CompoundTagModel(compound_tag_name=k.strip())
-                for k in tag_list
-                if k.strip()
-            ],
-            ignore_conflicts=True,
-        )
-        tags = CompoundTagModel.objects.filter(compound_tag_name__in=tag_list)
+        Lookup-only: the vocabulary is maintained outside HIPPO, so an unknown
+        name is an error rather than a new row. Lookup counterpart of the
+        external registration pathway, in the same spirit as
+        :meth:`.MethodService.resolve_pose_method`.
+
+        :param tag_list: tag names; surrounding whitespace, blanks and duplicates
+            are ignored
+        :returns: the matching tags, evaluated (not a lazy queryset -- callers
+            iterate them once per chunk)
+        :raises MissingTagError: if any name is not in the vocabulary
+        """
+        if tag_list is None:
+            raise ValueError('"None" passed as tag_list')
+
+        names = {k.strip() for k in tag_list if k and k.strip()}
+        if not names:
+            return []
+
+        tags = list(CompoundTagModel.objects.filter(compound_tag_name__in=names))
+
+        missing = names - {t.compound_tag_name for t in tags}
+        if missing:
+            raise MissingTagError(
+                f'Unknown compound tag(s): {sorted(missing)}. Tags must exist '
+                'before ingestion -- add them to the tag vocabulary first, then '
+                're-run.'
+            )
+
         return tags

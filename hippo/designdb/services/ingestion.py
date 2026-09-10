@@ -455,7 +455,7 @@ class IngestionService:
 
         # this is now strictly for loading frag data. cannot switch inner funcs easily
         result = IngestionBatchResult()
-        compound_tags = CompoundTagService.tags_from_list(compound_tag_list)
+        compound_tags = CompoundTagService.resolve_tags(compound_tag_list)
         pose_tagger = PoseTagService(metadata_file, other_tags=compound_tag_list)
 
         # if needs xca paths, need to pass or select function
@@ -501,7 +501,6 @@ class IngestionService:
             if compound_created:
                 result.compounds_created += 1
 
-            # pose_tags = PoseTagService.tags_from_list(pose_tag_set)
             pose_tags, metadata = pose_tagger.tags_and_meta(
                 code=fs_record.name,
                 longcode=longcode,
@@ -693,6 +692,9 @@ class IngestionService:
         :param rmsd_threshold: RMSD below which two poses are the same, in Angstrom
         :returns: counts of attempted records and created compounds/poses
         :raises ValueError: if a named method is not registered
+        :raises MissingTagError: if a named tag is not in the tag vocabulary. Tags
+            are resolved, never created -- the vocabulary is maintained outside
+            HIPPO
         """
         result = IngestionBatchResult()
 
@@ -707,11 +709,15 @@ class IngestionService:
             score_cols, scoring_methods
         )
 
+        # Tags, like methods, must already exist: the vocabulary is maintained
+        # outside HIPPO. Resolved before the output directory is created so a
+        # rejected load leaves nothing behind.
+        compound_tags = CompoundTagService.resolve_tags(compound_tag_list)
+        pose_tags = PoseTagService.resolve_tags(pose_tag_list)
+
         output_directory = Path(str(file_path.name).removesuffix('.sdf'))
         output_directory.mkdir(parents=True, exist_ok=True)
 
-        compound_tags = CompoundTagService.tags_from_list(compound_tag_list)
-        pose_tags = PoseTagService.tags_from_list(pose_tag_list)
         scorer = ScoreService()
 
         chunk_size = chunk_size or DEFAULT_CHUNK_SIZE
@@ -1268,6 +1274,12 @@ class IngestionService:
         scaffold_compound: CompoundModel | None = None,
     ) -> pd.DataFrame:
 
+        # Tags must already exist: the vocabulary is maintained outside HIPPO.
+        # Resolved here rather than at their point of use further down, so an
+        # unknown tag fails before the compounds and reactions are written.
+        product_tags = CompoundTagService.resolve_tags(product_tag_list)
+        pose_tags = PoseTagService.resolve_tags(pose_tag_list)
+
         # work out number of reaction steps
         num_steps = max(
             [int(s.split('_')[0]) for s in df.columns if '_product_smiles' in s]
@@ -1524,7 +1536,6 @@ class IngestionService:
 
         product_ids = list(df[f'{num_steps}_product_compound_id'].dropna().unique())
         products = CompoundModel.objects.filter(pk__in=product_ids)
-        product_tags = CompoundTagService.tags_from_list(product_tag_list)
         for compound in products:
             for compound_tag in product_tags:
                 CompoundTagJunctionModel.objects.get_or_create(
@@ -1664,8 +1675,6 @@ class IngestionService:
             # pose.inspirations.add(*PoseModel.objects.filter(pk__in=inspiration.ids))
             pose.inspirations.add(*inspirations.queryset)
 
-        # if pose_tags:
-        pose_tags = PoseTagService.tags_from_list(pose_tag_list)
         for pose in poses:
             pose.tags.add(*pose_tags)
 
