@@ -8,6 +8,7 @@ from itertools import combinations
 from os.path import relpath
 from pathlib import Path
 from pprint import pprint
+from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
 import community as louvain
@@ -1119,7 +1120,9 @@ class PoseSet:
             (Default value = None)
         :param sort_reverse: reverse the sorting (Default value = False)
         :param generate_pdbs: generate accompanying protein-ligand complex PDBs
-            (Default value = False)
+            (Default value = False). Mutually exclusive with ``copy_reference_pdbs``.
+        :param copy_reference_pdbs: zip the apo reference protein PDBs alongside the
+            SDF (Default value = False). Mutually exclusive with ``generate_pdbs``.
         :param ingredients: get procurement and amount information from this
             :class:`.IngredientSet` (Default value = None)
         :param tags: include a column for tags in the output (Default value = True)
@@ -1132,6 +1135,15 @@ class PoseSet:
         """
 
         assert out_path.endswith('.sdf')
+
+        # generate_pdbs overwrites ref_pdb with the generated complex names, which
+        # copy_reference_pdbs would then fail to resolve as reference aliases
+        if generate_pdbs and copy_reference_pdbs:
+            raise ValueError(
+                'generate_pdbs and copy_reference_pdbs are mutually exclusive: '
+                'the SDF can reference either the generated complexes or the '
+                'reference proteins, not both'
+            )
 
         _name_col = '_Name'
         mol_col = 'ROMol'
@@ -1341,36 +1353,33 @@ class PoseSet:
         mrich.var('out_path', out_path)
 
         if generate_pdbs:
-            # output subdirectory
             out_key = Path(out_path).name.removesuffix('.sdf')
-            pdb_dir = Path(out_path).parent / Path(out_key)
-            pdb_dir.mkdir(exist_ok=True)
             zip_path = Path(out_path).parent / f'{out_key}_pdbs.zip'
 
-            # create the zip archive
-            with ZipFile(str(zip_path.resolve()), 'w') as z:
+            # PDBs are staged in a temporary directory (molparse writes to a path)
+            # and only the zip archive is kept
+            with (
+                TemporaryDirectory() as tmp_dir,
+                ZipFile(str(zip_path.resolve()), 'w') as z,
+            ):
                 # loop over poses
                 for (i, row), pose in zip(pose_df.iterrows(), poses, strict=False):
                     # filenames
                     pdb_name = f'{out_key}_{row._Name}.pdb'
-                    pdb_path = pdb_dir / pdb_name
+                    pdb_path = Path(tmp_dir) / pdb_name
                     pose_df.loc[i, 'ref_pdb'] = pdb_name
 
                     # generate the PL-complex
                     sys = pose.complex_system
 
                     # write the PDB
-                    mrich.writing(pdb_path)
                     sys.write(pdb_path, verbosity=0)
-                    z.write(pdb_path)
+                    z.write(pdb_path, arcname=pdb_name)
 
             mrich.writing(f'{out_key}_pdbs.zip')
 
         if copy_reference_pdbs:
-            # output subdirectory
             out_key = Path(out_path).name.removesuffix('.sdf')
-            pdb_dir = Path(out_path).parent / Path(out_key)
-            pdb_dir.mkdir(exist_ok=True)
             zip_path = Path(out_path).parent / f'{out_key}_refs.zip'
 
             # ref_pdb holds reference pose aliases that may lie outside this set,
@@ -1382,7 +1391,9 @@ class PoseSet:
                 )
             )
 
-            zips = set()
+            # archive name -> apo PDB on disk; written straight into the zip rather
+            # than copied to a loose output directory first
+            zips = {}
             for ref_alias in pose_df['ref_pdb'].values:
                 source = lookup.get(ref_alias)
                 if not source:
@@ -1409,18 +1420,12 @@ class PoseSet:
                     sys = mp.parse(source_path).protein_system
                     sys.write(apo_path, verbosity=0)
 
-                target_path = pdb_dir / f'{ref_alias}.pdb'
-
-                if not target_path.exists():
-                    mrich.writing(target_path)
-                    shutil.copy(apo_path, target_path)
-
-                zips.add(target_path)
+                zips[f'{ref_alias}.pdb'] = apo_path
 
             # create the zip archive
             with ZipFile(str(zip_path.resolve()), 'w') as z:
-                for path in zips:
-                    z.write(path, arcname=path.name)
+                for arcname, path in zips.items():
+                    z.write(path, arcname=arcname)
 
             mrich.writing(f'{out_key}_refs.zip')
 

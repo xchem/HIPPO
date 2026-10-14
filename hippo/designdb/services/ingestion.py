@@ -709,13 +709,13 @@ class IngestionService:
         )
 
         # Tags, like methods, must already exist: the vocabulary is maintained
-        # outside HIPPO. Resolved before the output directory is created so a
-        # rejected load leaves nothing behind.
+        # outside HIPPO. Resolved up front so an unknown tag fails fast.
         compound_tags = CompoundTagService.resolve_tags(compound_tag_list)
         pose_tags = PoseTagService.resolve_tags(pose_tag_list)
 
+        # only used to build each pose's placeholder ``.fake.mol`` path; nothing is
+        # written there, so the directory is not created
         output_directory = Path(str(file_path.name).removesuffix('.sdf'))
-        output_directory.mkdir(parents=True, exist_ok=True)
 
         scorer = ScoreService()
 
