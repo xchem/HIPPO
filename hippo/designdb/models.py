@@ -132,6 +132,7 @@ class TargetModel(BaseModel):
             ),
         ]
         indexes = [
+            models.Index(fields=['project'], name='idx_target_project_id'),
             models.Index(fields=['target_name'], name='idx_target_name'),
             models.Index(fields=['created_on'], name='idx_target_created'),
         ]
@@ -166,7 +167,7 @@ class CompoundModel(BaseModel):
     compound_metadata = models.TextField(null=True, blank=True)
     note = models.TextField(null=True, blank=True)
     rdkit_version = models.TextField(null=True, blank=True)
-    inchi_version = models.TextField(null=True, blank=True)
+    inchi_version = models.TextField()
 
     tags = models.ManyToManyField(
         'CompoundTagModel',
@@ -193,31 +194,32 @@ class CompoundModel(BaseModel):
     class Meta(BaseModel.Meta):
         db_table = 'compounds'
         constraints = [
-            # I believe there were supposed to be changes to these
-            # models.UniqueConstraint(
-            #     fields=[
-            #         'compound_alias',
-            #     ],
-            #     name='uc_compound_alias',
-            # ),
+            models.UniqueConstraint(
+                fields=[
+                    'compound_alias',
+                ],
+                name='uc_compound_alias',
+            ),
             models.UniqueConstraint(
                 fields=[
                     'compound_inchikey',
                 ],
                 name='uc_compound_inchikey',
             ),
-            # tautomers mess this up
-            # models.UniqueConstraint(
-            #     fields=[
-            #         'compound_smiles',
-            #     ],
-            #     name='uc_compound_smiles',
-            # ),
+            models.UniqueConstraint(
+                fields=[
+                    'compound_smiles',
+                ],
+                name='uc_compound_smiles',
+            ),
         ]
         indexes = [
-            # models.Index(fields=['base_compound'], name='idx_base_compound_id'),
+            models.Index(
+                fields=['base_compound'], name='idx_compound_base_compound_id'
+            ),
             models.Index(fields=['compound_inchikey'], name='idx_compound_inchikey'),
-            # models.Index(fields=['compound_smiles'], name='idx_compound_smiles'),
+            models.Index(fields=['compound_smiles'], name='idx_compound_smiles'),
+            models.Index(fields=['compound_hash'], name='idx_compound_compound_hash'),
             models.Index(fields=['created_on'], name='idx_compound_created'),
         ]
 
@@ -447,9 +449,7 @@ class PoseMethodJunctionModel(BaseModel):
             models.Index(
                 fields=['pose_method'], name='idx_has_pose_methods_pose_method_id'
             ),
-            models.Index(
-                fields=['created_on'], name='idx_idx_has_pose_methods_created'
-            ),
+            models.Index(fields=['created_on'], name='idx_has_pose_methods_created'),
         ]
 
 
@@ -649,7 +649,7 @@ class CompoundTagJunctionModel(BaseModel):
     )
     target = models.ForeignKey(
         TargetModel,
-        on_delete=models.CASCADE,
+        on_delete=models.RESTRICT,
         db_column='target_id',
     )
     compound_tag = models.ForeignKey(
@@ -665,6 +665,7 @@ class CompoundTagJunctionModel(BaseModel):
                 fields=['compound_tag'], name='idx_has_compound_tag_compound_tag_id'
             ),
             models.Index(fields=['created_on'], name='idx_has_compound_tag_created'),
+            models.Index(fields=['target'], name='idx_has_compound_tags_target_id'),
         ]
 
 
@@ -704,7 +705,7 @@ class CompoundEnumerationMethodJunctionModel(BaseModel):
     )
     target = models.ForeignKey(
         TargetModel,
-        on_delete=models.CASCADE,
+        on_delete=models.RESTRICT,
         db_column='target_id',
     )
     enumeration_method = models.ForeignKey(
@@ -722,6 +723,9 @@ class CompoundEnumerationMethodJunctionModel(BaseModel):
             ),
             models.Index(
                 fields=['created_on'], name='idx_has_enumeration_methods_created'
+            ),
+            models.Index(
+                fields=['target'], name='idx_has_enumeration_methods_target_id'
             ),
         ]
 
@@ -850,8 +854,8 @@ class CatalogueCompoundModel(BaseModel):
     catalogue_smiles = models.TextField(null=False, blank=True)
     catalogue_inchikey = models.TextField(null=False, blank=True)
     catalogue_hash = models.TextField(null=False, blank=True)
-    rdkit_version = models.TextField(null=True, blank=True)
-    inchi_version = models.TextField(null=True, blank=True)
+    rdkit_version = models.TextField()
+    inchi_version = models.TextField()
 
     class Meta(BaseModel.Meta):
         db_table = 'catalogue_compounds'
@@ -867,20 +871,28 @@ class CatalogueCompoundModel(BaseModel):
                 name='ck_catalogue_compounds_hash_nonempty',
             ),
         ]
+        indexes = [
+            models.Index(fields=['created_on'], name='idx_catalogue_compounds_created'),
+            models.Index(
+                fields=['catalogue_inchikey'], name='idx_catalogue_compounds_inchikey'
+            ),
+            models.Index(
+                fields=['catalogue_hash'], name='idx_catalogue_compounds_hash'
+            ),
+        ]
 
 
 class CataloguePriceModel(BaseModel):
     id = models.BigAutoField(primary_key=True)
     catalogue_compound = models.ForeignKey(
         CatalogueCompoundModel,
-        null=True,
         on_delete=models.CASCADE,
         db_column='catalogue_id',
     )
     vendor = models.TextField(null=False, blank=True)
     supplier = models.TextField(null=True, blank=True)
     supplier_id = models.TextField(null=False, blank=True)
-    amount = models.FloatField(null=True, blank=True)
+    amount = models.FloatField()
     price = models.FloatField(null=True, blank=True)
     currency = models.TextField(null=True, blank=True)
     purity = models.FloatField(null=True, blank=True)
@@ -906,6 +918,12 @@ class CataloguePriceModel(BaseModel):
                 name='uc_catalogue_price',
             )
         ]
+        indexes = [
+            models.Index(
+                fields=['catalogue_compound'], name='idx_catalogue_prices_catalogue_id'
+            ),
+            models.Index(fields=['created_on'], name='idx_catalogue_prices_created'),
+        ]
 
 
 class CataloguePriceCompoundJunctionModel(BaseModel):
@@ -923,6 +941,10 @@ class CataloguePriceCompoundJunctionModel(BaseModel):
 
     match_hash = models.TextField(null=False, blank=True)
 
+    # NOT NULL here, unlike the other tables
+    created_on = models.DateTimeField(default=timezone.now)
+    updated_on = models.DateTimeField(default=timezone.now)
+
     # Not needed, remove
     # catalogue_inchikey = models.TextField(null=False, blank=True)
     # supplier = models.TextField(null=True, blank=True)
@@ -937,6 +959,18 @@ class CataloguePriceCompoundJunctionModel(BaseModel):
                 condition=Q(match_hash__isnull=False) & Q(match_hash__gt=''),
                 name='ck_compound_catalogue_map_match_hash_nonempty',
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=['match_hash'], name='idx_compound_catalogue_map_match_hash'
+            ),
+            models.Index(
+                fields=['catalogue_price'],
+                name='idx_compound_catalogue_map_catalogue_price_id',
+            ),
+            models.Index(
+                fields=['created_on'], name='idx_compound_catalogue_map_created'
+            ),
         ]
 
 

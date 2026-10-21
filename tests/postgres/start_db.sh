@@ -61,26 +61,11 @@ psql_() {
 
 psql_ --dbname=postgres --command="CREATE DATABASE ${DB_NAME}" > /dev/null
 
-# The schema's last statement, CREATE FUNCTION designdb.end_score_values_load(),
-# is indented with non-breaking spaces (U+00A0) and fails to parse, so a fresh
-# load -- like the deployed DB -- has begin_score_values_load() but not end_.
-# The schema isn't ours to change, so mirror production: load without
-# ON_ERROR_STOP, tolerate exactly that one failure, and fail on anything else.
-errors="$(psql_ --set=ON_ERROR_STOP=0 --dbname="${DB_NAME}" --file="${SCHEMA}" \
-    2>&1 > /dev/null | grep 'ERROR:' || true)"
-end_fn_exists="$(psql_ --dbname="${DB_NAME}" --tuples-only --no-align --command \
-    "SELECT to_regprocedure('designdb.end_score_values_load()') IS NOT NULL")"
-
-if [ -n "${errors}" ]; then
-    if [ "$(printf '%s\n' "${errors}" | wc -l)" -eq 1 ] && [ "${end_fn_exists}" = f ]; then
-        echo "warning: designdb.end_score_values_load() not created (known schema" \
-            "issue, matches production)" >&2
-    else
-        echo "schema load failed:" >&2
-        printf '%s\n' "${errors}" >&2
-        exit 1
-    fi
-fi
+# Older schema versions failed to create designdb.end_score_values_load()
+# (non-breaking spaces in its body); the current one loads cleanly, so any error
+# is a real failure. Deployed databases may still lack that function, which
+# IngestionService checks for at runtime.
+psql_ --dbname="${DB_NAME}" --file="${SCHEMA}" > /dev/null
 
 echo "DesignDB test database ready:"
 echo "  DB_HOST=localhost POSTGRES_PORT=${PORT} DB_NAME=${DB_NAME}" \

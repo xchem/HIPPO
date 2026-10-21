@@ -23,7 +23,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 -- =========================================================
 -- TABLES (ordered by FK dependencies)
 -- =========================================================
-
+-- New table supporting HIPPO authorization
 CREATE TABLE IF NOT EXISTS designdb.projects (
     id BIGSERIAL PRIMARY KEY,
     project_name TEXT NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS designdb.targets (
     external_target_id BIGINT, -- ID of this target in the external database (Scarab link)
     target_name TEXT NOT NULL, --Insert from HIPPO codebase. Must be a link to Scarab protein production target
     target_metadata TEXT, -- Not populated by code
-    project_id BIGINT NOT NULL REFERENCES designdb.projects (id) ON DELETE RESTRICT,
+    project_id BIGINT NOT NULL REFERENCES designdb.projects (id) ON DELETE RESTRICT, -- Needed for HIPPO authorization
     created_on TIMESTAMPTZ DEFAULT now(),
     updated_on TIMESTAMPTZ DEFAULT now(),
     CONSTRAINT uc_target UNIQUE (target_name, project_id)
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS designdb.poses (
     pose_alias TEXT,
     pose_smiles TEXT, -- Populated by RDKit cartridge trigger from pose_mol (do not insert by code). LR - necessary because will contain defined stereochemistry - should these be canonicalised? Is it done by codebase from pose.mol? Could be done by RDkit cartridge.
     pose_reference INTEGER,
-    protein_link TEXT,
+    protein_link TEXT, -- Original pose_path reanmed to protein_link, contains the fragalysis link to the delig-desolv.pdb or apo-desolv.pdb
     compound_id BIGINT NOT NULL REFERENCES designdb.compounds (id) ON DELETE RESTRICT,
     target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE RESTRICT,
     pose_mol rdkit.mol, -- Insert by codebase. Trigger populates pose_inchikey and pose_smiles via cartridge.
@@ -206,8 +206,8 @@ CREATE TABLE IF NOT EXISTS designdb.compound_tags (
 -- New table
 CREATE TABLE IF NOT EXISTS designdb.has_compound_tags (
     compound_id BIGINT NOT NULL REFERENCES designdb.compounds (id) ON DELETE CASCADE,
-    target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE CASCADE,
     compound_tag_id BIGINT NOT NULL REFERENCES designdb.compound_tags (id) ON DELETE CASCADE,
+    target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE RESTRICT,
     created_on TIMESTAMPTZ DEFAULT now(),
     updated_on TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (compound_id, compound_tag_id, target_id)
@@ -230,8 +230,8 @@ CREATE TABLE IF NOT EXISTS designdb.enumeration_methods (
 -- New table
 CREATE TABLE IF NOT EXISTS designdb.has_enumeration_methods (
     compound_id BIGINT NOT NULL REFERENCES designdb.compounds (id) ON DELETE CASCADE,
-    target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE CASCADE,
     enumeration_method_id BIGINT NOT NULL REFERENCES designdb.enumeration_methods (id) ON DELETE CASCADE,
+    target_id BIGINT NOT NULL REFERENCES designdb.targets (id) ON DELETE RESTRICT,
     created_on TIMESTAMPTZ DEFAULT now(),
     updated_on TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (compound_id, enumeration_method_id, target_id)
@@ -454,6 +454,7 @@ CREATE TABLE IF NOT EXISTS designdb.scoring_methods_event_audit (
 -- INDEXES
 -- =========================================================
 
+CREATE INDEX IF NOT EXISTS idx_target_project_id ON designdb.targets(project_id);
 CREATE INDEX IF NOT EXISTS idx_target_name ON designdb.targets(target_name);
 CREATE INDEX IF NOT EXISTS idx_target_created ON designdb.targets(created_on);
 
@@ -603,6 +604,9 @@ CREATE INDEX IF NOT EXISTS idx_has_enumeration_methods_created ON designdb.has_e
 
 CREATE INDEX IF NOT EXISTS idx_has_compound_tag_compound_tag_id ON designdb.has_compound_tags(compound_tag_id);
 CREATE INDEX IF NOT EXISTS idx_has_compound_tag_created ON designdb.has_compound_tags(created_on);
+
+CREATE INDEX IF NOT EXISTS idx_has_compound_tags_target_id ON designdb.has_compound_tags(target_id);
+CREATE INDEX IF NOT EXISTS idx_has_enumeration_methods_target_id ON designdb.has_enumeration_methods(target_id);
 
 -- =========================================================
 -- MATERIALIZED VIEWS
@@ -916,7 +920,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  REFRESH MATERIALIZED VIEW CONCURRENTLY designdb.scores_per_pose_pivoted_mv;
+  REFRESH MATERIALIZED VIEW designdb.scores_per_pose_pivoted_mv;
   RETURN NULL;
 END;
 $$;
@@ -1004,7 +1008,6 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-
 
 -- =========================================================
 -- AUDIT FUNCTIONS
@@ -1300,8 +1303,9 @@ CREATE TRIGGER trg_has_enumeration_methods_updated_on BEFORE UPDATE ON designdb.
 -- Pivoted materialized view once at schema load, this will be mapped in Scarab to do the filtering based on any type of scores/methods
 SELECT designdb.create_scores_per_pose_pivoted_mv();
 
-
--- functions to disable and enable triggers in pose table (Lucas' later addition)
+-- Bulk score load: turn off per-statement refresh, then refresh once at the end.
+-- DISABLE/ENABLE TRIGGER is transactional. Call both in one transaction, or call end after begin,
+-- or the trigger stays disabled for every session and the view stops updating.
 CREATE OR REPLACE FUNCTION designdb.begin_score_values_load()
 RETURNS void
 LANGUAGE plpgsql
@@ -1321,6 +1325,6 @@ SET search_path = designdb, pg_temp
 AS $$
 BEGIN
   EXECUTE 'ALTER TABLE designdb.score_values ENABLE TRIGGER trg_score_values_refresh_pivoted_mv';
-  EXECUTE 'REFRESH MATERIALIZED VIEW designdb.scores_per_pose_pivoted_mv';
+  EXECUTE 'REFRESH MATERIALIZED VIEW designdb.scores_per_pose_pivoted_mv';
 END;
 $$;
