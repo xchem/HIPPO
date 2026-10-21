@@ -399,6 +399,9 @@ def metadata_from_record(
         'reference_id',
         'path',
         'exports',
+        # IDs written by PoseSet.to_fragalysis; meaningless in this database
+        'HIPPO Pose ID',
+        'HIPPO Compound ID',
     }
 
     skip = skip.union(set([k for k in ignore_fields if k]))

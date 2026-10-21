@@ -18,7 +18,7 @@ import molparse as mp
 import mrich
 import numpy as np
 from django.db import ProgrammingError, connection
-from django.db.models import Aggregate, OuterRef, Subquery
+from django.db.models import Aggregate
 from molparse.rdkit import mol_from_smiles
 from rdkit import Chem
 from rdkit.Chem import AddHs, MolFromSmiles, MolToSmiles, RegistrationHash, RemoveHs
@@ -347,20 +347,6 @@ def make_warn_once_per_key():
             warned.add(key)
 
     return warn
-
-
-# TODO: move
-class ScoreSubquery(Subquery):
-    def __init__(self, scoring_method):
-        # avoiding circular imports
-        from .models import ScoreValueModel
-
-        query = ScoreValueModel.objects.filter(
-            pose=OuterRef('pk'),
-            compound=OuterRef('compound'),
-            scoring_method__method_name=scoring_method,
-        ).values('score')[:1]
-        super().__init__(query)
 
 
 # Don't understand the distinct here. Shouldn't have to use it.

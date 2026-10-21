@@ -53,6 +53,7 @@ def generate_header(
     generation_date: str | None = None,
     extras=None,
     metadata: bool = True,
+    skip_metadata: set[str] | None = None,
 ) -> Chem.rdchem.Mol:
     """Generate a header molecule for Fragalysis RHS upload"""
 
@@ -78,7 +79,10 @@ def generate_header(
     header.SetProp('method', method)
 
     if metadata:
+        skip_metadata = skip_metadata or set()
         for k, _ in pose.pose_metadata.items():
+            if k in skip_metadata:
+                continue
             header.SetProp(k, str(k))
 
     for k, v in extras.items():

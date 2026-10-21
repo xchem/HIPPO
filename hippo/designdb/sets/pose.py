@@ -21,23 +21,26 @@ from designdb.models import (
     CompoundModel,
     InspirationModel,
     InteractionModel,
+    PoseMethodJunctionModel,
     PoseModel,
     PoseTagJunctionModel,
     PoseTagModel,
     ScoreValueModel,
+    ScoringMethodModel,
     SubsiteModel,
     SubsiteTagModel,
     TargetModel,
 )
 from designdb.sets.interaction import InteractionSet
 from designdb.settings import DEFAULT_POSE_METHODS
-from designdb.utils import MissingTagError, ScoreSubquery, normalize_string_list
+from designdb.utils import MissingTagError, normalize_string_list
 from designdb.utils_frag import generate_header
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import (
     Count,
     Exists,
+    F,
     FloatField,
     OuterRef,
     Q,
@@ -93,6 +96,13 @@ PDBID_PATTERN = re.compile(r'^[A-Za-z0-9]{4}-[a-z].sdf$')
 
 
 logger = logging.getLogger(__name__)
+
+
+def score_column_name(method_name: str, method_version: str | None) -> str:
+    """Column name for a scoring method's values in exported pose data"""
+    if method_version is None:
+        return method_name
+    return f'{method_name} ({method_version})'
 
 
 class PoseSet:
@@ -449,9 +459,6 @@ class PoseSet:
         reference_alias: bool = False,
         path: bool = False,
         mol: bool = False,
-        energy_score: bool = False,
-        distance_score: bool = False,
-        inspiration_score: bool = False,
         metadata: bool = False,
         expand_metadata: bool = True,
         debug: bool = True,
@@ -461,8 +468,9 @@ class PoseSet:
         tags: bool = False,
         expand_tags: bool = False,
         subsites: bool = False,
+        scores: bool = True,
         scoring_methods: list[tuple[str, str]] | None = None,
-        pose_method: bool = False,
+        pose_method: bool = True,
         # skip_no_mol=True, reference: str = "name", mol: bool = False, **kwargs
     ) -> 'pandas.DataFrame':
         """Get a DataFrame of the poses in this set.
@@ -479,18 +487,24 @@ class PoseSet:
             (Default value = False)
         :param path: include path column (Default value = False)
         :param mol: include ``rdkit.Chem.Mol`` in output (Default value = False)
-        :param energy_score: include energy_score column (Default value = False)
-        :param distance_score: include distance_score column (Default value = False)
-        :param inspiration_score: include inspiration_score column
-            (Default value = False)
         :param metadata: include metadata in output (Default value = False)
         :param expand_metadata: create separate column for each metadata key
-            (Default value = True)
+            (Default value = True). Keys named after a scoring method present in
+            the score columns are dropped, the score table being the source of truth
         :param inspiration_ids: include inspiration :class:`.PoseModel` ID column
         :param inspiration_aliases: include inspiration :class:`.PoseModel` alias column
         :param derivative_ids: include derivative :class:`.PoseModel` ID column
         :param tags: include tags column
         :param subsites: include subsites column
+        :param scores: include one column per scoring method, taken from the score
+            table and named ``<method name> (<method version>)``
+            (Default value = True)
+        :param scoring_methods: restrict the score columns to these
+            ``(method name, method version)`` pairs; ``None`` includes every
+            method scored for poses in this set
+        :param pose_method: include ``pose_method_name`` and
+            ``pose_method_version`` columns, comma separated when a pose has
+            several methods (Default value = True)
         """
 
         sig = inspect.signature(self.get_df)
@@ -503,7 +517,9 @@ class PoseSet:
                 'debug',
                 'expand_tags',
                 'expand_metadata',
+                'scores',
                 'scoring_methods',
+                'pose_method',
             )
         }
         # need id in output
@@ -539,21 +555,6 @@ class PoseSet:
             ),
             'path': ('protein_link', 'protein_link', None),
             'mol': ('mol', 'pose_mol', None),
-            'energy_score': (
-                'energy_score',
-                'energy_score',
-                ScoreSubquery('energy_score'),
-            ),
-            'distance_score': (
-                'distance_score',
-                'distance_score',
-                ScoreSubquery('distance_score'),
-            ),
-            'inspiration_score': (
-                'inspiration_score',
-                'inspiration_score',
-                ScoreSubquery('inspiration_score'),
-            ),
             'metadata': ('metadata', 'pose_metadata', None),
             'inspiration_ids': (
                 'inspiration_ids',
@@ -589,11 +590,6 @@ class PoseSet:
                 # JsonGroupArray('subsites__subsite_name',
                 #     filter=Q(subsites__isnull=False),),
             ),
-            'pose_method': (
-                'pose_method',
-                'pose_method_names',
-                ArrayAgg('methods__pose_method_name', distinct=True),
-            ),
         }
 
         annotations = {
@@ -601,26 +597,6 @@ class PoseSet:
         }
         values = [v[1] for k, v in fields.items() if flags.get(k, False)]
         columns = {v[1]: v[0] for k, v in fields.items() if flags.get(k, False)}
-
-        for method_name, version in scoring_methods or []:
-            score_sq = Subquery(
-                ScoreValueModel.objects.filter(
-                    pose=OuterRef('pk'),
-                    compound=OuterRef('compound'),
-                    scoring_method__method_name=method_name,
-                    scoring_method__method_version=version,
-                )
-                .annotate(
-                    score_val=Cast(
-                        KeyTextTransform('score', 'score'), output_field=FloatField()
-                    )
-                )
-                .values('score_val')[:1],
-                output_field=FloatField(),
-            )
-            annotations[method_name] = score_sq
-            values.append(method_name)
-            columns[method_name] = method_name
 
         qs = self._queryset.annotate(**annotations).values(*values)
 
@@ -631,6 +607,14 @@ class PoseSet:
         if alias:
             df['alias'] = df.name
 
+        score_method_names: set[str] = set()
+        if scores:
+            score_df, score_method_names = self._get_score_df(scoring_methods)
+            df = df.join(score_df)
+
+        if pose_method:
+            df = df.join(self._get_pose_method_df())
+
         if metadata and expand_metadata:
             # TODO: code specific to my current situation. have to
             # parse string to json (does postgres handle this
@@ -639,10 +623,14 @@ class PoseSet:
             #     df["metadata"].apply(lambda x: json.loads(x) if x else {}),
             # )
             expanded = pd.json_normalize(df['metadata'])
+            # json_normalize returns a positional index, align it with pose IDs
+            expanded.index = df.index
             # dropping columns is due to confusion with scores. can't be
             # permanent solution, for now, drop the common ones
             expanded = expanded.drop(
-                columns=set(expanded.columns).intersection(set(df.columns)),
+                columns=set(expanded.columns).intersection(
+                    set(df.columns) | score_method_names
+                ),
             )
 
             df = df.drop(columns=['metadata']).join(expanded)
@@ -668,6 +656,85 @@ class PoseSet:
                 df[col] = df[col].apply(normalize_string_list)
 
         return df
+
+    def _get_score_df(
+        self,
+        scoring_methods: list[tuple[str, str]] | None = None,
+    ) -> tuple[DataFrame, set[str]]:
+        """Scores of the poses in this set from the score table, one column per
+        scoring method, indexed by pose ID.
+
+        :param scoring_methods: restrict to these ``(name, version)`` pairs
+        :returns: the score DataFrame and the names of the methods in it
+        """
+        qs = ScoreValueModel.objects.filter(
+            pose__in=self._queryset,
+            compound=F('pose__compound'),
+        )
+
+        if scoring_methods:
+            method_filter = Q()
+            for method_name, version in scoring_methods:
+                method_filter |= Q(
+                    scoring_method__method_name=method_name,
+                    scoring_method__method_version=version,
+                )
+            qs = qs.filter(method_filter)
+
+        rows = qs.values_list(
+            'pose_id',
+            'scoring_method__method_name',
+            'scoring_method__method_version',
+            'score',
+        )
+
+        data: dict[int, dict[str, object]] = {}
+        method_names: set[str] = set()
+        for pose_id, method_name, version, score in rows:
+            column = score_column_name(method_name, version)
+            if isinstance(score, dict):
+                score = score.get('score')
+            data.setdefault(pose_id, {})[column] = score
+            method_names.add(method_name)
+
+        df = DataFrame.from_dict(data, orient='index')
+        for column in df.columns:
+            try:
+                df[column] = pd.to_numeric(df[column])
+            except (TypeError, ValueError):
+                # non-numeric scores are kept as they are
+                pass
+
+        return df[sorted(df.columns)], method_names
+
+    def _get_pose_method_df(self) -> DataFrame:
+        """Pose method names and versions of the poses in this set, indexed by
+        pose ID. A pose with several methods gets comma separated values, aligned
+        by position.
+        """
+        rows = (
+            PoseMethodJunctionModel.objects.filter(pose__in=self._queryset)
+            .order_by('pose_id', 'pose_method_id')
+            .values_list(
+                'pose_id',
+                'pose_method__pose_method_name',
+                'pose_method__pose_method_version',
+            )
+        )
+
+        names: dict[int, list[str]] = {}
+        versions: dict[int, list[str]] = {}
+        for pose_id, name, version in rows:
+            names.setdefault(pose_id, []).append(name or '')
+            versions.setdefault(pose_id, []).append(version or '')
+
+        return DataFrame(
+            {
+                'pose_method_name': {k: ','.join(v) for k, v in names.items()},
+                'pose_method_version': {k: ','.join(v) for k, v in versions.items()},
+            },
+            columns=['pose_method_name', 'pose_method_version'],
+        )
 
     def get_by_reference(
         self,
@@ -1034,6 +1101,11 @@ class PoseSet:
     ) -> None:
         """Write an SDF
 
+        Scores (one property per scoring method, from the score table) and the
+        pose method name and version are included by default; pass ``scores``,
+        ``scoring_methods`` or ``pose_method`` through to :meth:`get_df` to change
+        that.
+
         :param out_path: filepath of the output
         :param name_col: pose property to use as the name column, can be
             ``["name", "alias", "inchikey", "id"]`` (Default value = 'name')
@@ -1101,7 +1173,7 @@ class PoseSet:
         tags: bool = True,
         subsites: bool = True,
         extra_cols: dict[str, list] = None,
-        inspiration_score: bool = True,
+        scoring_methods: list[tuple[str, str]] | None = None,
         # name_col: str = "name",
         **kwargs,
     ):
@@ -1131,6 +1203,10 @@ class PoseSet:
         :param extra_cols: extra_cols should be a dictionary with a key for each column
             name, and list values where the first element is the field description, and
             all subsequent elements are values for each pose.
+        :param scoring_methods: restrict the exported scores to these
+            ``(method name, method version)`` pairs; ``None`` exports every method
+            scored for these poses. Scores come from the score table, one field per
+            method, named ``<method name> (<method version>)``
 
         """
 
@@ -1203,9 +1279,9 @@ class PoseSet:
             metadata=metadata,
             tags=tags,
             subsites=subsites,
-            energy_score=True,
-            distance_score=True,
-            inspiration_score=inspiration_score,
+            scores=True,
+            scoring_methods=scoring_methods,
+            pose_method=True,
             # sanitise_null_metadata_values=True,
             expand_tags=False,
             # sanitise_tag_list_separator=";",
@@ -1272,16 +1348,27 @@ class PoseSet:
 
         pose_df[_name_col] = pose_df['name']
 
-        pose_df.rename(
-            inplace=True,
-            columns={
-                'id': 'HIPPO Pose ID',
-                'compound_id': 'HIPPO Compound ID',
-                'mol': mol_col,
-                # "smiles": "original SMILES",
-                # "compound_id": "compound inchikey",
-            },
-        )
+        renames = {
+            'id': 'HIPPO Pose ID',
+            'compound_id': 'HIPPO Compound ID',
+            'mol': mol_col,
+            # "smiles": "original SMILES",
+            # "compound_id": "compound inchikey",
+        }
+
+        # expanded metadata can already hold a column under a renamed name (e.g.
+        # 'HIPPO Pose ID' from re-loading an earlier export); the rename would
+        # then duplicate it, so the database value wins
+        clashes = [
+            col for old, col in renames.items() if col != old and col in pose_df.columns
+        ]
+        if clashes:
+            mrich.warning(
+                f'Ignoring metadata columns that clash with output: {clashes}'
+            )
+            pose_df = pose_df.drop(columns=clashes)
+
+        pose_df.rename(inplace=True, columns=renames)
 
         extras = {
             'HIPPO Pose ID': 'HIPPO Pose ID',
@@ -1291,10 +1378,27 @@ class PoseSet:
             'ref_mols': 'fragment inspirations',
             'alias': 'alias',
             # "compound inchikey": "compound inchikey",
-            'distance_score': 'distance_score',
-            'energy_score': 'energy_score',
-            'inspiration_score': 'inspiration_score',
+            'pose_method_name': 'pose method name',
+            'pose_method_version': 'pose method version',
         }
+
+        # one field per scoring method, described in the header
+        scoring_method_rows = (
+            ScoringMethodModel.objects.filter(scores__pose__in=poses._queryset)
+            .distinct()
+            .values_list('method_name', 'method_version', 'method_description')
+        )
+        score_method_names = set()
+        for method_name, version, description in scoring_method_rows:
+            column = score_column_name(method_name, version)
+            if column not in pose_df.columns:
+                continue
+            score_method_names.add(method_name)
+            extras[column] = description or (
+                f'{method_name} score, version {version}'
+                if version is not None
+                else f'{method_name} score'
+            )
 
         if subsites:
             extras['subsites'] = 'subsites'
@@ -1441,6 +1545,7 @@ class PoseSet:
             submitter_institution=submitter_institution,
             extras=extras,
             metadata=metadata,
+            skip_metadata=set(skip_metadata or []) | score_method_names,
         )
 
         # # empty properties
@@ -1463,6 +1568,12 @@ class PoseSet:
 
         if sort_by:
             pose_df = pose_df.sort_values(by=sort_by, ascending=not sort_reverse)
+
+        # an SDF property holds a single value; a duplicated column would be
+        # written as the repr of a pandas Series
+        duplicated = pose_df.columns[pose_df.columns.duplicated()].unique().tolist()
+        if duplicated:
+            raise ValueError(f'Duplicate output columns: {duplicated}')
 
         mrich.writing(out_path)
 
