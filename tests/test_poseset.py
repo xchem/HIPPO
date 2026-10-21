@@ -119,11 +119,15 @@ def scored_poseset(animal, make_compound):
         for i in range(3)
     ]
 
-    vina = ScoringMethodModel.objects.create(
+    # get_or_create: the session database is shared between tests and the
+    # method tables are unique on (name, version)
+    vina, _ = ScoringMethodModel.objects.get_or_create(
         method_name="export_vina", method_version="1.2.5"
     )
-    cnn = ScoringMethodModel.objects.create(method_name="export_cnn")
-    pose_method = PoseMethodModel.objects.create(
+    cnn, _ = ScoringMethodModel.objects.get_or_create(
+        method_name="export_cnn", method_version=None
+    )
+    pose_method, _ = PoseMethodModel.objects.get_or_create(
         pose_method_name="export_dock", pose_method_version="2.0"
     )
 
