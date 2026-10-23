@@ -244,3 +244,389 @@ def test_metadata_from_record_skips_hippo_ids():
     )
 
     assert metadata == {"note": "kept"}
+
+
+### many-to-many columns (inspirations, tags, subsites)
+
+
+@pytest.fixture
+def tagged_poseset(animal, make_compound):
+    """Two poses with two inspirations each, on a dedicated target. The first
+    pose has no tags or subsites; the second has three pose tags, two subsites
+    and a compound with two compound tags in this target (and one more in
+    another target, which must not show up).
+
+    Several many-to-many relations per pose: aggregating them over joins in one
+    query multiplied their rows (``[None, None]`` tags for an untagged pose with
+    two inspirations).
+    """
+    from designdb.models import (
+        CompoundTagJunctionModel,
+        CompoundTagModel,
+        InspirationModel,
+        PoseModel,
+        PoseTagJunctionModel,
+        PoseTagModel,
+        SubsiteModel,
+        SubsiteTagModel,
+        TargetModel,
+    )
+    from designdb.sets.pose import PoseSet
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    target, other_target = (
+        TargetModel.objects.create(
+            target_name=f"m2m-test-{TargetModel.objects.count()}",
+            project=animal.target.project,
+        )
+        for _ in range(2)
+    )
+    compound = make_compound("c1ccc(C#N)cc1")  # benzonitrile
+    mol = Chem.AddHs(Chem.MolFromSmiles("c1ccc(C#N)cc1"))
+    AllChem.EmbedMolecule(mol, randomSeed=42)
+
+    def pose(alias):
+        return PoseModel.objects.create(
+            compound=compound, target=target, pose_alias=alias, pose_mol=mol
+        )
+
+    hits = [pose(f"m2m-hit-{i}") for i in range(4)]
+    untagged, tagged = pose("m2m-untagged"), pose("m2m-tagged")
+
+    InspirationModel.objects.bulk_create(
+        [
+            InspirationModel(original_pose=hits[0], derivative_pose=untagged),
+            InspirationModel(original_pose=hits[1], derivative_pose=untagged),
+            InspirationModel(original_pose=hits[2], derivative_pose=tagged),
+            InspirationModel(original_pose=hits[3], derivative_pose=tagged),
+        ]
+    )
+
+    pose_tags = [
+        PoseTagModel.objects.get_or_create(pose_tag_name=f"m2m-pose-{c}")[0]
+        for c in "cab"
+    ]
+    PoseTagJunctionModel.objects.bulk_create(
+        [PoseTagJunctionModel(pose=tagged, pose_tag=t) for t in pose_tags]
+    )
+
+    subsites = [
+        SubsiteModel.objects.create(target=target, subsite_name=f"m2m-site-{c}")
+        for c in "ba"
+    ]
+    SubsiteTagModel.objects.bulk_create(
+        [SubsiteTagModel(pose=tagged, subsite=s) for s in subsites]
+    )
+
+    compound_tags = [
+        CompoundTagModel.objects.get_or_create(compound_tag_name=f"m2m-cmpd-{c}")[0]
+        for c in "yxz"
+    ]
+    CompoundTagJunctionModel.objects.bulk_create(
+        [
+            CompoundTagJunctionModel(compound=compound, target=target, compound_tag=t)
+            for t in compound_tags[:2]
+        ]
+        + [
+            CompoundTagJunctionModel(
+                compound=compound, target=other_target, compound_tag=compound_tags[2]
+            )
+        ]
+    )
+
+    pset = PoseSet(PoseModel.objects.filter(pk__in=[untagged.pk, tagged.pk]))
+    return pset, hits, untagged, tagged
+
+
+M2M_FLAGS = dict(
+    inspiration_ids=True,
+    inspiration_aliases=True,
+    pose_tags=True,
+    compound_tags=True,
+    subsites=True,
+)
+
+
+def test_get_df_m2m_columns_are_not_multiplied(tagged_poseset):
+    pset, hits, untagged, tagged = tagged_poseset
+
+    df = pset.get_df(**M2M_FLAGS)
+
+    assert df.loc[tagged.pk, "inspiration_ids"] == [hits[2].pk, hits[3].pk]
+    assert df.loc[tagged.pk, "inspiration_aliases"] == ["m2m-hit-2", "m2m-hit-3"]
+    assert df.loc[tagged.pk, "pose_tags"] == ["m2m-pose-a", "m2m-pose-b", "m2m-pose-c"]
+    assert df.loc[tagged.pk, "subsites"] == ["m2m-site-a", "m2m-site-b"]
+    # compound tags of this pose's target only
+    assert df.loc[tagged.pk, "compound_tags"] == ["m2m-cmpd-x", "m2m-cmpd-y"]
+
+
+def test_get_df_m2m_columns_empty_lists(tagged_poseset):
+    pset, hits, untagged, _ = tagged_poseset
+
+    df = pset.get_df(**M2M_FLAGS)
+
+    assert df.loc[untagged.pk, "inspiration_ids"] == [hits[0].pk, hits[1].pk]
+    assert df.loc[untagged.pk, "pose_tags"] == []
+    assert df.loc[untagged.pk, "subsites"] == []
+    # compound tags belong to the compound, shared by both poses
+    assert df.loc[untagged.pk, "compound_tags"] == ["m2m-cmpd-x", "m2m-cmpd-y"]
+
+
+def test_get_df_derivative_ids(tagged_poseset):
+    from designdb.models import PoseModel
+    from designdb.sets.pose import PoseSet
+
+    _, hits, untagged, tagged = tagged_poseset
+
+    df = PoseSet(PoseModel.objects.filter(pk__in=[h.pk for h in hits])).get_df(
+        derivative_ids=True
+    )
+
+    assert df.loc[hits[0].pk, "derivative_ids"] == [untagged.pk]
+    assert df.loc[hits[3].pk, "derivative_ids"] == [tagged.pk]
+    # derivatives, not inspirations: the hits have none of the latter
+    df = PoseSet(PoseModel.objects.filter(pk=untagged.pk)).get_df(derivative_ids=True)
+    assert df.loc[untagged.pk, "derivative_ids"] == []
+
+
+def test_get_df_expand_tags(tagged_poseset):
+    pset, _, untagged, tagged = tagged_poseset
+
+    df = pset.get_df(pose_tags=True, expand_tags=True)
+
+    assert "pose_tags" not in df.columns
+    assert df.loc[tagged.pk, "m2m-pose-a"]
+    assert not df.loc[untagged.pk, "m2m-pose-a"]
+
+
+def test_get_df_tags_is_deprecated_alias_for_pose_tags(tagged_poseset):
+    pset, _, _, tagged = tagged_poseset
+
+    df = pset.get_df(tags=True)
+
+    assert df.loc[tagged.pk, "pose_tags"] == ["m2m-pose-a", "m2m-pose-b", "m2m-pose-c"]
+
+
+def test_get_df_m2m_columns_on_sliced_set(tagged_poseset):
+    """PoseSet[:n] slices the queryset; the m2m lookups subquery it."""
+    pset, _, _, _ = tagged_poseset
+
+    df = pset[:1].get_df(**M2M_FLAGS)
+
+    assert len(df) == 1
+
+
+def test_write_sdf_m2m_fields(tagged_poseset, tmp_path):
+    from rdkit.Chem import PandasTools
+
+    pset, hits, _, _ = tagged_poseset
+    out = tmp_path / "m2m.sdf"
+
+    pset.write_sdf(str(out), **M2M_FLAGS)
+
+    sdf = PandasTools.LoadSDF(str(out)).set_index("ID")
+    tagged = sdf.loc["m2m-tagged"]
+    assert tagged["inspiration_ids"] == f"{hits[2].pk},{hits[3].pk}"
+    assert tagged["inspiration_aliases"] == "m2m-hit-2,m2m-hit-3"
+    assert tagged["pose_tags"] == "m2m-pose-a,m2m-pose-b,m2m-pose-c"
+    assert tagged["compound_tags"] == "m2m-cmpd-x,m2m-cmpd-y"
+    assert tagged["subsites"] == "m2m-site-a,m2m-site-b"
+
+    untagged = sdf.loc["m2m-untagged"]
+    assert untagged["pose_tags"] == ""
+    assert untagged["subsites"] == ""
+
+
+def test_write_sdf_omits_m2m_fields_by_default(tagged_poseset, tmp_path):
+    from rdkit.Chem import PandasTools
+
+    pset, _, _, _ = tagged_poseset
+    out = tmp_path / "default.sdf"
+
+    pset.write_sdf(str(out))
+
+    sdf = PandasTools.LoadSDF(str(out))
+    for field in ("pose_tags", "compound_tags", "subsites", "tags"):
+        assert field not in sdf.columns
+
+
+### write_sdf name_col
+
+
+@pytest.mark.parametrize("name_col", ["alias", "name", "id", "longcode", "inchikey"])
+def test_write_sdf_name_col(scored_poseset, tmp_path, name_col):
+    """Every ``name_col`` mode names the records; ``id`` is the DataFrame index
+    and ``longcode`` a pose metadata key (missing on the other poses)."""
+    from designdb.models import PoseModel
+    from rdkit.Chem import PandasTools
+
+    pset, poses = scored_poseset
+    poses[0].pose_metadata = {"longcode": "LC-0"}
+    poses[0].save()
+    PoseModel.objects.filter(pk__in=[p.pk for p in poses]).update(
+        pose_inchikey="INCHIKEY-TEST"
+    )
+    out = tmp_path / f"{name_col}.sdf"
+
+    pset.write_sdf(str(out), name_col=name_col)
+
+    sdf = PandasTools.LoadSDF(str(out))
+    expected = {
+        "alias": [p.pose_alias for p in poses],
+        "name": [p.pose_alias for p in poses],
+        "id": [str(p.pk) for p in poses],
+        "longcode": ["LC-0", "None", "None"],
+        "inchikey": ["INCHIKEY-TEST"] * 3,
+    }[name_col]
+    assert sorted(sdf["ID"]) == sorted(expected)
+    assert "_Name" not in sdf.columns
+
+
+### to_fragalysis
+
+
+FRAGALYSIS_ARGS = dict(
+    method="test",
+    submitter_name="test",
+    submitter_email="test@example.com",
+    submitter_institution="test",
+)
+
+
+def set_reference(pose, reference):
+    pose.pose_reference = reference.pk
+    pose.save()
+
+
+def fragalysis_records(path):
+    """The SDF records of a Fragalysis upload by name, without the header"""
+    from rdkit.Chem import PandasTools
+
+    sdf = PandasTools.LoadSDF(str(path)).set_index("ID")
+    return sdf.drop(index="ver_1.2"), sdf.loc["ver_1.2"]
+
+
+def test_to_fragalysis_ref_mols_tags_and_compound_tags(tagged_poseset, tmp_path):
+    pset, hits, untagged, tagged = tagged_poseset
+    set_reference(untagged, hits[0])
+    set_reference(tagged, hits[0])
+    out = tmp_path / "fragalysis.sdf"
+
+    pset.to_fragalysis(str(out), compound_tags=True, **FRAGALYSIS_ARGS)
+
+    records, header = fragalysis_records(out)
+    assert records.loc["m2m-tagged", "ref_mols"] == "m2m-hit-2,m2m-hit-3"
+    assert records.loc["m2m-untagged", "ref_mols"] == "m2m-hit-0,m2m-hit-1"
+    assert records.loc["m2m-tagged", "tags"] == "m2m-pose-a,m2m-pose-b,m2m-pose-c"
+    assert records.loc["m2m-untagged", "tags"] == ""
+    assert records.loc["m2m-tagged", "compound tags"] == "m2m-cmpd-x,m2m-cmpd-y"
+    assert records.loc["m2m-tagged", "subsites"] == "m2m-site-a,m2m-site-b"
+    # every field is described in the header
+    assert header["compound tags"] == "compound tags"
+    assert header["ref_mols"] == "fragment inspirations"
+
+
+def test_to_fragalysis_ref_mols_falls_back_to_self(tagged_poseset, tmp_path):
+    from designdb.models import PoseModel
+    from designdb.sets.pose import PoseSet
+
+    _, hits, _, tagged = tagged_poseset
+    set_reference(hits[1], hits[0])
+    set_reference(tagged, hits[0])
+    out = tmp_path / "fragalysis.sdf"
+
+    PoseSet(PoseModel.objects.filter(pk__in=[hits[1].pk, tagged.pk])).to_fragalysis(
+        str(out), skip_no_inspirations=False, **FRAGALYSIS_ARGS
+    )
+
+    records, _ = fragalysis_records(out)
+    assert records.loc["m2m-hit-1", "ref_mols"] == "m2m-hit-1"
+    assert records.loc["m2m-tagged", "ref_mols"] == "m2m-hit-2,m2m-hit-3"
+
+
+def test_to_fragalysis_skip_filters_combine(tagged_poseset, tmp_path):
+    """Only poses with both a reference and inspirations are exported."""
+    from designdb.models import PoseModel
+    from designdb.sets.pose import PoseSet
+
+    _, hits, untagged, tagged = tagged_poseset
+    set_reference(hits[1], hits[0])  # reference, no inspirations
+    set_reference(tagged, hits[0])  # reference and inspirations
+    # untagged: inspirations, no reference
+    out = tmp_path / "fragalysis.sdf"
+
+    PoseSet(
+        PoseModel.objects.filter(pk__in=[hits[1].pk, untagged.pk, tagged.pk])
+    ).to_fragalysis(str(out), **FRAGALYSIS_ARGS)
+
+    records, _ = fragalysis_records(out)
+    assert list(records.index) == ["m2m-tagged"]
+
+
+def test_to_fragalysis_tags_is_deprecated_alias(tagged_poseset, tmp_path):
+    pset, hits, untagged, tagged = tagged_poseset
+    set_reference(untagged, hits[0])
+    set_reference(tagged, hits[0])
+    out = tmp_path / "fragalysis.sdf"
+
+    pset.to_fragalysis(str(out), tags=False, **FRAGALYSIS_ARGS)
+
+    records, header = fragalysis_records(out)
+    assert "tags" not in records.columns
+    assert "compound tags" not in records.columns
+
+
+def test_to_fragalysis_generate_pdbs_matches_rows_to_poses(
+    tagged_poseset, tmp_path, monkeypatch
+):
+    """Each generated PDB belongs to its own row's pose, also when the set holds
+    a pose (here the first one) that is skipped for having no reference.
+
+    ``Pose.complex_system`` is not ported yet; a stub writes the pose alias.
+    """
+    from pathlib import Path
+    from zipfile import ZipFile
+
+    from designdb.components.pose import Pose
+
+    class StubSystem:
+        def __init__(self, alias):
+            self.alias = alias
+
+        def write(self, path, verbosity=0):
+            Path(path).write_text(self.alias)
+
+    monkeypatch.setattr(
+        Pose,
+        "complex_system",
+        property(lambda self: StubSystem(self.pose_alias)),
+        raising=False,
+    )
+
+    pset, hits, untagged, tagged = tagged_poseset
+    assert list(pset.ids) == [untagged.pk, tagged.pk]
+    set_reference(tagged, hits[0])  # untagged has no reference
+    out = tmp_path / "fragalysis.sdf"
+
+    pset.to_fragalysis(str(out), generate_pdbs=True, **FRAGALYSIS_ARGS)
+
+    records, _ = fragalysis_records(out)
+    pdb_name = records.loc["m2m-tagged", "ref_pdb"]
+    with ZipFile(tmp_path / "fragalysis_pdbs.zip") as z:
+        assert z.namelist() == [pdb_name]
+        assert z.read(pdb_name).decode() == "m2m-tagged"
+
+
+def test_to_fragalysis_keeps_poses_without_reference(tagged_poseset, tmp_path):
+    """skip_no_reference=False: a pose without reference (NaN reference_id in
+    the DataFrame) is exported with an empty protein reference."""
+    pset, hits, untagged, tagged = tagged_poseset
+    set_reference(tagged, hits[0])
+    out = tmp_path / "fragalysis.sdf"
+
+    pset.to_fragalysis(str(out), skip_no_reference=False, **FRAGALYSIS_ARGS)
+
+    records, _ = fragalysis_records(out)
+    assert records.loc["m2m-tagged", "ref_pdb"] == "m2m-hit-0"
+    assert records.loc["m2m-untagged", "ref_pdb"] == "None"

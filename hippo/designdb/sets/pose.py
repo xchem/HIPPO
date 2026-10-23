@@ -1,5 +1,4 @@
 import inspect
-import json
 import logging
 import re
 import shutil
@@ -19,6 +18,7 @@ import networkx as nx
 import pandas as pd
 from designdb.models import (
     CompoundModel,
+    CompoundTagJunctionModel,
     InspirationModel,
     InteractionModel,
     PoseMethodJunctionModel,
@@ -33,7 +33,7 @@ from designdb.models import (
 )
 from designdb.sets.interaction import InteractionSet
 from designdb.settings import DEFAULT_POSE_METHODS
-from designdb.utils import MissingTagError, normalize_string_list
+from designdb.utils import MissingTagError
 from designdb.utils_frag import generate_header
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -68,10 +68,11 @@ from rdkit import Chem
 # from rdkit.Chem import inchi
 from rdkit.Chem import PandasTools, SDWriter
 
+# currently unused here, kept available for aggregations
 if settings.MANAGE_MODELS:
-    from designdb.utils import JsonGroupArray as ArrayAgg
+    from designdb.utils import JsonGroupArray as ArrayAgg  # noqa: F401
 else:
-    from django.contrib.postgres.aggregates import ArrayAgg
+    from django.contrib.postgres.aggregates import ArrayAgg  # noqa: F401
 
 from typing import TYPE_CHECKING
 
@@ -103,6 +104,32 @@ def score_column_name(method_name: str, method_version: str | None) -> str:
     if method_version is None:
         return method_name
     return f'{method_name} ({method_version})'
+
+
+# multi-valued columns of PoseSet.get_df
+LIST_COLUMNS = (
+    'inspiration_ids',
+    'inspiration_aliases',
+    'derivative_ids',
+    'pose_tags',
+    'compound_tags',
+    'subsites',
+)
+
+
+def join_list_field(values: list) -> str:
+    """Comma separated string of a list column value, for SDF fields. ``None``
+    entries become empty strings, so positions stay aligned between columns.
+    """
+    return ','.join('' if v is None else str(v) for v in values)
+
+
+def _sorted_name_lookup(rows) -> dict[int, list[str]]:
+    """Sorted, unique names by pose ID from ``(pose ID, name)`` rows"""
+    names: dict[int, set[str]] = {}
+    for pose_id, name in rows:
+        names.setdefault(pose_id, set()).add(name)
+    return {pose_id: sorted(v) for pose_id, v in names.items()}
 
 
 class PoseSet:
@@ -465,9 +492,11 @@ class PoseSet:
         inspiration_ids: bool = False,
         inspiration_aliases: bool = False,
         derivative_ids: bool = False,
-        tags: bool = False,
+        pose_tags: bool = False,
+        compound_tags: bool = False,
         expand_tags: bool = False,
         subsites: bool = False,
+        tags: bool | None = None,
         scores: bool = True,
         scoring_methods: list[tuple[str, str]] | None = None,
         pose_method: bool = True,
@@ -494,8 +523,14 @@ class PoseSet:
         :param inspiration_ids: include inspiration :class:`.PoseModel` ID column
         :param inspiration_aliases: include inspiration :class:`.PoseModel` alias column
         :param derivative_ids: include derivative :class:`.PoseModel` ID column
-        :param tags: include tags column
-        :param subsites: include subsites column
+        :param pose_tags: include ``pose_tags`` column, the pose's tag names
+        :param compound_tags: include ``compound_tags`` column, the tag names of
+            the pose's compound within the pose's target
+        :param expand_tags: replace the ``pose_tags`` column with one boolean
+            column per pose tag (Default value = False)
+        :param subsites: include ``subsites`` column, the names of the subsites
+            the pose is assigned to
+        :param tags: deprecated alias for ``pose_tags``
         :param scores: include one column per scoring method, taken from the score
             table and named ``<method name> (<method version>)``
             (Default value = True)
@@ -505,7 +540,15 @@ class PoseSet:
         :param pose_method: include ``pose_method_name`` and
             ``pose_method_version`` columns, comma separated when a pose has
             several methods (Default value = True)
+
+        The list columns (inspirations, derivatives, tags, subsites) are lists,
+        empty when the pose has none. Inspiration IDs and aliases are aligned by
+        position; tag and subsite names are sorted.
         """
+
+        if tags is not None:
+            mrich.warning('get_df(tags=...) is deprecated, use pose_tags=...')
+            pose_tags = pose_tags or tags
 
         sig = inspect.signature(self.get_df)
         flags = {
@@ -533,8 +576,10 @@ class PoseSet:
         # was the original code doing here? simply adding both fields,
         # name and alias?
 
-        # dict :: func arg: (col title, qs field lookup, queryset annotation)
-        # this is going to get out of hand with multiple scoring methods
+        # dict :: func arg: (col title, qs field lookup, queryset annotation).
+        # Many-to-many columns are not here: aggregating several of them over
+        # joins in one query multiplies their rows, they are added below from
+        # queries of their own
         fields = {
             'id': ('id', 'id', None),
             'smiles': ('smiles', 'pose_smiles', None),
@@ -556,40 +601,6 @@ class PoseSet:
             'path': ('protein_link', 'protein_link', None),
             'mol': ('mol', 'pose_mol', None),
             'metadata': ('metadata', 'pose_metadata', None),
-            'inspiration_ids': (
-                'inspiration_ids',
-                'inspiration_ids',
-                ArrayAgg('inspirations__id'),
-                # JsonGroupArray('inspirations__id'),
-            ),
-            'inspiration_aliases': (
-                'inspiration_aliases',
-                'inspiration_aliases',
-                ArrayAgg('inspirations__pose_alias'),
-                # JsonGroupArray('inspirations__pose_alias'),
-            ),
-            'derivative_ids': (
-                'derivative_ids',
-                'derivative_ids',
-                ArrayAgg('inspirations__id'),
-                # JsonGroupArray('inspirations__id'),
-            ),
-            'tags': (
-                'tags',
-                'tag_names',
-                ArrayAgg('tags__pose_tag_name'),
-                # JsonGroupArray('tags__pose_tag_name'),
-            ),
-            'subsites': (
-                'subsites',
-                'subsites_names',
-                ArrayAgg(
-                    'subsites__subsite_name',
-                    filter=Q(subsites__isnull=False),
-                ),
-                # JsonGroupArray('subsites__subsite_name',
-                #     filter=Q(subsites__isnull=False),),
-            ),
         }
 
         annotations = {
@@ -606,6 +617,25 @@ class PoseSet:
 
         if alias:
             df['alias'] = df.name
+
+        if inspiration_ids or inspiration_aliases:
+            ids, aliases = self._get_inspirations()
+            if inspiration_ids:
+                df['inspiration_ids'] = self._list_column(df, ids)
+            if inspiration_aliases:
+                df['inspiration_aliases'] = self._list_column(df, aliases)
+
+        if derivative_ids:
+            df['derivative_ids'] = self._list_column(df, self._get_derivative_ids())
+
+        if pose_tags:
+            df['pose_tags'] = self._list_column(df, self._get_pose_tags())
+
+        if compound_tags:
+            df['compound_tags'] = self._list_column(df, self._get_compound_tags())
+
+        if subsites:
+            df['subsites'] = self._list_column(df, self._get_subsites())
 
         score_method_names: set[str] = set()
         if scores:
@@ -635,27 +665,101 @@ class PoseSet:
 
             df = df.drop(columns=['metadata']).join(expanded)
 
-        if tags and expand_tags:
-            # surprisingly manual compared to expand_metadata, but
-            # kept running into problems
-            df['tags'] = df['tags'].apply(normalize_string_list)
+        if pose_tags and expand_tags:
             # get all unique tags
-            all_tags = sorted(set(tag for tags in df['tags'] for tag in tags))
+            all_tags = sorted(set(tag for tags in df['pose_tags'] for tag in tags))
 
             # build boolean columns
             for tag in all_tags:
-                df[tag] = df['tags'].apply(lambda tags, tag=tag: tag in tags)
+                df[tag] = df['pose_tags'].apply(lambda tags, tag=tag: tag in tags)
 
-            df = df.drop(columns=['tags'])
-
-        # custom aggreagte field is giving me string, parse to list
-        for col in [
-            'inspiration_aliases',
-        ]:
-            if col in df.columns:
-                df[col] = df[col].apply(normalize_string_list)
+            df = df.drop(columns=['pose_tags'])
 
         return df
+
+    @staticmethod
+    def _list_column(df: DataFrame, lookup: dict[int, list]) -> list[list]:
+        """Values of a list column, in ``df`` order, from a pose ID lookup.
+        Poses missing from the lookup get an empty list.
+        """
+        return [lookup.get(pose_id, []) for pose_id in df.index]
+
+    def _get_inspirations(self) -> tuple[dict[int, list[int]], dict[int, list]]:
+        """Inspiration pose IDs and aliases of the poses in this set, by pose ID,
+        aligned by position.
+        """
+        rows = (
+            InspirationModel.objects.filter(derivative_pose__in=self._queryset)
+            .order_by('derivative_pose_id', 'id')
+            .values_list(
+                'derivative_pose_id',
+                'original_pose_id',
+                'original_pose__pose_alias',
+            )
+        )
+
+        ids: dict[int, list[int]] = {}
+        aliases: dict[int, list] = {}
+        for pose_id, original_id, original_alias in rows:
+            ids.setdefault(pose_id, []).append(original_id)
+            aliases.setdefault(pose_id, []).append(original_alias)
+
+        return ids, aliases
+
+    def _get_derivative_ids(self) -> dict[int, list[int]]:
+        """IDs of the poses inspired by the poses in this set, by pose ID"""
+        rows = (
+            InspirationModel.objects.filter(original_pose__in=self._queryset)
+            .order_by('original_pose_id', 'id')
+            .values_list('original_pose_id', 'derivative_pose_id')
+        )
+
+        lookup: dict[int, list[int]] = {}
+        for pose_id, derivative_id in rows:
+            lookup.setdefault(pose_id, []).append(derivative_id)
+
+        return lookup
+
+    def _get_pose_tags(self) -> dict[int, list[str]]:
+        """Sorted tag names of the poses in this set, by pose ID"""
+        rows = PoseTagJunctionModel.objects.filter(pose__in=self._queryset).values_list(
+            'pose_id', 'pose_tag__pose_tag_name'
+        )
+
+        return _sorted_name_lookup(rows)
+
+    def _get_compound_tags(self) -> dict[int, list[str]]:
+        """Sorted tag names of the compounds of the poses in this set, by pose ID.
+
+        Compound tags are scoped to a target, a pose gets its compound's tags
+        within the pose's target only.
+        """
+        poses = list(self._queryset.values_list('id', 'compound_id', 'target_id'))
+
+        rows = CompoundTagJunctionModel.objects.filter(
+            compound__in=self._queryset.values('compound_id'),
+            target__in=self._queryset.values('target_id'),
+        ).values_list('compound_id', 'target_id', 'compound_tag__compound_tag_name')
+
+        names: dict[tuple[int, int], set[str]] = {}
+        for compound_id, target_id, name in rows:
+            names.setdefault((compound_id, target_id), set()).add(name)
+
+        return {
+            pose_id: sorted(names[compound_id, target_id])
+            for pose_id, compound_id, target_id in poses
+            if (compound_id, target_id) in names
+        }
+
+    def _get_subsites(self) -> dict[int, list[str]]:
+        """Sorted names of the subsites the poses in this set are assigned to, by
+        pose ID
+        """
+        rows = SubsiteTagModel.objects.filter(pose__in=self._queryset).values_list(
+            'pose_id', 'subsite__subsite_name'
+        )
+
+        return _sorted_name_lookup(rows)
 
     def _get_score_df(
         self,
@@ -1097,6 +1201,9 @@ class PoseSet:
         name_col: str = 'alias',
         inspiration_ids: bool = False,
         inspiration_aliases: bool = False,
+        pose_tags: bool = False,
+        compound_tags: bool = False,
+        subsites: bool = False,
         **kwargs,
     ) -> None:
         """Write an SDF
@@ -1108,40 +1215,53 @@ class PoseSet:
 
         :param out_path: filepath of the output
         :param name_col: pose property to use as the name column, can be
-            ``["name", "alias", "inchikey", "id"]`` (Default value = 'name')
+            ``["name", "alias", "inchikey", "id"]`` or a pose metadata key
+            (Default value = 'alias')
         :param inspiration_ids: include inspiration :class:`.PoseModel` ID column
         :param inspiration_aliases: include inspiration :class:`.PoseModel` alias column
+        :param pose_tags: include a ``pose_tags`` field with the pose's tags
+        :param compound_tags: include a ``compound_tags`` field with the tags of the
+            pose's compound within the pose's target
+        :param subsites: include a ``subsites`` field with the pose's subsites
         :param fragalysis_inspirations: create inspirations column "ref_mols"
+
+        Multi-valued fields (inspirations, tags, subsites) are written comma
+        separated, and empty when the pose has none.
         """
 
         df = self.get_df(
             mol=True,
             inspiration_ids=inspiration_ids,
             inspiration_aliases=inspiration_aliases,
+            pose_tags=pose_tags,
+            compound_tags=compound_tags,
+            subsites=subsites,
             name=name_col == 'name',
             **kwargs,
         )
 
-        if name_col not in ['name', 'alias', 'inchikey', 'id']:
-            # try getting name from metadata
-            records = self._queryset.values('id', 'pose_metadata')
+        for col in LIST_COLUMNS:
+            if col in df.columns:
+                df[col] = df[col].apply(join_list_field)
 
-            longcode_lookup = {}
-            for i, d in records:
-                if d:
-                    metadata = json.loads(d)
-                else:
-                    metadata = {}
+        if name_col == 'id':
+            # pose ID is the index, not a column
+            df['_Name'] = df.index
+        elif name_col in ['name', 'alias', 'inchikey']:
+            df = df.rename(columns={name_col: '_Name'})
+        else:
+            # name from a pose metadata key, None where a pose lacks it
+            lookup = {
+                pose_id: (metadata or {}).get(name_col)
+                for pose_id, metadata in self._queryset.values_list(
+                    'id', 'pose_metadata'
+                )
+            }
+            # expanded metadata (metadata=True) can already hold this key
+            df = df.drop(columns=[name_col], errors='ignore')
+            df['_Name'] = [lookup.get(pose_id) for pose_id in df.index]
 
-                longcode_lookup[i] = metadata.get(name_col, None)
-
-            values = []
-            for _, row in df.iterrows():
-                values.append(longcode_lookup[row['id']])
-
-            df[name_col] = values
-
-        df = df.rename(columns={name_col: '_Name', 'mol': 'ROMol'})
+        df = df.rename(columns={'mol': 'ROMol'})
 
         mrich.writing(out_path)
 
@@ -1170,8 +1290,10 @@ class PoseSet:
         skip_no_reference: bool = True,
         skip_no_inspirations: bool = True,
         skip_metadata: list[str] | None = None,
-        tags: bool = True,
+        pose_tags: bool = True,
+        compound_tags: bool = False,
         subsites: bool = True,
+        tags: bool | None = None,
         extra_cols: dict[str, list] = None,
         scoring_methods: list[tuple[str, str]] | None = None,
         # name_col: str = "name",
@@ -1197,9 +1319,18 @@ class PoseSet:
             SDF (Default value = False). Mutually exclusive with ``generate_pdbs``.
         :param ingredients: get procurement and amount information from this
             :class:`.IngredientSet` (Default value = None)
-        :param tags: include a column for tags in the output (Default value = True)
+        :param skip_no_reference: leave out poses without a protein reference
+            (Default value = True)
+        :param skip_no_inspirations: leave out poses without inspirations, unless
+            none of the poses have any (Default value = True). A pose without
+            inspirations is its own inspiration in ``ref_mols``
+        :param pose_tags: include a ``tags`` field with the pose's tags
+            (Default value = True)
+        :param compound_tags: include a ``compound tags`` field with the tags of
+            the pose's compound within the pose's target (Default value = False)
         :param subsites: include a column for subsites in the output
             (Default value = True)
+        :param tags: deprecated alias for ``pose_tags``
         :param extra_cols: extra_cols should be a dictionary with a key for each column
             name, and list values where the first element is the field description, and
             all subsequent elements are values for each pose.
@@ -1211,6 +1342,10 @@ class PoseSet:
         """
 
         assert out_path.endswith('.sdf')
+
+        if tags is not None:
+            mrich.warning('to_fragalysis(tags=...) is deprecated, use pose_tags=...')
+            pose_tags = tags
 
         # generate_pdbs overwrites ref_pdb with the generated complex names, which
         # copy_reference_pdbs would then fail to resolve as reference aliases
@@ -1229,55 +1364,52 @@ class PoseSet:
         logger.debug('entering')
 
         mrich.debug(len(self), 'poses in set')
-        poses = None
+
+        # a fresh queryset of the members: filtering self._queryset directly
+        # fails on a sliced set
+        qs = PoseModel.objects.filter(pk__in=self._queryset.values('pk'))
 
         if skip_no_reference:
-            values = self._queryset.filter(pose_reference__isnull=False)
+            prev = qs.count()
+            qs = qs.filter(pose_reference__isnull=False)
 
-            if not values.exists():
+            if not qs.exists():
                 mrich.debug('no references, quitting')
                 logger.warning('no references, quitting')
                 return
 
-            poses = PoseSet(values)
-
-            mrich.debug(len(poses), 'remaining after skipping null reference')
+            if (remaining := qs.count()) < prev:
+                mrich.warning(f'Skipping {prev - remaining} Poses with no reference')
 
         if skip_no_inspirations:
-            if not poses:
-                poses = self
-
-            values = InspirationModel.objects.filter(
-                derivative_pose__in=self._queryset,
-            ).values(
-                'derivative_pose',
+            inspired = qs.filter(
+                Exists(InspirationModel.objects.filter(derivative_pose=OuterRef('pk')))
             )
 
-            if values.exists():
-                poses = PoseSet(PoseModel.objects.filter(pk__in=values))
-                mrich.debug(len(poses), 'remaining after skipping null inspirations')
+            if inspired.exists():
+                qs = inspired
+                mrich.debug(qs.count(), 'remaining after skipping null inspirations')
             else:
                 logger.warning(
                     'no inspirations found; per-pose fallback will set '
                     'inspiration to self'
                 )
 
-        if not poses:
-            # huh?
-            poses = PoseSet(self._queryset)
+        poses = PoseSet(qs)
 
         mrich.var('#poses', len(poses))
 
         # TODO: this should not go through the df
         pose_df = poses.get_df(
             mol=True,
-            inspiration_ids=True,
+            inspiration_aliases=True,
             # duplicate_name="original ID",
             name=True,
             compound_id=True,
             reference_id=True,
             metadata=metadata,
-            tags=tags,
+            pose_tags=pose_tags,
+            compound_tags=compound_tags,
             subsites=subsites,
             scores=True,
             scoring_methods=scoring_methods,
@@ -1295,20 +1427,28 @@ class PoseSet:
         # fix inspirations and reference column (comma separated aliases).
         # reference poses may lie outside this set, so look up exactly the
         # referenced pose IDs rather than scanning the whole table.
-        ref_ids = {r for r in pose_df['reference_id'].tolist() if r is not None}
+        # (a pose without reference has NaN here, not None)
+        ref_ids = {int(r) for r in pose_df['reference_id'] if pd.notna(r)}
         lookup = dict(
             PoseModel.objects.filter(pk__in=ref_ids).values_list('pk', 'pose_alias')
         )
 
-        # for i, row in pose_df.iterrows():
-        #     strs = []
-        #     for i in normalize_string_list(row['inspiration_ids']):
-        #         # this is what it did in original code
-        #         alias = self._queryset.get(pk=i).pose_alias
-        #         if not alias:
-        #             continue
-        #         strs.append(alias)
-        #     inspiration_strs.append(','.join(strs))
+        # fragment inspirations: comma separated aliases, the pose itself when it
+        # has none
+        no_inspirations = pose_df['inspiration_aliases'].apply(
+            lambda aliases: not any(aliases)
+        )
+        if no_inspirations.any():
+            mrich.warning(
+                f'{no_inspirations.sum()} poses have no inspirations, '
+                'setting inspiration to self'
+            )
+        pose_df['ref_mols'] = [
+            ','.join(a for a in aliases if a) or name
+            for aliases, name in zip(
+                pose_df['inspiration_aliases'], pose_df['name'], strict=True
+            )
+        ]
 
         # comma separate subsites
         if subsites:
@@ -1322,27 +1462,22 @@ class PoseSet:
 
             pose_df['subsites'] = pose_df['subsites'].apply(fix_subsites)
 
-        if tags:
-            pose_df['tags'] = pose_df['tags'].apply(
-                lambda x: ','.join(v for v in x if v is not None)
+        if pose_tags:
+            pose_df['tags'] = pose_df.pop('pose_tags').apply(join_list_field)
+
+        if compound_tags:
+            pose_df['compound tags'] = pose_df.pop('compound_tags').apply(
+                join_list_field
             )
 
-        # pose_df['ref_mols'] = inspiration_strs
-        pose_df['ref_mols'] = 'inspiration_strs'
         pose_df['ref_pdb'] = pose_df['reference_id'].apply(lambda x: lookup.get(x))
 
         # add compound identifier column (inchikey?)
 
-        drops = ['inspiration_ids', 'reference_id']
+        drops = ['inspiration_aliases', 'reference_id']
 
         # if ingredients:
         #     drops.pop(drops.index("compound"))
-
-        if skip_no_reference:
-            prev = len(pose_df)
-            pose_df = pose_df[pose_df['reference_id'].notna()]
-            if len(pose_df) < prev:
-                mrich.warning(f'Skipping {prev - len(pose_df)} Poses with no reference')
 
         pose_df = pose_df.drop(columns=drops, errors='ignore')
 
@@ -1403,8 +1538,11 @@ class PoseSet:
         if subsites:
             extras['subsites'] = 'subsites'
 
-        if tags:
+        if pose_tags:
             extras['tags'] = 'tags'
+
+        if compound_tags:
+            extras['compound tags'] = 'compound tags'
 
         if extra_cols:
             for key, value in extra_cols.items():
@@ -1466,8 +1604,10 @@ class PoseSet:
                 TemporaryDirectory() as tmp_dir,
                 ZipFile(str(zip_path.resolve()), 'w') as z,
             ):
-                # loop over poses
-                for (i, row), pose in zip(pose_df.iterrows(), poses, strict=False):
+                # match rows to poses by ID, not by position
+                pose_lookup = {pose.id: pose for pose in poses}
+                for i, row in pose_df.iterrows():
+                    pose = pose_lookup[row['HIPPO Pose ID']]
                     # filenames
                     pdb_name = f'{out_key}_{row._Name}.pdb'
                     pdb_path = Path(tmp_dir) / pdb_name
@@ -1836,7 +1976,6 @@ class PoseSet:
         sdf_name = out_dir / f'{out_key}_syndirella_inspiration_hits.sdf'
         all_inspirations.write_sdf(
             sdf_name,
-            tags=False,
             metadata=False,
             name_col='name',
         )
