@@ -91,3 +91,11 @@ def test_pose_fingerprint_flag(pose):
 def test_pose_without_protein_link_has_no_protein_system(pose):
     assert pose.protein_link is None
     assert pose.protein_system is None
+
+
+def test_pose_smiles(pose):
+    """Pose.smiles reads PoseModel.pose_smiles (there is no ``smiles`` field).
+    On Postgres a trigger canonicalises it, so compare canonical forms."""
+    from rdkit import Chem
+
+    assert Chem.CanonSmiles(pose.smiles) == Chem.CanonSmiles("c1ccc(N)cc1")

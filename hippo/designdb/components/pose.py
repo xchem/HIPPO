@@ -52,9 +52,9 @@ class Pose:
         return self._instance.pose_mol
 
     @property
-    def smiles(self) -> int:
+    def smiles(self) -> str | None:
         """The pose's SMILES"""
-        return self._instance.smiles
+        return self._instance.pose_smiles
 
     @property
     def protein_link(self) -> str | None:
