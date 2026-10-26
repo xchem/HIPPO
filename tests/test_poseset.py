@@ -246,7 +246,7 @@ def test_metadata_from_record_skips_hippo_ids():
     assert metadata == {"note": "kept"}
 
 
-### many-to-many columns (inspirations, tags, subsites)
+### many-to-many columns (inspirations, tags, subsite tags)
 
 
 @pytest.fixture
@@ -344,7 +344,7 @@ M2M_FLAGS = dict(
     inspiration_aliases=True,
     pose_tags=True,
     compound_tags=True,
-    subsites=True,
+    subsite_tags=True,
 )
 
 
@@ -356,7 +356,7 @@ def test_get_df_m2m_columns_are_not_multiplied(tagged_poseset):
     assert df.loc[tagged.pk, "inspiration_ids"] == [hits[2].pk, hits[3].pk]
     assert df.loc[tagged.pk, "inspiration_aliases"] == ["m2m-hit-2", "m2m-hit-3"]
     assert df.loc[tagged.pk, "pose_tags"] == ["m2m-pose-a", "m2m-pose-b", "m2m-pose-c"]
-    assert df.loc[tagged.pk, "subsites"] == ["m2m-site-a", "m2m-site-b"]
+    assert df.loc[tagged.pk, "subsite_tags"] == ["m2m-site-a", "m2m-site-b"]
     # compound tags of this pose's target only
     assert df.loc[tagged.pk, "compound_tags"] == ["m2m-cmpd-x", "m2m-cmpd-y"]
 
@@ -368,7 +368,7 @@ def test_get_df_m2m_columns_empty_lists(tagged_poseset):
 
     assert df.loc[untagged.pk, "inspiration_ids"] == [hits[0].pk, hits[1].pk]
     assert df.loc[untagged.pk, "pose_tags"] == []
-    assert df.loc[untagged.pk, "subsites"] == []
+    assert df.loc[untagged.pk, "subsite_tags"] == []
     # compound tags belong to the compound, shared by both poses
     assert df.loc[untagged.pk, "compound_tags"] == ["m2m-cmpd-x", "m2m-cmpd-y"]
 
@@ -408,6 +408,14 @@ def test_get_df_tags_is_deprecated_alias_for_pose_tags(tagged_poseset):
     assert df.loc[tagged.pk, "pose_tags"] == ["m2m-pose-a", "m2m-pose-b", "m2m-pose-c"]
 
 
+def test_get_df_subsites_is_deprecated_alias_for_subsite_tags(tagged_poseset):
+    pset, _, _, tagged = tagged_poseset
+
+    df = pset.get_df(subsites=True)
+
+    assert df.loc[tagged.pk, "subsite_tags"] == ["m2m-site-a", "m2m-site-b"]
+
+
 def test_get_df_m2m_columns_on_sliced_set(tagged_poseset):
     """PoseSet[:n] slices the queryset; the m2m lookups subquery it."""
     pset, _, _, _ = tagged_poseset
@@ -431,11 +439,11 @@ def test_write_sdf_m2m_fields(tagged_poseset, tmp_path):
     assert tagged["inspiration_aliases"] == "m2m-hit-2,m2m-hit-3"
     assert tagged["pose_tags"] == "m2m-pose-a,m2m-pose-b,m2m-pose-c"
     assert tagged["compound_tags"] == "m2m-cmpd-x,m2m-cmpd-y"
-    assert tagged["subsites"] == "m2m-site-a,m2m-site-b"
+    assert tagged["subsite_tags"] == "m2m-site-a,m2m-site-b"
 
     untagged = sdf.loc["m2m-untagged"]
     assert untagged["pose_tags"] == ""
-    assert untagged["subsites"] == ""
+    assert untagged["subsite_tags"] == ""
 
 
 def test_write_sdf_omits_m2m_fields_by_default(tagged_poseset, tmp_path):
@@ -447,7 +455,7 @@ def test_write_sdf_omits_m2m_fields_by_default(tagged_poseset, tmp_path):
     pset.write_sdf(str(out))
 
     sdf = PandasTools.LoadSDF(str(out))
-    for field in ("pose_tags", "compound_tags", "subsites", "tags"):
+    for field in ("pose_tags", "compound_tags", "subsite_tags", "tags"):
         assert field not in sdf.columns
 
 
@@ -521,7 +529,7 @@ def test_to_fragalysis_ref_mols_tags_and_compound_tags(tagged_poseset, tmp_path)
     assert records.loc["m2m-tagged", "tags"] == "m2m-pose-a,m2m-pose-b,m2m-pose-c"
     assert records.loc["m2m-untagged", "tags"] == ""
     assert records.loc["m2m-tagged", "compound tags"] == "m2m-cmpd-x,m2m-cmpd-y"
-    assert records.loc["m2m-tagged", "subsites"] == "m2m-site-a,m2m-site-b"
+    assert records.loc["m2m-tagged", "subsite tags"] == "m2m-site-a,m2m-site-b"
     # every field is described in the header
     assert header["compound tags"] == "compound tags"
     assert header["ref_mols"] == "fragment inspirations"
