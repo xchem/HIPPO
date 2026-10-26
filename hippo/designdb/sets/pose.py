@@ -113,7 +113,7 @@ LIST_COLUMNS = (
     'derivative_ids',
     'pose_tags',
     'compound_tags',
-    'subsites',
+    'subsite_tags',
 )
 
 
@@ -495,8 +495,9 @@ class PoseSet:
         pose_tags: bool = False,
         compound_tags: bool = False,
         expand_tags: bool = False,
-        subsites: bool = False,
+        subsite_tags: bool = False,
         tags: bool | None = None,
+        subsites: bool | None = None,
         scores: bool = True,
         scoring_methods: list[tuple[str, str]] | None = None,
         pose_method: bool = True,
@@ -528,9 +529,10 @@ class PoseSet:
             the pose's compound within the pose's target
         :param expand_tags: replace the ``pose_tags`` column with one boolean
             column per pose tag (Default value = False)
-        :param subsites: include ``subsites`` column, the names of the subsites
-            the pose is assigned to
+        :param subsite_tags: include ``subsite_tags`` column, the names of the
+            subsites the pose is assigned to
         :param tags: deprecated alias for ``pose_tags``
+        :param subsites: deprecated alias for ``subsite_tags``
         :param scores: include one column per scoring method, taken from the score
             table and named ``<method name> (<method version>)``
             (Default value = True)
@@ -541,7 +543,7 @@ class PoseSet:
             ``pose_method_version`` columns, comma separated when a pose has
             several methods (Default value = True)
 
-        The list columns (inspirations, derivatives, tags, subsites) are lists,
+        The list columns (inspirations, derivatives, tags, subsite tags) are lists,
         empty when the pose has none. Inspiration IDs and aliases are aligned by
         position; tag and subsite names are sorted.
         """
@@ -549,6 +551,10 @@ class PoseSet:
         if tags is not None:
             mrich.warning('get_df(tags=...) is deprecated, use pose_tags=...')
             pose_tags = pose_tags or tags
+
+        if subsites is not None:
+            mrich.warning('get_df(subsites=...) is deprecated, use subsite_tags=...')
+            subsite_tags = subsite_tags or subsites
 
         sig = inspect.signature(self.get_df)
         flags = {
@@ -634,8 +640,8 @@ class PoseSet:
         if compound_tags:
             df['compound_tags'] = self._list_column(df, self._get_compound_tags())
 
-        if subsites:
-            df['subsites'] = self._list_column(df, self._get_subsites())
+        if subsite_tags:
+            df['subsite_tags'] = self._list_column(df, self._get_subsite_tags())
 
         score_method_names: set[str] = set()
         if scores:
@@ -751,7 +757,7 @@ class PoseSet:
             if (compound_id, target_id) in names
         }
 
-    def _get_subsites(self) -> dict[int, list[str]]:
+    def _get_subsite_tags(self) -> dict[int, list[str]]:
         """Sorted names of the subsites the poses in this set are assigned to, by
         pose ID
         """
@@ -1203,7 +1209,7 @@ class PoseSet:
         inspiration_aliases: bool = False,
         pose_tags: bool = False,
         compound_tags: bool = False,
-        subsites: bool = False,
+        subsite_tags: bool = False,
         **kwargs,
     ) -> None:
         """Write an SDF
@@ -1222,10 +1228,11 @@ class PoseSet:
         :param pose_tags: include a ``pose_tags`` field with the pose's tags
         :param compound_tags: include a ``compound_tags`` field with the tags of the
             pose's compound within the pose's target
-        :param subsites: include a ``subsites`` field with the pose's subsites
+        :param subsite_tags: include a ``subsite_tags`` field with the names of the
+            pose's subsites
         :param fragalysis_inspirations: create inspirations column "ref_mols"
 
-        Multi-valued fields (inspirations, tags, subsites) are written comma
+        Multi-valued fields (inspirations, tags, subsite tags) are written comma
         separated, and empty when the pose has none.
         """
 
@@ -1235,7 +1242,7 @@ class PoseSet:
             inspiration_aliases=inspiration_aliases,
             pose_tags=pose_tags,
             compound_tags=compound_tags,
-            subsites=subsites,
+            subsite_tags=subsite_tags,
             name=name_col == 'name',
             **kwargs,
         )
@@ -1292,8 +1299,9 @@ class PoseSet:
         skip_metadata: list[str] | None = None,
         pose_tags: bool = True,
         compound_tags: bool = False,
-        subsites: bool = True,
+        subsite_tags: bool = True,
         tags: bool | None = None,
+        subsites: bool | None = None,
         extra_cols: dict[str, list] = None,
         scoring_methods: list[tuple[str, str]] | None = None,
         # name_col: str = "name",
@@ -1328,9 +1336,10 @@ class PoseSet:
             (Default value = True)
         :param compound_tags: include a ``compound tags`` field with the tags of
             the pose's compound within the pose's target (Default value = False)
-        :param subsites: include a column for subsites in the output
-            (Default value = True)
+        :param subsite_tags: include a ``subsite tags`` field with the names of
+            the pose's subsites (Default value = True)
         :param tags: deprecated alias for ``pose_tags``
+        :param subsites: deprecated alias for ``subsite_tags``
         :param extra_cols: extra_cols should be a dictionary with a key for each column
             name, and list values where the first element is the field description, and
             all subsequent elements are values for each pose.
@@ -1346,6 +1355,12 @@ class PoseSet:
         if tags is not None:
             mrich.warning('to_fragalysis(tags=...) is deprecated, use pose_tags=...')
             pose_tags = tags
+
+        if subsites is not None:
+            mrich.warning(
+                'to_fragalysis(subsites=...) is deprecated, use subsite_tags=...'
+            )
+            subsite_tags = subsites
 
         # generate_pdbs overwrites ref_pdb with the generated complex names, which
         # copy_reference_pdbs would then fail to resolve as reference aliases
@@ -1410,7 +1425,7 @@ class PoseSet:
             metadata=metadata,
             pose_tags=pose_tags,
             compound_tags=compound_tags,
-            subsites=subsites,
+            subsite_tags=subsite_tags,
             scores=True,
             scoring_methods=scoring_methods,
             pose_method=True,
@@ -1450,17 +1465,19 @@ class PoseSet:
             )
         ]
 
-        # comma separate subsites
-        if subsites:
+        # comma separate subsite tags
+        if subsite_tags:
 
-            def fix_subsites(subsite_list: list[str]):
-                """Fix subsites"""
+            def fix_subsite_tags(subsite_list: list[str]):
+                """Fix subsite tags"""
                 if not subsite_list:
                     logger.warning('no subsite list')
                     return 'None'
                 return ','.join(subsite_list)
 
-            pose_df['subsites'] = pose_df['subsites'].apply(fix_subsites)
+            pose_df['subsite tags'] = pose_df.pop('subsite_tags').apply(
+                fix_subsite_tags
+            )
 
         if pose_tags:
             pose_df['tags'] = pose_df.pop('pose_tags').apply(join_list_field)
@@ -1535,8 +1552,8 @@ class PoseSet:
                 else f'{method_name} score'
             )
 
-        if subsites:
-            extras['subsites'] = 'subsites'
+        if subsite_tags:
+            extras['subsite tags'] = 'subsite tags'
 
         if pose_tags:
             extras['tags'] = 'tags'
