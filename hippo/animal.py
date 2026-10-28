@@ -323,19 +323,24 @@ class HIPPO:
         subdirs = list(aligned_directory.glob("*"))
 
         SUBDIR_PATTERN_FRAGALYSIS = re.compile(r"^.*\d{4}[a-z]$")
+        SUBDIR_PATTERN_PDB = re.compile(r"^[A-Za-z0-9]{4}-[a-z]$")
         SUBDIR_PATTERN_XCA = re.compile(r"^.*-.\d{4}$")
 
         fragalysis_subdirs_present = any(
             SUBDIR_PATTERN_FRAGALYSIS.match(subdir.name) for subdir in subdirs
         )
+        pdb_subdirs_present = any(
+            SUBDIR_PATTERN_PDB.match(subdir.name) for subdir in subdirs
+        )
+        frag_or_pdb_subdirs_present = fragalysis_subdirs_present or pdb_subdirs_present
         xca_subdirs_present = any(
             SUBDIR_PATTERN_XCA.match(subdir.name) for subdir in subdirs
         )
         assert (
-            fragalysis_subdirs_present ^ xca_subdirs_present
+            frag_or_pdb_subdirs_present ^ xca_subdirs_present
         ), "Unexpected mixed data format"
 
-        if fragalysis_subdirs_present:
+        if frag_or_pdb_subdirs_present:
             data_format = DataFormat.Fragalysis_v2
         else:
 
