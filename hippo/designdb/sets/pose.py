@@ -2417,7 +2417,7 @@ class PoseSet:
     def reference_ids(self) -> set[int]:
         """Return a set of :class:`.PoseModel` ID's of the all the distinct references
         in this :class:`.PoseSet`"""
-        return self.get_by_references(self).values_list('pk', flat=True)
+        return set(self.get_by_references(self).ids)
 
     @property
     def inspiration_sets(self) -> set[tuple[int, ...]]:
@@ -2450,9 +2450,10 @@ class PoseSet:
         # fmt: on
 
     @property
-    def inspirations(self) -> int:
-        """Return the number of unique inspirations for poses in this set"""
-        return self.get_by_inspirations(self._queryset)
+    def inspirations(self) -> 'PoseSet':
+        """Return a :class:`.PoseSet` of the unique inspirations for poses in this
+        set"""
+        return self.get_by_inspirations(self)
 
     # @property
     # def str_ids(self) -> str:

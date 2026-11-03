@@ -146,3 +146,14 @@ def test_compoundset_get_by_smiles_returns_compound(compoundset):
 
     assert isinstance(comp, Compound)
     assert comp.smiles == "CCO"
+
+
+def test_compoundset_count_by_tag_counts_only_tagged(animal, compoundset):
+    """Regression: ``count_by_tag`` filtered ``CompoundTagModel`` by a
+    nonexistent ``compound`` field (FieldError) and never filtered on the
+    annotation, so it would have counted every member."""
+    animal.register_compound_tag("count-by-tag")
+    compoundset[0:3].add_tag("count-by-tag", target=animal.target)
+
+    assert compoundset.count_by_tag("count-by-tag") == 3
+    assert compoundset.count_by_tag("count-by-tag-unused") == 0
