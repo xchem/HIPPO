@@ -480,20 +480,24 @@ class CompoundSet:
     def count_by_tag(
         self,
         tag: str,
-    ) -> 'CompoundSet':
+    ) -> int:
         """Count all child compounds with a certain tag
 
         :param tag: tag to filter by
 
         """
-        return self._queryset.annotate(
-            has_tag=Exists(
-                CompoundTagModel.objects.filter(
-                    compound=OuterRef('pk'),
-                    compound_tag__compound_tag_name=tag,
+        return (
+            self._queryset.annotate(
+                has_tag=Exists(
+                    CompoundTagJunctionModel.objects.filter(
+                        compound=OuterRef('pk'),
+                        compound_tag__compound_tag_name=tag,
+                    ),
                 ),
-            ),
-        ).count()
+            )
+            .filter(has_tag=True)
+            .count()
+        )
 
     ### CONSOLE / NOTEBOOK OUTPUT
 

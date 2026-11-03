@@ -638,3 +638,77 @@ def test_to_fragalysis_keeps_poses_without_reference(tagged_poseset, tmp_path):
     records, _ = fragalysis_records(out)
     assert records.loc["m2m-tagged", "ref_pdb"] == "m2m-hit-0"
     assert records.loc["m2m-untagged", "ref_pdb"] == "None"
+
+
+def test_poseset_inspirations_returns_original_poses(animal, make_compound):
+    """Regression: ``PoseSet.inspirations`` passed a queryset to
+    ``get_by_inspirations``, which reads ``._queryset`` (AttributeError)."""
+    from designdb.models import InspirationModel, PoseModel
+    from designdb.sets.pose import PoseSet
+
+    compound = make_compound("c1ccc(Cl)cc1")  # chlorobenzene
+    target = animal.target
+    hit_a, hit_b, derivative = (
+        PoseModel.objects.create(compound=compound, target=target, pose_alias=a)
+        for a in ("insp-hit-a", "insp-hit-b", "insp-derivative")
+    )
+    for hit in (hit_a, hit_b):
+        InspirationModel.objects.create(original_pose=hit, derivative_pose=derivative)
+
+    inspirations = PoseSet(PoseModel.objects.filter(pk=derivative.pk)).inspirations
+
+    assert isinstance(inspirations, PoseSet)
+    assert set(inspirations.ids) == {hit_a.pk, hit_b.pk}
+
+
+def test_poseset_reference_ids_and_split_by_reference(animal, make_compound):
+    """Regression: ``PoseSet.reference_ids`` called ``.values_list`` on a
+    ``PoseSet`` (AttributeError), which also broke ``split_by_reference``."""
+    from designdb.models import PoseModel
+    from designdb.sets.pose import PoseSet
+
+    compound = make_compound("c1ccc(Br)cc1")  # bromobenzene
+    target = animal.target
+    ref = PoseModel.objects.create(compound=compound, target=target, pose_alias="ref")
+    posed = [
+        PoseModel.objects.create(
+            compound=compound,
+            target=target,
+            pose_alias=f"refd-{i}",
+            pose_reference=ref.pk,
+        )
+        for i in range(3)
+    ]
+    unreferenced = PoseModel.objects.create(
+        compound=compound, target=target, pose_alias="unrefd"
+    )
+    pset = PoseSet(
+        PoseModel.objects.filter(pk__in=[p.pk for p in posed] + [unreferenced.pk])
+    )
+
+    assert pset.reference_ids == {ref.pk}
+    split = pset.split_by_reference()
+    assert list(split) == [ref.pk]
+    assert set(split[ref.pk].ids) == {p.pk for p in posed}
+
+
+def test_pose_service_create_from_record_sets_reference(animal, make_compound):
+    """Regression: ``PoseService.create_from_record`` passed ``reference=`` to
+    ``get_or_create``; the field is ``pose_reference`` (FieldError)."""
+    from designdb.models import PoseModel
+    from designdb.services.pose import PoseService
+
+    compound = make_compound("c1ccc(I)cc1")  # iodobenzene
+    target = animal.target
+    ref = PoseModel.objects.create(compound=compound, target=target, pose_alias="rec-ref")
+
+    pose, created = PoseService.create_from_record(
+        compound_id=compound.pk,
+        target_id=target.pk,
+        path="elabs/rec-pose.mol",
+        reference=ref.pk,
+    )
+
+    assert created
+    assert pose.pose_reference == ref.pk
+    assert pose.protein_link == "elabs/rec-pose.mol"

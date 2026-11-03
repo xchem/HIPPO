@@ -538,7 +538,7 @@ class PoseService:
             compound=compound,
             target=target,
             protein_link=path,
-            reference=reference,
+            pose_reference=reference,
         )
         return pose, created
 

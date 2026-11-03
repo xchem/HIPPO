@@ -1690,16 +1690,15 @@ class IngestionService:
         poses = PoseModel.objects.filter(pk__in=pose_ids)
         mrich.success('Registered', poses.count(), 'new poses')
 
-        # query relevant poses (also previously registered)
-        paths = poses.values_list('path', flat=True)
-
-        # what the hell is this??
+        # link inspirations to every pose of this target at the same mol file
+        # paths (including ones registered previously)
+        paths = poses.values_list('protein_link', flat=True)
         records = PoseModel.objects.filter(
-            path__in=paths,
+            protein_link__in=paths,
+            target=target,
         )
         for pose in records:
-            # pose.inspirations.add(*PoseModel.objects.filter(pk__in=inspiration.ids))
-            pose.inspirations.add(*inspirations.queryset)
+            pose.inspirations.add(*inspirations)
 
         for pose in poses:
             pose.tags.add(*pose_tags)
