@@ -546,10 +546,10 @@ class HIPPO:
         inspirations: list[int] | PoseSet | None = None,
         compound_tags: None | list[str] = None,
         pose_tags: None | list[str] = None,
-        enumeration_method: tuple[str, str] | None = None,
-        pose_method: tuple[str, str] | None = None,
-        score_cols: list[str] | None = None,
-        scoring_methods: list[tuple[str, str]] | None = None,
+        enumeration_method: tuple[str, str],
+        pose_method: tuple[str, str],
+        score_cols: list[str],
+        scoring_methods: list[tuple[str, str]],
         mol_col: str = 'ROMol',
         name_col: str = 'ID',
         inspiration_col: str = 'ref_mols',
@@ -592,12 +592,12 @@ class HIPPO:
         :param pose_tags: String tags to assign to all created poses, defaults to
             ``None``. Must already exist, as for ``compound_tags``
         :param enumeration_method: ``(name, version)`` of a registered enumeration
-            method to associate with every compound
+            method to associate with every compound. Required
         :param pose_method: ``(name, version)`` of a registered pose method to
-            associate with every pose
-        :param score_cols: Columns holding score values
-        :param scoring_methods: ``(name, version)`` pairs positionally aligned with
-            ``score_cols``
+            associate with every pose. Required
+        :param score_cols: Columns holding score values. Required, non-empty
+        :param scoring_methods: ``(name, version)`` pairs of registered scoring
+            methods, positionally aligned with ``score_cols``. Required, non-empty
         :param mol_col: Column containing the ``rdkit.ROMol`` ligands, defaults to
             ``"ROMol"``
         :param name_col: Column containing the ligand name/alias, defaults to
@@ -622,6 +622,9 @@ class HIPPO:
             compound is below ``rmsd_threshold``
         :param rmsd_threshold: RMSD below which two poses are the same, in
             Angstrom, defaults to ``1.0``
+        :raises ValueError: if any of ``enumeration_method``, ``pose_method``,
+            ``score_cols`` or ``scoring_methods`` is missing or empty, or a named
+            method is not registered
         :raises MissingTagError: if any tag is not in the tag vocabulary
 
         .. note::

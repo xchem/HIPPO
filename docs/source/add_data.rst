@@ -117,9 +117,19 @@ HIPPO can load compounds, poses, and their related information from a formatted 
 ::
 
 	animal.load_sdf(
-		target=..., # name of target
 		path=..., # path to SDF
+		enumeration_method=("my-enumeration", "1.0"),
+		pose_method=("my-pose-method", "1.0"),
+		score_cols=["vina_score"],
+		scoring_methods=[("vina", "1.2")],
 	)
+
+``enumeration_method``, ``pose_method``, ``score_cols`` and ``scoring_methods`` are
+required: every compound, pose and score must be attributable to the method that
+produced it. The methods must already be registered (see
+:meth:`.HIPPO.register_enumeration_method`, :meth:`.HIPPO.register_pose_method` and
+:meth:`.HIPPO.register_scoring_method`); ``scoring_methods`` is positionally
+aligned with ``score_cols``.
 
 
 Refer to the full API reference for more details: :meth:`.HIPPO.load_sdf`

@@ -130,7 +130,35 @@ def test_resolve_tags_is_a_value_error():
 ### ingestion
 
 
-def test_load_sdf_rejects_unknown_tag_before_touching_the_file(animal, tmp_path):
+@pytest.fixture
+def ingest_methods(animal):
+    """Registered enumeration/pose/scoring methods, as load_sdf kwargs."""
+    from designdb.models import (
+        EnumerationMethodModel,
+        PoseMethodModel,
+        ScoringMethodModel,
+    )
+
+    EnumerationMethodModel.objects.get_or_create(
+        enum_name="res-enum", enum_version="1.0"
+    )
+    PoseMethodModel.objects.get_or_create(
+        pose_method_name="res-pose-method", pose_method_version="1.0"
+    )
+    ScoringMethodModel.objects.get_or_create(
+        method_name="res-scoring", method_version="1.0"
+    )
+    return {
+        "enumeration_method": ("res-enum", "1.0"),
+        "pose_method": ("res-pose-method", "1.0"),
+        "score_cols": ["res_score"],
+        "scoring_methods": [("res-scoring", "1.0")],
+    }
+
+
+def test_load_sdf_rejects_unknown_tag_before_touching_the_file(
+    animal, tmp_path, ingest_methods
+):
     """Tags resolve before any file IO, so a bad tag beats a missing SDF."""
     from designdb.models import CompoundModel, PoseModel
     from designdb.utils import MissingTagError
@@ -142,10 +170,51 @@ def test_load_sdf_rejects_unknown_tag_before_touching_the_file(animal, tmp_path)
         animal.load_sdf(
             path=tmp_path / "does-not-exist.sdf",
             compound_tags=["res-absent-ingest"],
+            **ingest_methods,
         )
 
     assert CompoundModel.objects.count() == compounds_before
     assert PoseModel.objects.count() == poses_before
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["enumeration_method", "pose_method", "score_cols", "scoring_methods"],
+)
+@pytest.mark.parametrize("value", [None, []], ids=["none", "empty"])
+def test_load_sdf_requires_methods(animal, tmp_path, ingest_methods, missing, value):
+    """Every method argument is required; None or empty fails before file IO."""
+    from designdb.models import CompoundModel, PoseModel
+
+    compounds_before = CompoundModel.objects.count()
+    poses_before = PoseModel.objects.count()
+
+    kwargs = {**ingest_methods, missing: value}
+    with pytest.raises(ValueError, match=missing):
+        animal.load_sdf(path=tmp_path / "does-not-exist.sdf", **kwargs)
+
+    assert CompoundModel.objects.count() == compounds_before
+    assert PoseModel.objects.count() == poses_before
+
+
+def test_load_sdf_reports_every_missing_method(animal, tmp_path):
+    with pytest.raises(ValueError) as exc:
+        animal.load_sdf(
+            path=tmp_path / "does-not-exist.sdf",
+            enumeration_method=None,
+            pose_method=None,
+            score_cols=None,
+            scoring_methods=None,
+        )
+    message = str(exc.value)
+    for name in ("enumeration_method", "pose_method", "score_cols", "scoring_methods"):
+        assert name in message
+
+
+def test_load_sdf_methods_have_no_defaults(animal, tmp_path):
+    """Omitting the method arguments entirely is a TypeError, not a silent None."""
+    with pytest.raises(TypeError):
+        animal.load_sdf(path=tmp_path / "does-not-exist.sdf")
 
 
 ### register_tag
