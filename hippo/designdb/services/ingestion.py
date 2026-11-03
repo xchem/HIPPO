@@ -631,10 +631,10 @@ class IngestionService:
         target,
         compound_tag_list: list[str],
         pose_tag_list: list[str],
-        enumeration_method: tuple[str, str] | None = None,
-        pose_method: tuple[str, str] | None = None,
-        score_cols: list[str] | None = None,
-        scoring_methods: list[tuple[str, str]] | None = None,
+        enumeration_method: tuple[str, str],
+        pose_method: tuple[str, str],
+        score_cols: list[str],
+        scoring_methods: list[tuple[str, str]],
         mol_col: str,
         name_col: str,
         inspiration_col: str | None = None,
@@ -674,10 +674,12 @@ class IngestionService:
            ``FOR EACH STATEMENT`` and this path writes every score in a single
            statement, so it fires once per load either way.
 
-        :param enumeration_method: ``(name, version)`` of the enumeration method
-        :param pose_method: ``(name, version)`` of the pose method
-        :param score_cols: SDF columns holding score values
-        :param scoring_methods: ``(name, version)`` pairs aligned with ``score_cols``
+        :param enumeration_method: ``(name, version)`` of the enumeration method.
+            Required
+        :param pose_method: ``(name, version)`` of the pose method. Required
+        :param score_cols: SDF columns holding score values. Required, non-empty
+        :param scoring_methods: ``(name, version)`` pairs aligned with
+            ``score_cols``. Required, non-empty
         :param max_workers: worker processes for registration hashing; see
             :func:`compound_hashes_from_smiles`
         :param batch_size: rows per INSERT/UPDATE statement, applied to every bulk
@@ -694,10 +696,32 @@ class IngestionService:
             :meth:`PoseService.create_batch`
         :param rmsd_threshold: RMSD below which two poses are the same, in Angstrom
         :returns: counts of attempted records and created compounds/poses
-        :raises ValueError: if a named method is not registered
+        :raises ValueError: if any of the method arguments or ``score_cols`` is
+            missing or empty, or a named method is not registered
         :raises MissingTagError: if a named tag is not registered. Tags are
             resolved, never created -- see ``register_tag`` on the tag services
         """
+        # Every pose must be attributable to the methods that produced it: provenance
+        # is not optional. Checked here rather than in the client so the rule holds
+        # for any caller of the service, and before any DB or file access.
+        missing = [
+            name
+            for name, value in (
+                ('enumeration_method', enumeration_method),
+                ('pose_method', pose_method),
+                ('score_cols', score_cols),
+                ('scoring_methods', scoring_methods),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                f'ingest_sdf requires {", ".join(missing)}; got None or empty. '
+                'Register the methods first (register_enumeration_method, '
+                'register_pose_method, register_scoring_method) and pass them '
+                'as (name, version) pairs.'
+            )
+
         result = IngestionBatchResult()
 
         # Methods arrive as (name, version) rather than ORM objects: resolving them
