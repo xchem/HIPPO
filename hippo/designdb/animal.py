@@ -395,6 +395,11 @@ class HIPPO:
             :meth:`register_pose_tag`), so this covers ``tags`` *and* every
             curated ``metadata.csv`` column that is used as a pose tag
 
+        Pose tags come from the ``metadata.csv`` columns named
+        ``[<category>] <tag name>`` whose category is one of ``Data type``,
+        ``Site``, ``Library`` or ``DMTA cycle``; the pose is tagged with the bare
+        ``<tag name>`` wherever the column is true. Other categories are ignored.
+
         """
 
         # fall back to the stack/auth configured at instantiation

@@ -24,7 +24,11 @@ from designdb.utils import (
     safe_batch_size,
 )
 from designdb.utils_chem import get_rmsd
-from designdb.utils_frag import GENERATED_TAG_COLS, META_IGNORE_COLS
+from designdb.utils_frag import (
+    GENERATED_TAG_COLS,
+    IMPORTED_TAG_CATEGORIES,
+    parse_tag_column,
+)
 from django.db.models import Q, QuerySet
 
 # from mypackage.services.compound import CompoundService
@@ -595,11 +599,13 @@ class PoseService:
 class PoseTagService:
     def __init__(self, metadata_file: Path | str, other_tags: list[str] | None = None):
         self._df = pd.read_csv(metadata_file)
-        self._curated_tag_cols = [
-            c
-            for c in self._df.columns
-            if c not in META_IGNORE_COLS + GENERATED_TAG_COLS
-        ]
+        # tag columns are '[<category>] <tag name>'; only the imported categories
+        # become pose tags, stored under the bare tag name
+        self._curated_tag_cols: dict[str, str] = {}
+        for column in self._df.columns:
+            parsed = parse_tag_column(column)
+            if parsed is not None and parsed[0] in IMPORTED_TAG_CATEGORIES:
+                self._curated_tag_cols[column] = parsed[1]
         # any other tags to be added
         if other_tags:
             self._other_tags = [k.strip() for k in other_tags if k.strip()]
@@ -616,14 +622,14 @@ class PoseTagService:
         # NB the truthiness test must match the one tags_and_meta applies per
         # record below -- pandas' Series.any() skips NaN, but bool(nan) is True,
         # so an all-NaN column would be left out of the map and then asked for.
-        used_tag_cols = [
-            c
-            for c in self._curated_tag_cols
-            if any(bool(v) for v in self._df[c].values)
+        used_tag_names = [
+            name
+            for column, name in self._curated_tag_cols.items()
+            if any(bool(v) for v in self._df[column].values)
         ]
         self._tag_map = {
             tag.pose_tag_name: tag
-            for tag in PoseTagService.resolve_tags(used_tag_cols + self._other_tags)
+            for tag in PoseTagService.resolve_tags(used_tag_names + self._other_tags)
         }
 
     @staticmethod
@@ -717,11 +723,10 @@ class PoseTagService:
 
         pose_tag_set = set(self._other_tags)
 
-        for tag in self._curated_tag_cols:
-            if meta_row[tag].values[0]:
-                pose_tag_set.add(tag)
+        for column, name in self._curated_tag_cols.items():
+            if meta_row[column].values[0]:
+                pose_tag_set.add(name)
 
-        # keys come from resolve_tags, which strips; column names may not be
-        tags = [self._tag_map[tag.strip()] for tag in pose_tag_set]
+        tags = [self._tag_map[name] for name in pose_tag_set]
 
         return tags, metadata

@@ -29,18 +29,24 @@ GENERATED_TAG_COLS = [
 ]
 
 
-META_IGNORE_COLS = [
-    'Code',
-    'Long code',
-    'Compound code',
-    'Smiles',
-    'Downloaded',
-    'Main status',
-    'GOOD count',
-    'MEDIOCRE count',
-    'BAD count',
-    'RefinementResolution',
-]
+#: metadata.csv tag columns are named ``[<category>] <tag name>``; only these
+#: categories become pose tags on import. The rest (Release, Other, User
+#: defined, Crystalform and the design-side categories) are ignored.
+IMPORTED_TAG_CATEGORIES = ('Data type', 'Site', 'Library', 'DMTA cycle')
+
+TAG_COLUMN_RE = re.compile(r'^\[(?P<category>[^\]]+)\]\s*(?P<name>.+)$')
+
+
+def parse_tag_column(column: str) -> tuple[str, str] | None:
+    """Split a ``[<category>] <tag name>`` metadata.csv column.
+
+    :returns: ``(category, tag_name)``, both stripped, or ``None`` if the column
+        is not a tag column
+    """
+    match = TAG_COLUMN_RE.match(column.strip())
+    if match is None:
+        return None
+    return match['category'].strip(), match['name'].strip()
 
 
 def generate_header(
